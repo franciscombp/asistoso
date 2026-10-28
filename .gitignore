@@ -1,0 +1,3 @@
+# Copias locales de MediaPipe, face-api y Transformers.js para probar sin CDN (LEEME.md › Sin internet)
+_local/
+__pycache__/

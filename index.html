@@ -1,0 +1,168 @@
+<!doctype html>
+<html lang="es" data-theme="light">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Uku · asistente de Fran</title>
+  <meta name="build" content="__BUILD__">
+  <meta name="description" content="Uku es el asistente de Fran. Cuando Fran deja su computadora, Uku atiende por la webcam a quien se acerque, lo reconoce y luego le cuenta a Fran quién vino.">
+  <link rel="icon" type="image/svg+xml" href="./icono.svg">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;500;600;700&display=swap">
+  <link rel="stylesheet" href="./mimo.css?v=__BUILD__">
+</head>
+<body class="solo-uku">
+  <!-- La escena 3D (Uku y su claro) y, encima, los efectos de las reacciones -->
+  <div id="escena" class="mimo-escena" aria-hidden="true"></div>
+  <!-- Bordes que se funden con el cielo, como un sueño -->
+  <div class="mimo-brillo" aria-hidden="true"></div>
+  <div class="mimo-rayos" aria-hidden="true"></div>
+  <div class="mimo-sueno" aria-hidden="true"></div>
+  <canvas id="efectos" class="mimo-efectos" aria-hidden="true"></canvas>
+
+  <!-- Lo que dice Uku -->
+  <div id="globo" class="mimo-globo" role="status" aria-live="polite"><p id="globo-t"></p><span class="mimo-globo__puntos" aria-label="Uku está pensando"><i></i><i></i><i></i></span></div>
+  <!-- Lo que Uku escuchó (para saber que te entendió) -->
+  <p id="oido" class="mimo-oido" aria-live="polite"></p>
+
+  <!-- Arriba: marca, estado y accesos para quien opera -->
+  <header class="mimo-top">
+    <p id="estado" class="mimo-estado">Despertando a Uku…</p>
+    <span id="mic" class="mimo-mic" hidden title="Uku te escucha">🎙️ Te escucho</span>
+    <span id="despierto" class="mimo-mic mimo-despierto" hidden>☀️ Pantalla despierta</span>
+    <button type="button" id="modo" class="mp-btn mimo-modo" aria-pressed="false">🛡️ Modo guardián</button>
+    <div class="mimo-reloj" id="reloj" role="button" tabindex="0" aria-label="Hora y clima. Mostrar u ocultar los controles" title="Mostrar u ocultar los controles (X)">
+      <b id="reloj-h" class="mr-hora">--:--</b>
+      <span id="reloj-f" class="mr-fecha"></span>
+      <span id="reloj-c" class="mr-clima" hidden></span>
+    </div>
+    <div class="mimo-acciones">
+      <button type="button" id="btn-visitas" class="mp-btn mimo-visitas" aria-label="Quién vino" title="Quién vino (P)">👤 <span>Quién vino</span> <b class="mimo-visitas__n"></b></button>
+      <button type="button" id="btn-ayuda" class="mp-btn mp-btn--icono" aria-label="Ayuda y atajos" title="Ayuda (H)">?</button>
+    </div>
+  </header>
+
+  <!-- A la izquierda: cómo va la descarga de la IA -->
+  <aside class="mimo-lateral">
+    <section id="descargas" class="mimo-tarjeta mimo-descargas" hidden aria-labelledby="descargas-t">
+      <header class="mimo-tarjeta__head"><h2 id="descargas-t">La IA de Uku</h2><button type="button" class="mp-btn mp-btn--icono" data-cerrar aria-label="Ocultar" title="Ocultar (A)">✕</button></header>
+      <ul class="md-lista" aria-live="polite"></ul>
+      <p class="mimo-tarjeta__nota">Se descarga una vez y queda en la caché del navegador. Todo corre en este equipo.</p>
+    </section>
+  </aside>
+
+  <!-- Tu imagen en espejo (para que sepas que Uku te ve) -->
+  <div id="camara" class="mimo-camara">
+    <video id="video" playsinline muted></video>
+    <canvas id="marcas"></canvas>
+  </div>
+
+  <!-- Qué puedes hacer: se resalta el gesto que Uku acaba de ver -->
+  <ul id="pistas" class="mimo-pistas" aria-label="Gestos">
+    <li data-g="saludo chao">👋 <span>Saluda</span></li>
+    <li data-g="like">👍 <span>Me gusta</span></li>
+    <li data-g="ok">👌 <span>OK</span></li>
+    <li data-g="globos">✌️ <span>Globos</span></li>
+    <li data-g="corazon">🫶 <span>Corazón</span></li>
+    <li data-g="tip">☝️ <span>Un consejo</span></li>
+    <li data-g="jardin">✊ <span>Jardín</span></li>
+    <li data-g="sol">🙌 <span>Sale el sol</span></li>
+    <li data-g="fiesta">🤟 <span>Fiesta</span></li>
+    <li data-g="fuegos">👍👍 <span>Fuegos</span></li>
+    <li data-g="lluvia">👎👎 <span>Lluvia</span></li>
+  </ul>
+
+  <!-- Inicio: hace falta un toque para la cámara, la pantalla completa y la voz -->
+  <section id="inicio" class="mimo-inicio" aria-labelledby="inicio-t">
+    <div class="mimo-inicio__card">
+      <h1 id="inicio-t">Uku cuida tu compu</h1>
+      <p>Mientras no estás, Uku atiende a quien se acerque: lo saluda, juega con sus gestos y reconoce su cara. Cuando vuelvas, te cuenta quién vino.</p>
+      <label class="mp-check"><input type="checkbox" id="opt-voz"> Uku habla en voz alta</label>
+      <label class="mp-check" title="Por defecto quedan solo Uku, su globo, el reloj y el clima"><input type="checkbox" id="opt-hud"> Mostrar los controles en pantalla (si no, se muestran con X o tocando el reloj)</label>
+      <label class="mp-check" title="Con el modo demo apagado (guardián), cuando estás frente a Uku solo te saluda y sigue en lo suyo"><input type="checkbox" id="opt-demo"> Modo demo: Uku también juega y conversa contigo cuando estás enfrente (si no, solo te saluda)</label>
+      <label class="mp-check" title="Evita que la computadora apague la pantalla o entre en reposo mientras Uku cuida"><input type="checkbox" id="opt-despierto" checked> Mantener la pantalla despierta (que la compu no entre en reposo)</label>
+      <label class="mp-check"><input type="checkbox" id="opt-mic" checked> Uku escucha y conversa por ti («¿dónde está Fran?», «déjale un mensaje»…)</label>
+      <label class="mp-check" title="Para oficinas con ruido: ignora lo que no empiece por «Uku». Después de responderte, te sigue escuchando 25 s sin que repitas su nombre"><input type="checkbox" id="opt-llamada" checked> Solo responde cuando le dicen «Uku» (ignora las conversaciones de alrededor)</label>
+      <fieldset class="mimo-inicio__oido" id="opt-oido">
+        <legend>Cómo te escucha</legend>
+        <label class="mp-check" id="opt-navegador-l"><input type="radio" name="oido" value="navegador" checked> Del navegador: entiende mucho mejor y muestra lo que oye, pero el audio lo procesa el servicio del navegador.</label>
+        <label class="mp-check"><input type="radio" name="oido" value="whisper"> Whisper en este equipo: privado, nada sale del navegador (descarga ~250 MB).</label>
+      </fieldset>
+      <p class="mp-check mimo-inicio__nube" id="nube-estado">☁️ Cerebro en la nube: comprobando…</p>
+      <label class="mp-check" id="opt-mente-l"><input type="checkbox" id="opt-mente"> Experimental: conversación libre con IA en este equipo (Qwen3, ~1 GB, necesita tarjeta gráfica). Sin esto, Uku responde con su compendio de frases.</label>
+      <button type="button" id="empezar" class="mp-btn mp-btn--primario">Empezar</button>
+      <button type="button" id="sin-camara" class="mp-btn mp-btn--terciario">Probar sin cámara</button>
+      <p class="mimo-inicio__nota">La cámara se usa solo en esta pantalla: no se graba video ni se envía nada. De cada persona que se acerca, Uku guarda en este equipo una foto pequeña de la cara y una huella numérica para reconocerla. Se borran desde «Quién vino».</p>
+    </div>
+  </section>
+
+  <!-- Personas que Uku reconoce -->
+  <section id="personas" class="mimo-panel mimo-panel--grande" hidden aria-labelledby="personas-t">
+    <header class="mimo-panel__head"><h2 id="personas-t">Quién vino</h2><button type="button" class="mp-btn mp-btn--icono" data-cerrar aria-label="Cerrar">✕</button></header>
+    <div class="mp-tabs" role="tablist">
+      <button type="button" role="tab" data-tab="visitas">Visitas <b class="mp-n"></b></button>
+      <button type="button" role="tab" data-tab="mensajes">Mensajes <b class="mp-n"></b></button>
+      <button type="button" role="tab" data-tab="personas">Personas</button>
+      <button type="button" role="tab" data-tab="estado">Estado</button>
+    </div>
+    <div class="mp-cuerpo"></div>
+    <p class="mp-nota">Las fotos y las huellas de las caras se guardan solo en este equipo. Nada sale del navegador.</p>
+  </section>
+
+  <!-- Ayuda y atajos -->
+  <section id="ayuda" class="mimo-panel mimo-panel--ayuda" hidden aria-labelledby="ayuda-t">
+    <header class="mimo-panel__head"><h2 id="ayuda-t">Cómo se juega</h2><button type="button" class="mp-btn mp-btn--icono" data-cerrar aria-label="Cerrar">✕</button></header>
+    <div class="mp-cols">
+      <div>
+        <h3>Modo guardián y modo demo</h3>
+        <p>En <b>guardián</b> (por defecto) Uku atiende a los demás. Cuando quien está enfrente eres tú (Fran), solo te saluda, te cuenta quién vino y sigue en lo suyo: no reacciona a tus gestos ni te contesta. En <b>demo</b> (botón de arriba o <kbd>N</kbd>) Uku juega y conversa con todos, también contigo.</p>
+        <h3>Uku atiende por ti</h3>
+        <p>Cuando alguien se acerca, Uku lo reconoce: si lo conoce lo saluda por su nombre; si no, lo anota como visitante. Al volver, Uku te cuenta quién vino y en <kbd>P</kbd> les pones nombre (o los juntas con alguien que ya conoce). Marca «Soy yo» en tu tarjeta para que Uku sepa que eres el dueño.</p>
+        <h3>Habla con Uku</h3>
+        <p>Uku te escucha (con el reconocimiento del navegador o con Whisper en este equipo) y conversa de lo que sea con un modelo de lenguaje que corre aquí mismo. Sabe lo que eliges en <kbd>P</kbd> › Estado antes de irte («¿dónde está Fran?», «¿cuándo vuelve?») y guarda los mensajes: «déjale un mensaje» o «dile que…».</p>
+        <h3>Tareas por voz</h3>
+        <p>Empieza con «Uku…»: «Uku, recuérdame en 10 minutos tomar agua», «Uku, pon un post-it que diga comprar pan», «Uku, qué recordatorios tengo», «Uku, borra los post-its».</p>
+        <h3>Más gestos</h3>
+        <ul>
+          <li>🖕 El dedo del medio: Uku responde con humor (¡no tiene dedos!).</li>
+          <li>🤘 Rock · 🤙 Shaka (playa) · 🤏 Un poquito · 3 o 4 dedos quietos.</li>
+          <li>✋ Palma quieta: choca esos cinco · 👏 Aplaude · 🙏 Manos juntas.</li>
+          <li>😝 Saca la lengua · 😘 Beso · 😉 Guiño · 🥱 Bostezo · 😮 Sorpresa · 😊 Sonríe un buen rato.</li>
+          <li>Mueve la cabeza: sí (arriba y abajo) o no (de lado a lado).</li>
+          <li>🙏 Manos juntas: Uku suma un día al cartel de «días sin accidentes» (tecla <kbd>B</kbd>).</li>
+          <li>❌ Cruza los brazos: hubo un accidente, el cartel vuelve a cero (tecla <kbd>0</kbd>). También con la voz: «un día más», «hubo un accidente», «pon el cartel en 15».</li>
+          <li>Levanta una mano, como en clase.</li>
+          <li>Di «jugamos» (o tecla <kbd>G</kbd>) y juegas piedra, papel o tijera con la mano.</li>
+        </ul>
+        <h3>Con el cuerpo</h3>
+        <ul>
+          <li>👋 Saluda moviendo la mano abierta.</li>
+          <li>👍 Me gusta · 👍👍 fuegos artificiales y noche.</li>
+          <li>👎 No me gusta · 👎👎 lluvia.</li>
+          <li>✌️ Globos · ✌️✌️ confeti · 🤟 fiesta.</li>
+          <li>👌 OK · 🫶 corazón con las dos manos.</li>
+          <li>☝️ Un consejo de oso · ✊ crece un jardín.</li>
+          <li>🙌 Los dos brazos arriba: sale el sol.</li>
+        </ul>
+        <h3>Palabras de juego</h3>
+        <p>"fiesta", "lluvia", "noche", "jardín", "globos", "un consejo".</p>
+      </div>
+      <div>
+        <h3>Teclado (para quien opera)</h3>
+        <ul class="mp-teclas">
+          <li><kbd>F</kbd> pantalla completa · <kbd>P</kbd> quién vino · <kbd>D</kbd> depurar · <kbd>C</kbd> cámara</li>
+          <li><kbd>X</kbd> mostrar u ocultar los controles (por defecto ocultos: quedan el globo de Uku, el reloj y el clima; también tocando el reloj) · <kbd>M</kbd> voz · <kbd>V</kbd> oído (micrófono) · <kbd>A</kbd> descargas de la IA · <kbd>G</kbd> jugar · <kbd>Z</kbd> travesura al azar · <kbd>S</kbd> pantalla despierta · <kbd>N</kbd> modo guardián / demo · <kbd>H</kbd> esta ayuda</li>
+          <li><kbd>←</kbd> <kbd>↑</kbd> <kbd>→</kbd> <kbd>↓</kbd> manejar a Uku por su claro (al soltar, sigue paseando)</li>
+          <li><kbd>1</kbd>–<kbd>6</kbd> día, atardecer, noche, lluvia, fiesta, jardín</li>
+          <li><kbd>Q</kbd> 👍 · <kbd>W</kbd> ✌️ · <kbd>E</kbd> 🫶 · <kbd>R</kbd> 👌 · <kbd>Y</kbd> 👋 · <kbd>U</kbd> 🙌</li>
+          <li><kbd>I</kbd> ✊ · <kbd>O</kbd> 🤟 · <kbd>J</kbd> fuegos · <kbd>K</kbd> lluvia · <kbd>L</kbd> confeti · <kbd>T</kbd> consejo</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <script src="./assets/clima.js?v=__BUILD__"></script>
+  <script type="module" src="./mimo.js?v=__BUILD__"></script>
+</body>
+</html>

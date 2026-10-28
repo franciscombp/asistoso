@@ -1,0 +1,6 @@
+# Uku (asistente de Fran) · cerebro en la nube.
+# Volver a desplegar: `npx wrangler deploy cerebro/worker.js --name uku-cerebro --compatibility-date 2026-10-01`
+# La key: `npx wrangler secret put GROQ_API_KEY --name uku-cerebro` (o en el panel de Cloudflare).
+name = "uku-cerebro"
+main = "worker.js"
+compatibility_date = "2026-10-01"

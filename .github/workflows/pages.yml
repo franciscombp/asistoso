@@ -1,0 +1,41 @@
+# Despliegue MANUAL a GitHub Pages para probar a Uku en otra computadora.
+# Sólo corre con "Run workflow" (workflow_dispatch); ningún push lo dispara.
+# Un sitio de Pages es público: desactívalo en Settings > Pages al terminar.
+name: Pages (manual)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/configure-pages@v5
+        with:
+          enablement: true
+      - name: Copia la página de Uku
+        run: |
+          mkdir _site
+          cp index.html mimo.css icono.svg *.js .nojekyll _site/
+          cp -r assets _site/assets
+      - name: Versiona con este despliegue los archivos que carga la página
+        # Cada despliegue cambia el ?v= de scripts y estilos: el navegador no reutiliza nada viejo
+        run: sed -i "s/__BUILD__/${GITHUB_SHA::8}-${GITHUB_RUN_NUMBER}/g" _site/*.html _site/*.js
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+      - id: deployment
+        uses: actions/deploy-pages@v4
