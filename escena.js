@@ -112,6 +112,10 @@ export function setClima(look) {
 }
 // El cartel «X días sin accidentes» del escenario: { dias, record, animar }
 export function setCartel(c) { if (b3d) b3d.setCartel(c); }
+// El claro crece con la relación (memoria.js › mundo()): lo que no venga, queda como en MUNDO
+export function setClaro(c) { if (!b3d || !c) return; b3d.setClaro(Object.assign({}, MUNDO, c, { escenario: Object.assign({}, MUNDO.escenario, c.escenario || {}) })); }
+// Ánimo que se queda un rato (feliz, tranquilo, pensativo) según el tono de la conversación
+export function setAnimo(a) { if (b3d && b3d.setMood) b3d.setMood(a || null); }
 export function getEntorno() { return entorno; }
 function pintarCielo() {
   const e = ENTORNOS[entorno], b = document.body;

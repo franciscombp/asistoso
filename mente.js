@@ -77,12 +77,14 @@ export function cargar() {
   return cargando;
 }
 
-/* responder(mensajes, alParcial): mensajes [{ role: system|user|assistant, content }].
-   alParcial(texto) recibe la respuesta mientras se escribe. Devuelve el texto final. */
+/* responder(mensajes, alParcial, { crudo }): mensajes [{ role: system|user|assistant, content }].
+   alParcial(texto) recibe la respuesta mientras se escribe. Devuelve el texto final.
+   crudo: para la memoria y el diario (memoria.js): no se corta en dos frases y, simulada, no responde. */
 let vistos = null; // lo último que se le pasó al modelo (para revisar el contexto desde la consola)
 export function ultimosMensajes() { return vistos; }
-export async function responder(mensajes, alParcial = () => {}) {
+export async function responder(mensajes, alParcial = () => {}, { crudo = false } = {}) {
   vistos = mensajes;
+  if (SIMULADA && crudo) return null;
   if (SIMULADA) { // eco palabra por palabra, con un respiro antes (para ver los puntos y el texto en vivo)
     const t = 'Te escuché: ' + mensajes[mensajes.length - 1].content;
     await new Promise(r => setTimeout(r, 600));
@@ -111,10 +113,10 @@ export async function responder(mensajes, alParcial = () => {}) {
         texto += t;
         const l = limpiar(texto);
         if (l) alParcial(l);
-        if ((l.match(/[.!?…](\s|$)/g) || []).length >= 2 && /[.!?…]\s*$/.test(l)) parar.interrupt();
+        if (!crudo && (l.match(/[.!?…](\s|$)/g) || []).length >= 2 && /[.!?…]\s*$/.test(l)) parar.interrupt();
       }
     });
-    await modelo.generate({ ...entrada, max_new_tokens: 72, do_sample: true, temperature: .75, top_p: .9, repetition_penalty: 1.1, streamer, stopping_criteria: parar });
+    await modelo.generate({ ...entrada, max_new_tokens: crudo ? 160 : 72, do_sample: true, temperature: .75, top_p: .9, repetition_penalty: 1.1, streamer, stopping_criteria: parar });
     return limpiar(texto);
   } finally { ocupada = false; }
 }
@@ -140,7 +142,7 @@ function anotarUso() { const ahora = Date.now(), hoy = new Date().toDateString()
 // Lo que va al modelo: las últimas pocas frases y cada una corta (el modelo responde en dos frases de todos modos)
 function recortar(mensajes) {
   const sis = mensajes.find(m => m.role === 'system'), resto = mensajes.filter(m => m.role !== 'system').slice(-8);
-  return (sis ? [{ role: 'system', content: sis.content.slice(0, 2500) }] : []).concat(resto.map(m => ({ role: m.role, content: String(m.content).slice(0, 400) })));
+  return (sis ? [{ role: 'system', content: sis.content.slice(0, 6000) }] : []).concat(resto.map(m => ({ role: m.role, content: String(m.content).slice(0, 400) })));
 }
 async function pedirNube(mensajes, alParcial) {
   const ctl = new AbortController(), tope = setTimeout(() => ctl.abort(), 15000);

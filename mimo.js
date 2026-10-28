@@ -13,6 +13,9 @@
      mensajes que luego le cuenta. Conversa libremente con un modelo de
      lenguaje en el navegador (mente.js) si el equipo tiene WebGPU. La descarga de cada modelo se ve en la
      tarjeta «La IA de Uku» (descargas.js, tecla A).
+   - Como Tolan: Uku recuerda lo que Fran le cuenta (memoria.js), le pregunta
+     después cómo le fue, escribe su diario al despedirse (P › Diario), lee
+     el tono de cada frase (tono.js) y su claro crece con la relación.
    Atajos de teclado para quien opera la demo: tecla H.
    ===================================================================== */
 import * as escena from './escena.js?v=__BUILD__';
@@ -34,6 +37,7 @@ import { crearSueno } from './sueno.js?v=__BUILD__';
 import { crearEfectos3d } from './efectos3d.js?v=__BUILD__';
 import { una } from './frases.js?v=__BUILD__';
 import * as tareas from './tareas.js?v=__BUILD__';
+import * as memoria from './memoria.js?v=__BUILD__';
 
 const $ = (s) => document.querySelector(s);
 const ui = {
@@ -262,6 +266,41 @@ function regreso(p = st.persona) {
   if (recados) cuenta += (quienes ? ' y ' : ', pero ') + (recados === 1 ? 'te dejaron 1 mensaje' : 'te dejaron ' + recados + ' mensajes');
   decir(frase('regreso', { nombre, visitas: cuenta }), 6500);
   setTimeout(() => { if (st.presente && hayDueno() && !hayVisita()) panel.abrir(recados ? 'mensajes' : 'visitas'); }, 3200);
+  setTimeout(() => abrirTema(), 9500);
+}
+/* ---------- Uku saca el tema (como Tolan: no espera a que le hablen) ----------
+   Al rato de saludar a Fran, Uku trae algo de su memoria: cómo le fue con lo que tenía pendiente, cuánto hace que
+   no hablan, o, por la mañana, qué es lo único que tiene que salir hoy. Si sabe poco de él, le pregunta algo. */
+const CONOCER = ['Oye, todavía no sé a qué te dedicas. ¿Qué haces cuando no estás frente a esta compu?', '¿Quién es la persona con la que más hablas en el día?', '¿Qué trae el día de hoy? Dime una sola cosa.', '¿Qué te pone de buen humor? Para saber cuándo sacar los globos.', 'Cuéntame algo tuyo que un oso no sabría. Lo guardo.'];
+let temaDicho = 0;
+function abrirTema({ forzar = false } = {}) {
+  if (!st.presente || !hayDueno() || hayVisita() || callandoPorDueno() || panel.abierto) return false;
+  if (!forzar && performance.now() - temaDicho < 90000) return false;
+  const h = new Date().getHours(), sin = memoria.diasSinHablar(), pend = memoria.pendientes();
+  let texto = null;
+  if (pend.length) { const p = pend[0]; memoria.cerrarSeguimiento(p.id); texto = preguntaPor(p.texto); }
+  else if (sin >= 2) texto = `Hace ${sin} días que no conversamos. ¿Qué me perdí?`;
+  else if (h >= 6 && h < 12 && memoria.relacion().ultimoDia !== new Date().toISOString().slice(0, 10)) texto = '¿Qué es lo único que tiene que salir hoy sí o sí? Dime una cosa y la anoto.';
+  else if (memoria.cuantos() < 3) texto = CONOCER[Math.floor(Math.random() * CONOCER.length)];
+  if (!texto) return false;
+  temaDicho = performance.now(); st.ultimaActividad = performance.now();
+  escena.gesto('nod'); decir(texto, Math.max(5000, texto.length * 70)); prestarAtencion();
+  return true;
+}
+// De un hecho con seguimiento («Tiene pendiente: mañana tengo la reunión con Ana») a una pregunta
+function preguntaPor(hecho) {
+  const t = hecho.replace(/^(tiene pendiente:|está|esta|quiere|hoy estaba \w+ por)\s*/i, '').replace(/^(mañana|manana|esta semana|la próxima semana|esta tarde|esta noche|el \w+)\s+(tiene|va a|le toca|es)\s+/i, '').replace(/\.$/, '');
+  const l = ['Oye, ¿y cómo te fue con ' + t + '?', '¿Cómo va ' + t + '? Me quedé pensando en eso.', 'Antes de otra cosa: ' + t + '. ¿Cómo salió?'];
+  return l[Math.floor(Math.random() * l.length)];
+}
+/* ---------- Al despedirse de Fran: Uku aprende y escribe su diario ---------- */
+async function cerrarConversacionConFran() {
+  const historial = atiende.historialActual();
+  if (!historial.length) return;
+  const vis = nombresDeQuienesVinieron();
+  const nuevos = await memoria.aprender(historial).catch(() => []);
+  await memoria.redactarDiario(historial, { nombre: dueno(), nuevos, visitas: vis }).catch(() => null);
+  escena.setClaro(memoria.mundo());
 }
 let irseTimer = 0;
 function seVa() {
@@ -275,9 +314,10 @@ function seVa() {
     decir(p && p.dueno ? frase('chaoDueno', { nombre: p.nombre }) : p && p.nombre ? frase('chaoNombre', { nombre: p.nombre }) : frase('chao'));
     escena.gesto('wave');
   }
+  const conFran = !!(p && p.dueno) && atiende.turnosDeEstaConversacion() > 0;
   st.persona = null; st.visita = null; st.tracks = []; st.saludados = new Set();
   modoDueno(false);
-  atiende.nuevaConversacion();
+  if (conFran) cerrarConversacionConFran().finally(() => atiende.nuevaConversacion()); else atiende.nuevaConversacion();
   // Se despide y, un rato después, vuelve a pasear por el claro
   clearTimeout(irseTimer);
   irseTimer = setTimeout(() => { if (!st.presente) escena.libre(0); }, 3500);
@@ -447,7 +487,8 @@ setInterval(() => {
   }
   if (st.presente && !callandoPorDueno() && ahora - st.ultimaActividad > 16000 && ahora - st.ultimaPista > 16000) {
     st.ultimaPista = ahora;
-    // Pistas de gestos y, de vez en cuando, un consejo de oso
+    // Con Fran, Uku saca un tema de su memoria; con los demás, pistas de gestos y, de vez en cuando, un consejo de oso
+    if (hayDueno() && !hayVisita() && abrirTema()) return;
     if (st.pistaN++ % 3 !== 2) decir(frase('pistas'));
     else { decir(frase('tipIntro') + ' ' + frase('tip'), 7500); escena.gesto('nod'); }
   }
@@ -680,10 +721,13 @@ async function oir(texto) {
   if (!escena.enCasa()) escena.venir();
   let enVivo = false;
   const alParcial = (t) => { enVivo = true; decirEnVivo(t); };
+  const hoyMs = new Date().setHours(23, 59, 59, 999);
   const r = await atiende.conversar(texto, {
     dueno: dueno(), personaId: p && p.id, nombre: p && p.nombre, esDueno, duenoAqui: hayDueno(),
-    visitas: esDueno ? nombresDeQuienesVinieron() : [], alParcial
+    visitas: esDueno ? nombresDeQuienesVinieron() : [], alParcial,
+    pendientes: esDueno ? tareas.recordatorios().filter(x => x.ms < hoyMs).map(x => x.texto + ' ' + tareas.formatoHora(x.ms)).concat(tareas.postits().map(n => n.texto)) : []
   });
+  if (esDueno && atiende.turnosDeEstaConversacion() === 1) { memoria.anotarConversacion(); escena.setClaro(memoria.mundo()); }
   if (!r.intencion) {
     const c = voz.comandoDe(texto);
     if (c) { if (c.startsWith('entorno:')) { escena.setEntorno(c.slice(8)); escena.gesto('happy'); } else reaccionar(c, { x: .5, y: .5 }); return; }
@@ -691,6 +735,7 @@ async function oir(texto) {
   const responder = () => {
     prestarAtencion(); // tras responder, sigue atento un rato sin que repitan «Uku»
     if (r.gesto) escena.gesto(r.gesto);
+    if (r.animo !== undefined) escena.setAnimo(r.animo);
     if (r.intencion === 'mensaje-guardado') efectos.lanzar('ok', { x: .62, y: .5 });
     if (r.efecto) efectos.lanzar(r.efecto, { x: .62, y: .5 });
     if (r.fx) fx(r.fx);
@@ -793,10 +838,14 @@ escena.iniciar(ui.escena).then(async () => {
   // El clima de verdad: Uku se viste para el lugar y el entorno sigue la hora (con lluvia, llueve)
   tiempo.iniciarClima($('#reloj-c'), (c) => { escena.setClima(c.look); ambienteReal(); }).then(() => ambienteReal());
   escena.setCartel(Object.assign(cartel.estado(), { animar: false }));
+  escena.setClaro(memoria.mundo()); // el claro crece con la relación
   cartel.vigilar();
   document.body.classList.add('lista');
   decir(frase('quienSoy'), 4500, { hablar: false });
 }).catch((e) => { console.error(e); estado('No pude cargar a Uku', 'error'); });
 
+// Cada cosa nueva que Uku aprende de Fran hace florecer el claro (la «energía» del planeta de Tolan)
+document.addEventListener('mimo:aprendio', () => { if (document.body.classList.contains('lista')) { efectos.lanzar('jardin', { x: .62, y: .55 }); escena.setClaro(memoria.mundo()); } });
+
 // Para pruebas y para operar desde la consola
-window.Mimo = { alternarHud, tiempo, ambienteReal, seguirCaras, hayDueno, hayVisita, cartel, setModo, get modo() { return modo; }, callandoPorDueno, despierto, jugar, fx, REACCION, mente, escena, reaccionar, procesar, decir, efectos, caras, visitas, atiende, panel, st, gestos, oir, oido, descargas, modoDueno };
+window.Mimo = { alternarHud, tiempo, ambienteReal, seguirCaras, hayDueno, hayVisita, cartel, setModo, get modo() { return modo; }, callandoPorDueno, despierto, jugar, fx, REACCION, mente, escena, reaccionar, procesar, decir, efectos, caras, visitas, atiende, panel, st, gestos, oir, oido, descargas, modoDueno, memoria, abrirTema, cerrarConversacionConFran };

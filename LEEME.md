@@ -41,6 +41,37 @@ Todo se guarda solo en este equipo (`localStorage`: `mimo_personas` con
 nombre, foto de 96 px y huellas; `mimo_visitas` con el historial). Nada sale
 del navegador.
 
+## Como Tolan: memoria, diario, tono y un claro que crece
+
+Uku toma de Tolan (la app de compañía de Portola; el benchmark está en `docs/benchmark-tolan.md`)
+lo que hace que un personaje se sienta vivo:
+
+- **Improvisa en vez de seguir guion.** El prompt se arma en cada turno (`atiende.js › sistema`):
+  la ficha de Uku (quién es, su claro, lo que le gusta), cómo conversa (corto, de tú, sigue la
+  energía de quien habla, no pregunta siempre, no solo da la razón, empuja a la vida real), el
+  tono de lo que acaban de decirle, lo que recuerda que viene al caso y la situación (hora, clima,
+  quién está, qué vino, qué tiene pendiente). La charla («¿cómo estás?», «estoy cansado», «cuéntame
+  algo») va al modelo; los datos y las acciones (dónde está Fran, quién vino, el cartel, la hora,
+  cuentas) siguen al toque, sin modelo.
+- **Tono** (`tono.js`): cada frase se lee como triste, estresada, enojada, cansada, feliz, bromista,
+  seria o neutra. Cada tono trae su guía para el modelo («acompaña, nada de chistes»), un gesto y
+  un ánimo que se le queda a Uku un rato.
+- **Memoria** (`memoria.js`): lo que Fran cuenta de su vida se anota como hechos («Su hermana se
+  llama Ana», «Tiene pendiente: mañana tiene la presentación con el comité»), con reglas al instante
+  y, al cerrar la conversación, con el modelo. Los que piden seguimiento hacen que Uku **saque el
+  tema** después («Oye, ¿y cómo te fue con la presentación?»), igual que cuánto hace que no
+  hablan o, por la mañana, «¿qué es lo único que tiene que salir hoy?». Si sabe poco de Fran, le
+  pregunta algo de su vida.
+- **Diario**: al despedirse de Fran, Uku escribe dos o tres frases desde su punto de vista. Está
+  en **P › Diario**, junto a todo lo que sabe de Fran; cada cosa se puede borrar, o todo.
+- **El claro crece con la relación** (`memoria.js › mundo()`): empieza con brotes y el lago chico;
+  con las conversaciones salen las flores, con los días los guayacanes y los árboles, con lo que
+  sabe las mariposas; la casa aparece al segundo día, la tortuga a la semana y una bandera por cada
+  meta que recuerda. Cada hecho nuevo hace brotar flores. Para verlo crecido:
+  `Mimo.memoria.simular(8, 30)` y recargar.
+- Nada de esto sale del navegador (`localStorage` `mimo_memoria`), salvo lo que viaja al modelo
+  mientras Fran conversa.
+
 ## Modo guardián y modo demo
 
 - **Guardián** (por defecto): Uku atiende a los demás. Cuando quien está enfrente es Fran
@@ -500,7 +531,9 @@ frase hasta haber dicho todas**, y la primera de la baraja nueva nunca es la
 | `tareas.js` | Tareas por voz: «Uku…» con recordatorios y post-its (en este navegador, sin red). |
 | `mente.js` | Conversación libre: Qwen3 en el navegador (Transformers.js + WebGPU) o el cerebro en la nube (`?cerebro=URL`). |
 | `cerebro/worker.js` | Worker de Cloudflare `uku-cerebro` que conecta a Uku con Groq o Claude; la key queda en el Worker. |
-| `atiende.js` | Estado de Fran, entender, responder y mensajes. |
+| `atiende.js` | Estado de Fran, entender, responder y mensajes. El prompt (ficha, estilo, tono, memoria, situación). |
+| `memoria.js` | Hechos que Uku sabe de Fran, diario, relación y el claro que crece. |
+| `tono.js` | Lee el tono de cada frase y dice cómo responder. |
 | `efectos3d.js` | Efectos en el mundo 3D (globos, corazones, confeti, fuegos, monedas, sol, emojis). |
 | `sueno.js` | Atmósfera de sueño: polvo de luz, bokeh y bruma (el desenfoque, el brillo y los rayos son CSS). |
 | `tiempo.js` | Reloj, clima del lugar y entorno según la hora. |

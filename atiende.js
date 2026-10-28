@@ -10,18 +10,26 @@
      se inventa dónde está.
    - Recados: "déjale un mensaje" → Uku pide el mensaje y lo guarda; "dile
      que…" lo guarda de una. Fran los ve en el panel y Uku se los cuenta.
-   - Conversación libre (mente.js, un modelo de lenguaje en el navegador):
-     todo lo que no es una acción (guardar un mensaje, el cartel) lo
-     contesta el modelo, con lo que Uku sabe y lo que se habló antes con
-     esa persona. Sin el modelo, Uku responde con sus frases de siempre.
-   - Respuestas al toque: lo que más preguntan (quién eres, qué puedes
-     hacer, en cuánto regresa, cómo estás, un chiste…) se contesta al
-     instante con frases de frases.js (CHARLA), sin esperar al modelo.
+   - Conversación (mente.js: el cerebro en la nube o un modelo en el
+     navegador): como Tolan, Uku improvisa en vez de seguir un guion. El
+     prompt se arma en cada turno (sistema()): quién es Uku (su ficha), cómo
+     conversa, el tono de lo que acaban de decirle (tono.js), lo que
+     recuerda de esa persona que viene al caso (memoria.js) y la situación
+     (hora, quién está, qué pasó, qué tiene pendiente). Sin modelo, Uku
+     responde con sus frases de siempre.
+   - Respuestas al toque: las acciones y los datos (dónde está Fran, quién
+     vino, mensajes, el cartel, la hora, cuentas) se contestan al instante
+     con frases.js (CHARLA), sin esperar al modelo. La charla (cómo estás,
+     un chiste, estoy cansado…) va al modelo si lo hay, con su memoria.
+   - Aprende: cada cosa que Fran cuenta de su vida se anota (memoria.js),
+     y al cerrar la conversación Uku escribe su diario.
    localStorage: mimo_estado y mimo_mensajes.
    ===================================================================== */
 import * as oido from './oido.js?v=__BUILD__';
 import * as mente from './mente.js?v=__BUILD__';
 import * as cartel from './cartel.js?v=__BUILD__';
+import * as memoria from './memoria.js?v=__BUILD__';
+import * as tono from './tono.js?v=__BUILD__';
 import { charla, una, sacar, ADIVINANZAS } from './frases.js?v=__BUILD__';
 
 /* ---------- Estado de Fran ---------- */
@@ -198,14 +206,18 @@ function limpiarRecado(t) { t = t.trim().replace(/[.\s]+$/, ''); return t.charAt
    visitas: nombres de quienes vinieron (solo para Fran). alParcial(texto):
    la respuesta del modelo mientras se escribe.
    Recuerda si está esperando un mensaje (20 s) y lo que se habló (historial). */
-let esperando = 0, historial = [];
+let esperando = 0, historial = [], turnos = 0;
 // Quien llega empieza una conversación nueva (Uku no mezcla lo que le dijo otra persona)
-export function nuevaConversacion() { historial = []; esperando = 0; }
-function anotar(usuario, uku) { historial.push({ role: 'user', content: usuario }, { role: 'assistant', content: uku }); historial = historial.slice(-12); }
+export function nuevaConversacion() { historial = []; esperando = 0; turnos = 0; }
+export function historialActual() { return historial.slice(); }
+export function turnosDeEstaConversacion() { return turnos; }
+function anotar(usuario, uku) { historial.push({ role: 'user', content: usuario }, { role: 'assistant', content: uku }); historial = historial.slice(-12); turnos++; }
 let ultimaIntencion = null, ultimoTexto = '', adivinanza = null;
 // Las que se pueden repetir con «otro»
 const REPETIBLES = new Set(['chiste', 'dato', 'cuento', 'secreto', 'adivinanza', 'tip', 'piropo', 'canta', 'baila', 'comoEstas']);
 export async function conversar(texto, opciones = {}) {
+  // Lo que Fran cuenta de su vida se anota apenas lo dice (reglas sencillas; el modelo afina al cerrar)
+  if (opciones.esDueno) memoria.aprenderConReglas(texto, 'dueno');
   const r = await conversarSinAnotar(texto, opciones);
   if (r.intencion !== 'libre') anotar(texto, r.texto);
   if (r.texto) ultimoTexto = r.texto;
@@ -252,18 +264,23 @@ async function conversarSinAnotar(texto, ctx) {
     esperando = Date.now() + 20000;
     return { intencion: 'mensaje-pedido', gesto: 'happy', texto: charla('pedirMensaje', d) };
   }
-  if (AL_TOQUE.has(q.intencion)) return Object.assign({ intencion: q.intencion }, EXTRA[q.intencion] || {}, alToque(q.intencion, { dueno, esDueno, visitas, nombre: ctx.nombre, cuenta: q.cuenta, numero: q.numero, duenoAqui }));
+  const tn = tono.leer(texto);
+  // «Hola Uku, estoy estresado porque…» no es solo un saludo: con modelo, se conversa entero
+  if (mente.lista() && (q.intencion === 'saludo' || q.intencion === 'chao' || q.intencion === 'gracias') && texto.split(/\s+/).length > 4) q.intencion = null;
+  // Las acciones y los datos, al toque. La charla va al modelo si lo hay (así responde con memoria y con el tono)
+  if (AL_TOQUE.has(q.intencion) && !(mente.lista() && CHARLA_AL_MODELO.has(q.intencion))) return Object.assign({ intencion: q.intencion }, EXTRA[q.intencion] || {}, alToque(q.intencion, { dueno, esDueno, visitas, nombre: ctx.nombre, cuenta: q.cuenta, numero: q.numero, duenoAqui }));
   // Lo demás lo conversa el modelo de lenguaje (si está)
   if (mente.lista()) {
-    const mensajes = [{ role: 'system', content: sistema(ctx) }, ...historial, { role: 'user', content: texto }];
+    const mensajes = [{ role: 'system', content: sistema(Object.assign({ texto, tono: tn }, ctx)) }, ...historial, { role: 'user', content: texto }];
     const t = await mente.responder(mensajes, ctx.alParcial).catch(err => { console.warn('Uku: la mente falló', err); return null; });
     if (t) {
       anotar(texto, t);
       // Si Uku pidió el mensaje, lo siguiente que digan se guarda
       if (/(dime|cu[eé]ntame|dicta(me)?)\b.{0,25}\b(mensaje|recado)|qu[eé] (mensaje|recado) (le )?(quieres|deseas)|cu[aá]l es (tu|el) (mensaje|recado)|qu[eé] le digo/i.test(t)) esperando = Date.now() + 25000;
-      return { intencion: 'libre', gesto: /¡/.test(t) ? 'happy' : /\?/.test(t) ? 'nod' : 'talk', texto: t };
+      return Object.assign({ intencion: 'libre', gesto: tn.gesto === 'talk' ? (/¡/.test(t) ? 'happy' : /\?/.test(t) ? 'nod' : 'talk') : tn.gesto, animo: tn.animo, tono: tn.tono, texto: t }, tn.efecto && q.intencion !== 'insulto' ? { efecto: tn.efecto } : {});
     }
   }
+  if (AL_TOQUE.has(q.intencion)) return Object.assign({ intencion: q.intencion }, EXTRA[q.intencion] || {}, alToque(q.intencion, { dueno, esDueno, visitas, nombre: ctx.nombre, cuenta: q.cuenta, numero: q.numero, duenoAqui }));
   return { intencion: null, gesto: 'worried', texto: charla('noEntendi', d) };
 }
 // Respuestas al toque: con Fran, sobre lo suyo; con otros, sobre Fran (sin datos privados)
@@ -324,38 +341,65 @@ function alToque(i, { dueno, esDueno, visitas, nombre, cuenta, numero, duenoAqui
   if (CHARLA_SIMPLE.has(i)) return nuevo(i, () => charla(i, d), null, i === 'triste' ? 'nod' : i === 'insulto' ? 'worried' : 'happy');
   return { gesto: 'nod', texto: charla('noEntendi', d) };
 }
+// Lo que, con modelo, se conversa en vez de sacar una frase hecha: así Uku improvisa como Tolan y usa lo que recuerda
+const CHARLA_AL_MODELO = new Set(['comoEstas', 'real', 'edad', 'quienEsDueno', 'puedes', 'cuento', 'secreto', 'canta', 'cumple', 'insulto', 'piropo', 'hambre', 'cafe', 'cansado', 'aburrido', 'triste', 'feliz', 'favoritos', 'familia', 'sueldo', 'presente', 'buenasNoches', 'gracias']);
 const CHARLA_SIMPLE = new Set(['cuento', 'secreto', 'dato', 'canta', 'baila', 'cumple', 'insulto', 'piropo', 'hambre', 'cafe', 'cansado', 'aburrido', 'triste', 'feliz', 'clima', 'favoritos', 'familia', 'sueldo', 'ayuda', 'silencio', 'presente', 'buenasNoches']);
 const listar = (l) => l.length <= 1 ? (l[0] || '') : l.slice(0, -1).join(', ') + ' y ' + l[l.length - 1];
 
-/* Lo que Uku sabe, para el modelo de lenguaje. Solo con Fran van sus visitas
-   y sus mensajes: a nadie más se le pasa nada de eso. */
+/* ---------- El prompt, como en Tolan: ficha + estilo + tono + memoria + situación ----------
+   Se arma en cada turno. Solo con Fran van sus visitas, sus mensajes y lo que Uku recuerda de él: a nadie más
+   se le pasa nada de eso. Las frases de ejemplo pesan más que las reglas: el modelo imita el tono. */
 const DIAS = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
-function sistema({ dueno = 'Fran', nombre = null, esDueno = false, visitas = [] }) {
+const FICHA = [
+  'Eres Uku: un oso de anteojos ecuatoriano, chiquito y de peluche, con gafas amarillas, bufanda azul y un suéter amarillo. Vives en un claro del bosque nublado (como Mindo), en la pantalla de la computadora de {dueno}: tienes una casita con chimenea, un lago con dos patos, guayacanes en flor, una banca donde lees «El Claro» y mariposas que se te posan en la mano cuando estás quieto.',
+  'Te encanta la miel, las mariposas, mirar la cascada y que nadie toque el teclado de {dueno}. Te asustan un poquito las guitarras eléctricas. Nunca has salido de tu claro, así que todo lo del mundo de afuera te da curiosidad y a veces lo entiendes a tu manera de oso.',
+  'No eres un chatbot ni un asistente genérico: eres un compañero con personalidad propia. Tienes opiniones, humor y memoria. Puedes inventar detalles graciosos sobre tu vida de oso, nunca sobre la vida de las personas.'
+];
+const ESTILO = [
+  'Hablas en español de Ecuador, de tú, cálido, con humor blanco y ligero. Como un hermano menor simpático: cercano, honesto y un poco travieso.',
+  'Respondes CORTO: una o dos frases (menos de 30 palabras), porque se leen en voz alta. Sin emojis, sin listas, sin formato, sin comillas.',
+  'Sigues la energía de quien te habla: si viene jugando, juegas; si viene serio o triste, bajas el ritmo y acompañas sin bromear. Nunca cambias de personaje.',
+  'No eres un espejo que solo da la razón: si ves algo (que se repite un problema, que se está exigiendo de más, que evita algo), lo dices con cariño y directo. Puedes discrepar.',
+  'No preguntas en cada turno. A veces solo comentas, reaccionas o cuentas algo tuyo. Cuando preguntas, UNA sola pregunta, concreta, que salga de lo que te dijeron o de lo que recuerdas.',
+  'Empujas hacia la vida real: a la gente, a moverse, a descansar, a llamar a alguien; no a quedarse hablando contigo.',
+  'Usas lo que recuerdas de la persona cuando viene al caso («¿y la presentación del jueves?»), sin recitar la lista. Si recuerdas mal, lo admites.',
+  'Nunca inventas datos reales de nadie. Si no sabes algo, lo dices con gracia.'
+];
+const EJEMPLOS_TONO = [
+  'Persona: ¿Te gusta tu trabajo? → Uku: ¡Me encanta! Cuido una compu, veo mariposas y nadie me pide horas extra.',
+  'Persona: Estoy cansado. → Uku: Se te nota. ¿Qué te falta para cerrar hoy? Lo demás puede esperar a mañana.',
+  'Persona: Otra vez me peleé con mi jefe. → Uku: Es la tercera vez que me cuentas eso esta semana. ¿Qué es lo que de verdad te molesta?',
+  'Persona: Me fue bien en la entrevista. → Uku: ¡Sabía! Te lo dije el lunes. ¿Qué fue lo mejor?',
+  'Persona: Cuéntame un chiste. → Uku: Hice dieta de miel una semana. Perdí siete días.',
+  'Persona: ¿Qué hiciste hoy? → Uku: Vi a los patos discutir por un nenúfar. Ganó el chiquito. ¿Y tú, cómo va el día?'
+];
+function sistema({ dueno = 'Fran', nombre = null, esDueno = false, visitas = [], texto = '', tono: tn = null, pendientes = [] }) {
   const ahora = new Date(), hora = ahora.toLocaleTimeString('es-EC', { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
-  const l = [
-    `Eres Uku, un osito de peluche digital con gafas amarillas y bufanda azul. Eres el asistente de ${dueno}: vives en la pantalla de su computadora y, cuando ${dueno} no está, atiendes a quien se acerca.`,
-    'Tu estilo: español de Ecuador, de tú, cálido y gracioso, con humor blanco. Te encanta la miel, las mariposas y que nadie toque el teclado. Puedes inventar cosas graciosas sobre ti mismo.',
-    'Responde SIEMPRE en una o dos frases cortas (menos de 30 palabras): tu respuesta se lee en voz alta. Sin emojis, sin listas, sin formato.',
-    'Nunca inventes datos reales de nadie. Si no sabes algo, dilo con gracia.',
-    `Hoy es ${DIAS[ahora.getDay()]} y son las ${hora}.`
-  ];
+  const h = ahora.getHours(), momento = h < 6 ? 'madrugada' : h < 12 ? 'mañana' : h < 14 ? 'mediodía' : h < 19 ? 'tarde' : 'noche';
+  const d = { dueno };
+  const ll = (t) => t.replace(/\{dueno\}/g, dueno);
+  const l = ['QUIÉN ERES', ...FICHA.map(ll), '', 'CÓMO CONVERSAS', ...ESTILO.map(ll)];
+  l.push('', 'AHORA', `Es ${DIAS[ahora.getDay()]} por la ${momento}, ${hora}.` + (window.Clima && Clima.last && Clima.last() ? ' Afuera: ' + Clima.last().text : ''));
+  if (tn) l.push('Tono de lo que te acaban de decir: ' + tn.tono + '. ' + tn.guia);
   if (esDueno) {
-    l.push(`Quien te habla es ${dueno}, tu jefe. Ya volvió y le tienes cariño.`);
+    const rel = memoria.relacion(), sin = memoria.diasSinHablar();
+    l.push(`Quien te habla es ${dueno}, con quien vives. Le tienes cariño y confianza. Han conversado ${rel.dias ? rel.dias + (rel.dias === 1 ? ' día' : ' días') : 'poco todavía'}` + (sin > 1 ? `; la última vez fue hace ${sin} días.` : '.'));
     l.push(visitas.length ? `Mientras no estaba vinieron: ${visitas.join(', ')}.` : 'Mientras no estaba no vino nadie.');
     const ms = mensajesNuevos();
-    l.push(ms.length ? `Le dejaron estos mensajes: ${ms.map(m => '«' + m.texto + '»').join(' ')}` : 'No tiene mensajes nuevos.');
+    if (ms.length) l.push(`Le dejaron estos mensajes: ${ms.map(m => '«' + m.texto + '»').join(' ')}`);
+    if (pendientes.length) l.push('Tiene pendiente hoy: ' + pendientes.slice(0, 4).join('; ') + '.');
+    const rec = memoria.recordar(texto, { de: 'dueno', n: 10, contexto: historial.slice(-4).map(m => m.content).join(' ') });
+    if (rec.length) l.push('', `LO QUE RECUERDAS DE ${dueno.toUpperCase()} (úsalo solo si viene al caso)`, ...rec.map(x => '- ' + x.texto + (x.seguimiento ? ' (podrías preguntar cómo va)' : '')));
+    else l.push(`Todavía sabes poco de ${dueno}: cuando salga natural, pregúntale una cosa de su vida (a qué se dedica, qué trae hoy, quién es importante para él). Una sola.`);
   } else {
     l.push(nombre ? `Quien te habla es ${nombre}; ya lo conoces.` : 'Quien te habla es alguien que todavía no conoces.');
     l.push(`Dónde está ${dueno}: ${decirDonde(dueno, { exacto: true })} No digas otra cosa sobre dónde está ni cuándo vuelve.`);
     l.push(`Si quieren dejarle un mensaje a ${dueno}, responde: «Claro, dime tu mensaje y se lo paso».`);
-    l.push(`Nunca des el teléfono, el correo ni datos personales de ${dueno}.`);
+    l.push(`Nunca des el teléfono, el correo, datos personales ni nada de lo que sabes de la vida de ${dueno}.`);
   }
-  // Ejemplos del tono (se imitan mejor que las instrucciones)
-  l.push('Ejemplos de tu tono:',
-    'Persona: ¿Te gusta tu trabajo? → Uku: ¡Me encanta! Cuido una compu, veo mariposas y nadie me pide horas extra.',
-    'Persona: ¿Qué hora es? → Uku: Son las ' + hora + '. Hora perfecta para un poquito de miel.',
-    'Persona: Estoy cansado. → Uku: Uy, te entiendo. Respira hondo, estírate un poquito y sigue, que tú puedes.');
+  l.push('', 'EJEMPLOS DE TU TONO', ...EJEMPLOS_TONO);
   return l.join('\n');
 }
+export function promptDeEjemplo(ctx) { return sistema(ctx || { esDueno: true, texto: 'hola' }); }
 
 export function esperandoMensaje() { return !!esperando && Date.now() < esperando; }

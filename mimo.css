@@ -153,6 +153,12 @@ kbd { display: inline-block; min-width: 26px; padding: 2px 6px; border-radius: 6
 .mp-msj { min-height: 24px; font-weight: 600; }
 .mp-lista { display: flex; flex-direction: column; gap: 6px; }
 .mp-fila { display: flex; align-items: center; justify-content: space-between; padding: 6px 6px 6px 14px; border-radius: var(--radio-md); background: var(--superficie); font-size: 17px; font-weight: 600; }
+.mp-h3 { margin: 10px 0 0; font-size: 16px; font-weight: 700; color: var(--texto-fuerte); }
+.mp-diario b { font-weight: 500; font-style: italic; line-height: 1.4; }
+.mp-hechos { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 6px; }
+.mp-hechos li { display: flex; align-items: center; gap: 10px; padding: 8px 8px 8px 14px; border-radius: var(--radio-md); background: #f6f7f9; font-size: 15px; }
+.mp-hechos li span { flex: 1; }
+.mp-hechos li small { color: var(--texto-2); font-size: 13px; white-space: nowrap; }
 .mp-vacio, .mp-nota { color: var(--texto-2); font-size: 14px !important; }
 
 @media (prefers-reduced-motion: reduce) { .mimo-globo.is-visible, .mimo-pistas li.is-on { animation: none; } }

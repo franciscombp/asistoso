@@ -8,11 +8,14 @@
    - Personas: las que Uku reconoce. Cambiar el nombre, marcar "Soy yo"
      (el dueño), borrar, o presentar a alguien a propósito frente a la cámara.
    - Estado: lo que Uku responde cuando preguntan por Fran (antes de irse).
+   - Diario: lo que Uku escribe al despedirse de Fran (desde su punto de
+     vista) y lo que recuerda de él; cada cosa se puede borrar.
    Al cerrar, las visitas y los mensajes quedan como vistos.
    ===================================================================== */
 import * as caras from './caras.js?v=__BUILD__';
 import * as visitas from './visitas.js?v=__BUILD__';
 import * as atiende from './atiende.js?v=__BUILD__';
+import * as memoria from './memoria.js?v=__BUILD__';
 
 const MESES = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
 function cuando(ms) {
@@ -47,7 +50,7 @@ export function crearPanel({ raiz, video, caja, alCambiar = () => {} }) {
     const nm = atiende.mensajesNuevos().length;
     raiz.querySelector('[data-tab="mensajes"] .mp-n').textContent = nm ? nm : '';
     cuerpo.textContent = '';
-    ({ visitas: pintarVisitas, mensajes: pintarMensajes, personas: pintarPersonas, estado: pintarEstado })[pestana]();
+    ({ visitas: pintarVisitas, mensajes: pintarMensajes, personas: pintarPersonas, estado: pintarEstado, diario: pintarDiario })[pestana]();
   }
 
   /* ---------- Visitas ---------- */
@@ -135,6 +138,33 @@ export function crearPanel({ raiz, video, caja, alCambiar = () => {} }) {
     previa();
   }
 
+  /* ---------- Diario y memoria ---------- */
+  function pintarDiario() {
+    const d = caras.dueno(), dueno = d ? d.nombre : 'Fran', rel = memoria.relacion();
+    cuerpo.append(el('p', { class: 'mp-sub', text: `Han conversado ${rel.dias} ${rel.dias === 1 ? 'día' : 'días'} (${rel.conversaciones} ${rel.conversaciones === 1 ? 'conversación' : 'conversaciones'}). Uku recuerda ${rel.hechos} ${rel.hechos === 1 ? 'cosa' : 'cosas'} de ${dueno}; con cada una, su claro crece.` }));
+    const fechaLarga = (f) => { const [y, m, dd] = f.split('-'); return `${+dd} ${MESES[+m - 1]}`; };
+    cuerpo.append(el('h3', { class: 'mp-h3', text: 'Diario de Uku' }));
+    const entradas = memoria.diario();
+    if (!entradas.length) cuerpo.append(el('p', { class: 'mp-vacio', text: `Todavía no hay entradas. Cuando conversen y ${dueno} se vaya, Uku escribe aquí qué pasó y qué notó.` }));
+    entradas.slice(0, 20).forEach(e => cuerpo.append(el('article', { class: 'mp-visita mp-diario' }, [
+      el('div', { class: 'mp-visita__txt' }, [el('b', { text: e.texto }), el('small', { text: fechaLarga(e.fecha) + ', ' + e.hora })]),
+      el('button', { type: 'button', class: 'mp-btn mp-btn--mini mp-btn--peligro', text: 'Borrar', onclick: () => { memoria.borrarDiario(e.id); pintar(); } })
+    ])));
+    cuerpo.append(el('h3', { class: 'mp-h3', text: `Lo que Uku sabe de ${dueno}` }));
+    const hs = memoria.hechos('dueno').slice().reverse();
+    if (!hs.length) cuerpo.append(el('p', { class: 'mp-vacio', text: 'Nada todavía. Cuéntale cosas: a qué te dedicas, qué tienes esta semana, qué te gusta. Lo anota y te pregunta después cómo te fue.' }));
+    const lista = el('ul', { class: 'mp-hechos' });
+    hs.forEach(h => lista.append(el('li', {}, [
+      el('span', { text: h.texto + (h.seguimiento ? ' · te preguntará cómo va' : '') }),
+      el('small', { text: fechaLarga(h.fecha) + (h.veces > 1 ? ' · ' + h.veces + ' veces' : '') }),
+      el('button', { type: 'button', class: 'mp-btn mp-btn--mini', text: 'Olvidar', 'aria-label': 'Olvidar: ' + h.texto, onclick: () => { memoria.olvidar(h.id); pintar(); } })
+    ])));
+    cuerpo.append(lista);
+    cuerpo.append(el('div', { class: 'mp-pie' }, [
+      el('button', { type: 'button', class: 'mp-btn mp-btn--terciario', text: 'Que Uku olvide todo', onclick: () => { if (confirm('¿Borrar el diario y todo lo que Uku recuerda?')) { memoria.olvidarTodo(); pintar(); alCambiar(); } } })
+    ]));
+  }
+
   /* ---------- Personas ---------- */
   function pintarPersonas() {
     const vs = visitas.lista();
@@ -200,6 +230,6 @@ export function crearPanel({ raiz, video, caja, alCambiar = () => {} }) {
     alCambiar();
   }
   // Si algo cambia con el panel abierto (llega alguien nuevo), se repinta
-  ['mimo:visitas', 'mimo:personas', 'mimo:mensajes'].forEach(ev => document.addEventListener(ev, () => { if (!raiz.hidden && !raiz.contains(document.activeElement)) pintar(); }));
+  ['mimo:visitas', 'mimo:personas', 'mimo:mensajes', 'mimo:memoria'].forEach(ev => document.addEventListener(ev, () => { if (!raiz.hidden && !raiz.contains(document.activeElement)) pintar(); }));
   return { abrir, cerrar, get abierto() { return !raiz.hidden; }, alternar(tab) { raiz.hidden ? abrir(tab) : cerrar(); } };
 }

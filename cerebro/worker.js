@@ -13,7 +13,7 @@
 const GROQ = 'https://api.groq.com/openai/v1';
 const ORIGENES = 'https://franciscombp.github.io,http://localhost:8765,http://127.0.0.1:8765';
 // Topes amplios, para uso libre y sin abuso: contexto corto, respuestas breves y cupo diario por IP y en total (por instancia)
-const MAX_MENSAJES = 10, MAX_LARGO = 500, MAX_SISTEMA = 3000, MAX_TOKENS = 160, POR_MINUTO = 20, POR_DIA_IP = 400, POR_DIA_TOTAL = 3000;
+const MAX_MENSAJES = 10, MAX_LARGO = 500, MAX_SISTEMA = 6000, MAX_TOKENS = 160, POR_MINUTO = 20, POR_DIA_IP = 400, POR_DIA_TOTAL = 3000;
 // Interruptor de cuotas: por defecto apagado (uso libre). Para limitar: variable LIMITES = on en el Worker (Settings › Variables).
 // Cambiarla no requiere volver a subir el código.
 const cuotasOn = (env) => String(env.LIMITES || '').toLowerCase() === 'on';
