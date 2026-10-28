@@ -145,6 +145,20 @@ export function manejar(dir) {
   if (dir) { b3d.setAmbient('walk'); clearTimeout(venirTimer); }
   b3d.manejar(dir);
 }
+/* ---------- Guíame (el juego de Her): Uku se pierde y lo traes a casa ---------- */
+// perderse(): Uku aparece lejos, a la entrada del bosque o tras el lago, quieto y sin pasear
+export function perderse() {
+  if (!b3d) return false;
+  clearTimeout(venirTimer); frente = false; b3d.setFront(false); b3d.setAmbient(null);
+  const sitios = ['cartel', 'cascada', 'lena', 'huerto'].filter(s => b3d.sitiosDePaseo().includes(s));
+  const ok = sitios.length ? b3d.colocarEn(sitios[Math.floor(Math.random() * sitios.length)]) : false;
+  encuadre(false);
+  return ok;
+}
+// guiar(dir): lo empuja en esa dirección de pantalla ({ x, z } o null para que pare)
+export function guiar(dir) { if (b3d) b3d.manejar(dir); }
+export function distanciaACasa() { if (!b3d) return 99; const c = b3d.casa(); return b3d.distanciaA(c.x, c.z); }
+export function dondeEsta() { return b3d ? b3d.dondeEsta() : null; }
 // El módulo del mundo 3D (para dibujar efectos dentro de la escena)
 export const mundo = () => b3d;
 export function _debug() { return { b3d, entorno, frente }; }

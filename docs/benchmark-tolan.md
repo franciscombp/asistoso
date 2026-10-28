@@ -47,6 +47,23 @@ recordatorios, mensajes, el cartel) es lo adicional que Tolan no tiene.
 - Modo **guardián**: con Fran enfrente solo lo saluda y sigue en lo suyo (no engancha).
 - Todo corre en el navegador y la memoria se queda en el equipo; lo único que sale es lo que viaja al modelo cuando se conversa.
 
+## El otro benchmark: el Alien Child de *Her* (2013)
+
+En la película de Spike Jonze, Theodore juega en su sala con un holograma: un alienígena chiquito
+(con la voz del propio Jonze, diseño de David OReilly) que lo guía por unos túneles mientras lo
+insulta con gracia. No hay pantalla, ni mandos, ni HUD: el personaje está en el cuarto, se le habla
+y entiende; tiene su propio carácter y su propia agenda; se mete en la conversación entre Theodore
+y Samantha (los tres hablan a la vez); se aburre, se queja, se burla, se pierde. Es la escena que
+mejor muestra un personaje de juego que se siente **presente** y con **genio propio**.
+
+| Qué hace el Alien Child | En Uku |
+| --- | --- |
+| **Vive en la sala, sin pantalla ni mandos.** Se le habla directo y el personaje contesta; no hay interfaz. | Uku vive en la pantalla grande con los controles ocultos por defecto (solo él, su globo, el reloj y el clima). Se le habla y lo ve a uno por la webcam. |
+| **Tiene genio propio.** Insulta, se burla, se queja, se niega, te apura. Lo grosero se lee como encanto porque es un bicho chiquito. | El prompt tiene **picardía con cariño**: Uku puede molestar un poquito, tener mal genio de mentira, negarse con humor («ya van cinco chistes, ¿me pagas en miel?») o pedir algo a cambio. Nunca hiere y lo deja a la primera señal de que algo es serio. Ejemplos en `atiende.js › EJEMPLOS_TONO`. |
+| **Te guía por los túneles.** El juego es él llevándote; se pierde, te apura, comenta el camino. | Al revés, porque Uku es el que vive en el claro: en **«Guíame»** (tecla `7` o decir «guíame») Uku se pierde a la entrada del bosque y tú lo traes a casa con la voz («izquierda», «derecha», «arriba», «sigue», «para») o **señalando con la mano** (la mano a un lado de la cámara lo lleva para allá; arriba, al fondo). Comenta el camino («¿seguro que es por aquí?»), se queja si lo dejas plantado, avisa cuando choca con algo («por ahí no paso, ¿me rodeas eso?»), celebra al llegar y a los dos minutos se rinde con drama. |
+| **Conversación a tres.** El alien, Theodore y Samantha se cruzan; el alien se mete en la charla de los dos. | Cuando Fran está en cámara y le habla una visita, el prompt dice que la conversación es a tres: Uku puede incluir a Fran, hacer de puente («Fran, ¿le contamos?») o bromear con los dos. |
+| **Se mueve por el espacio con el cuerpo.** Theodore lo sigue por la sala. | Uku pasea por un claro de más de 4 m, rodea el lago y la casa, se sienta a leer en la banca; las flechas y, ahora, la mano y la voz lo manejan. |
+
 ## Lo que falta para estar a la par
 
 1. **Latencia.** Tolan mide cada tramo y presupuesta 2 s. Uku no mide: convendría instrumentar (oído → respuesta → voz) y, como Tolan, usar un modelo pequeño para lo casual y el grande para lo delicado (el tono ya está clasificado; falta que el Worker elija el modelo).
@@ -65,3 +82,4 @@ recordatorios, mensajes, el cartel) es lo adicional que Tolan no tiene.
 - Creative Conviction, entrevista a Quinten Farmer
 - ai.engineer/orgs/tolan; HBS case *Tolan: When the Relationship Is the Product*
 - Reseñas: SoulLink (2026), Automateed, Forest Scout, Medium (@zhy9495), giraffetales.substack.com
+- *Her* (Spike Jonze, 2013), escena del Alien Child; Vice, *Meet the real-world designers behind the fictional video games of Her* (David OReilly); SlashFilm, *10 fake video games from movies*

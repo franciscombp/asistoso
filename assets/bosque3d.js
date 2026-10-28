@@ -680,8 +680,10 @@ function brain(dt) {
     const err = angDiff(Math.atan2(manual.x, manual.z), heading);
     heading += clamp(err, -dt * 4, dt * 4);
     want = Math.abs(err) < 1.2 ? WALK_V * 1.6 : 0;
-    const nx = pos.x + Math.sin(heading) * want * dt, nz = pos.z + Math.cos(heading) * want * dt;
-    if (!okWalk(nx, nz)) want = 0; // contra un borde o un objeto: se queda (sigue en la clip de caminar un instante)
+    // Mira un paso adelante (no solo el tramo de este cuadro: la velocidad se suaviza y se colaba dentro de las cosas);
+    // si ya quedó dentro de algo, se le deja salir por donde sea
+    const nx = pos.x + Math.sin(heading) * .06, nz = pos.z + Math.cos(heading) * .06;
+    if (!okWalk(nx, nz) && okWalk(pos.x, pos.z)) want = 0; // contra un borde o un objeto: se queda (sigue en la clip de caminar un instante)
     idleFor = 2.5;
   } else if (goal) {
     const dx = goal.x - pos.x, dz = goal.z - pos.z, d = Math.hypot(dx, dz), err = angDiff(Math.atan2(dx, dz), heading);
@@ -823,6 +825,9 @@ export function sitiosDePaseo() { return sitios().map(l => l.nombre); }
 export function caminarA(x, z) { return irANuevo(x, z); }
 export function planDe(x, z) { return planear(x, z); }
 export function dondeEsta() { return { x: pos.x, z: pos.z, libre: okWalk(pos.x, pos.z), andando: !!goal, ruta: ruta.length, front, gesture, ambient, focus: !!focus, replanes }; }
+// La puerta de su casa (adónde vuelve cuando lo guían) y a cuánto está de un punto
+export function casa() { const l = sitios().find(s => s.nombre === 'casa'); return l ? { x: l.x, z: l.z } : { x: ZONA.hogar[0][0], z: ZONA.hogar[0][1] + .55 }; }
+export function distanciaA(x, z) { return Math.hypot(pos.x - x, pos.z - z); }
 export function colocarEn(nombre) { const l = sitios().find(s => s.nombre === nombre); if (!l) return false; pos.x = l.x; pos.z = l.z; goal = null; heading = Math.atan2(l.mira[0] - l.x, l.mira[1] - l.z); return true; }
 export function colocar(x, z, rumbo) { if (!okWalk(x, z)) return false; pos.x = x; pos.z = z; goal = null; ruta = []; if (rumbo != null) heading = rumbo; return true; }
 /* Leer en la banca: Uku se sienta (pose del rig), abre el periódico y cada tanto pasa la página; al terminar se

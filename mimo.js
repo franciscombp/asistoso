@@ -548,6 +548,75 @@ async function empezar({ conCamara = true } = {}) {
   caras.cargar().catch(() => estado('No pude cargar el reconocimiento de caras', 'error')); // reconoce desde el inicio
 }
 
+/* ---------- Juego: guíame (el Alien Child de «Her», al revés) ----------
+   En Her, el personaje del juego vive en la sala, tiene su propio carácter y te guía por los túneles
+   mientras te insulta con gracia. Aquí Uku se pierde a la entrada del bosque y eres tú quien lo trae a
+   casa: con la voz («izquierda», «derecha», «sigue», «arriba», «para») o señalando con la mano (la mano
+   a la izquierda o a la derecha de la cámara lo lleva para allá; arriba, al fondo). Uku comenta el
+   camino, se queja si lo dejas plantado y celebra al llegar. Tecla 7 o decir «guíame» / «te guío». */
+let guiando = null;
+const GUIA_DIR = { izquierda: [-1, 0], derecha: [1, 0], arriba: [0, -1], fondo: [0, -1], atras: [0, -1], atrás: [0, -1], abajo: [0, 1], adelante: [0, 1], sigue: null, para: 'para', alto: 'para', quieto: 'para', espera: 'para' };
+const GUIA_FRASES = {
+  inicio: ['¡Ay! Me fui a mirar la cascada y ya no sé por dónde es mi casa. ¿Me guías? Dime izquierda, derecha o sigue, o señala con la mano.', '¡Me perdí! Esto me pasa por seguir a una mariposa. Guíame a mi casa: izquierda, derecha, arriba… o apunta con la mano.'],
+  andando: ['¿Seguro que es por aquí?', 'Voy, voy. No me apures.', 'Confío en ti. Más o menos.', 'Si me llevas al lago, nado. Pero no me gusta.', 'Ya huelo la chimenea… o es el deseo.', '¿Y si mejor me cargas?'],
+  trabado: ['Por ahí no paso: hay algo. ¿Por otro lado?', 'Choqué. ¿Me rodeas eso, porfa?', 'Ahí hay un bicho o un árbol. Dame otra dirección.', 'No avanzo. ¿Izquierda o derecha?'],
+  quieto: ['¿Hola? ¿Me vas a dejar aquí parado?', 'Sigo perdido, por si no te diste cuenta.', 'Un oso solo en el bosque. Qué drama.', 'Dime algo: izquierda, derecha… lo que sea.'],
+  cerca: ['¡Ahí está mi puerta! Ya casi.', '¡Esa es mi casa! Un pasito más.'],
+  llego: ['¡Llegué! Eres mejor guía que las mariposas. Y gratis.', '¡Mi casa! Gracias. Te debo una miel.', '¡En casa! Esto sí fue trabajo en equipo. Yo caminé, eso cuenta.'],
+  rindo: ['Bueno, me quedo a vivir aquí. Ya me acostumbré.', 'Se me acabó la paciencia de oso. Vuelvo solo, pero conste.']
+};
+const gf = (k) => GUIA_FRASES[k][Math.floor(Math.random() * GUIA_FRASES[k].length)];
+function guiarme() {
+  if (guiando || jugando) return;
+  if (!escena.perderse()) return decir('Hoy no me puedo perder: la escena no está lista.', 4000);
+  guiando = { desde: performance.now(), ultimoEmpuje: 0, ultimaFrase: performance.now(), cerca: false, dir: null };
+  st.ultimaActividad = performance.now(); st.interactuo = true; prestarAtencion();
+  decir(gf('inicio'), 8000); escena.gesto('worried');
+  guiando.timer = setInterval(() => {
+    if (!guiando) return;
+    const ahora = performance.now(), d = escena.distanciaACasa();
+    // La mano, a un lado de la cámara, lo lleva para allá (la imagen está en espejo: x ya viene invertida)
+    const m = st.ultimo && st.ultimo.manos && st.ultimo.manos[0];
+    if (m && m.puntos && m.puntos.length === 21) {
+      const x = 1 - m.puntos[9].x, y = m.puntos[9].y;
+      const dir = x < .35 ? [-1, 0] : x > .65 ? [1, 0] : y < .3 ? [0, -1] : null;
+      if (dir) { guiando.dir = dir; guiando.ultimoEmpuje = ahora; }
+    }
+    // Un empuje dura un par de segundos (así «izquierda» de voz lo mueve un tramo)
+    if (guiando.dir && ahora - guiando.ultimoEmpuje < 2200) escena.guiar({ x: guiando.dir[0], z: guiando.dir[1] });
+    else { escena.guiar(null); guiando.dir = null; }
+    // Si lo empujas y no se mueve, algo le cierra el paso (el lago, la tortuga, un árbol): lo dice
+    const w = escena.dondeEsta();
+    if (w) {
+      const quieto = guiando.pos && Math.hypot(w.x - guiando.pos.x, w.z - guiando.pos.z) < .005;
+      guiando.pos = { x: w.x, z: w.z };
+      guiando.trabado = guiando.dir && quieto ? (guiando.trabado || 0) + 1 : 0;
+      if (guiando.trabado === 6) { guiando.ultimaFrase = ahora; decir(gf('trabado'), 4000); escena.gesto('worried'); }
+    }
+    if (d < .6) return terminarGuia('llego');
+    if (d < 1.1 && !guiando.cerca) { guiando.cerca = true; decir(gf('cerca'), 4000); guiando.ultimaFrase = ahora; escena.gesto('happy'); }
+    if (ahora - guiando.ultimaFrase > 9000) { guiando.ultimaFrase = ahora; decir(gf(guiando.dir ? 'andando' : 'quieto'), 4500); if (!guiando.dir) escena.gesto('worried'); }
+    if (ahora - guiando.desde > 120000) terminarGuia('rindo');
+  }, 250);
+}
+function terminarGuia(como) {
+  if (!guiando) return;
+  clearInterval(guiando.timer); guiando = null; escena.guiar(null);
+  st.ultimaActividad = performance.now();
+  if (como === 'llego') { decir(gf('llego'), 6000); escena.gesto('happy'); efectos.lanzar('confeti', { x: .5, y: .5 }); fx('salto'); }
+  else { decir(gf('rindo'), 5000); escena.libre(0); }
+}
+// Lo que se dice durante el juego: izquierda, derecha, arriba, sigue, para… (o «ya no juego»)
+function guiarPorVoz(texto) {
+  const t = texto.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+  if (/\b(ya no|basta|dejalo|me rindo|cancela|salir)\b/.test(t)) return terminarGuia('rindo');
+  const k = Object.keys(GUIA_DIR).find(w => new RegExp('\\b' + w + '\\b').test(t));
+  if (!k) return;
+  const v = GUIA_DIR[k];
+  if (v === 'para') { guiando.dir = null; escena.guiar(null); escena.gesto('nod'); return; }
+  guiando.dir = v || guiando.dir || [0, -1]; guiando.ultimoEmpuje = performance.now();
+}
+
 /* ---------- Juego: piedra, papel o tijera ----------
    Uku cuenta, lee tu mano (puño = piedra, palma = papel, V = tijera) o lo que
    dijiste, y juega. Tecla G o decir «jugamos». */
@@ -688,6 +757,7 @@ async function oir(texto) {
   texto = (texto || '').trim();
   if (!texto || ALUCINA.test(texto) || texto.length < 2) return;
   if (voz.estaHablando()) return; // mientras habla Uku, lo que entra es él mismo o gente encima
+  if (guiando) { mostrarOido(texto); st.ultimaActividad = performance.now(); prestarAtencion(); return guiarPorVoz(texto); } // en «guíame», todo lo que se dice es para guiar
   // «Uku…» al principio: recordatorios, post-its y lo demás es para Uku (antes del modo guardián: son de quien lo dice)
   const ll = tareas.llamada(texto);
   if (ll) {
@@ -707,6 +777,7 @@ async function oir(texto) {
   // Piedra, papel o tijera: «jugamos» empieza; durante el juego lo que digan es la jugada
   const jugada = (texto.toLowerCase().match(/\b(piedra|papel|tijeras?)\b/) || [])[1];
   if (jugando) { if (jugada) jugando.voz = jugada.replace(/s$/, ''); return; }
+  if (/\b(gu[ií]ame|te gu[ií]o|est[aá]s perdido|pi[eé]rdete)\b/i.test(texto)) return guiarme();
   if (/\b(jugamos|juguemos|jugar|piedra,? papel)/i.test(texto)) return jugar();
   if (st.visita) visitas.seguir(st.visita);
   // Palabras de juego dichas solas ("¡fiesta!", "globos") mueven el mundo; lo demás se conversa
@@ -796,6 +867,7 @@ addEventListener('keydown', (e) => {
   if (k === 'a') return descargas.alternar();
   if (k === 'n') return setModo(modo === 'demo' ? 'guardian' : 'demo');
   if (k === 'g') return jugar();
+  if (k === '7') return guiando ? terminarGuia('rindo') : guiarme();
   if (k === 'z') return reaccionar(TRAVESURAS[Math.floor(Math.random() * TRAVESURAS.length)], { x: .62, y: .55 });
   if (k === 's') return despierto.activo() ? despierto.desactivar() : despierto.activar();
   if (k === 'escape') { panel.cerrar(); ui.ayuda.hidden = true; }
@@ -848,4 +920,4 @@ escena.iniciar(ui.escena).then(async () => {
 document.addEventListener('mimo:aprendio', () => { if (document.body.classList.contains('lista')) { efectos.lanzar('jardin', { x: .62, y: .55 }); escena.setClaro(memoria.mundo()); } });
 
 // Para pruebas y para operar desde la consola
-window.Mimo = { alternarHud, tiempo, ambienteReal, seguirCaras, hayDueno, hayVisita, cartel, setModo, get modo() { return modo; }, callandoPorDueno, despierto, jugar, fx, REACCION, mente, escena, reaccionar, procesar, decir, efectos, caras, visitas, atiende, panel, st, gestos, oir, oido, descargas, modoDueno, memoria, abrirTema, cerrarConversacionConFran };
+window.Mimo = { alternarHud, tiempo, ambienteReal, seguirCaras, hayDueno, hayVisita, cartel, setModo, get modo() { return modo; }, callandoPorDueno, despierto, jugar, fx, REACCION, mente, escena, reaccionar, procesar, decir, efectos, caras, visitas, atiende, panel, st, gestos, oir, oido, descargas, modoDueno, memoria, abrirTema, cerrarConversacionConFran, guiarme, get guiando() { return !!guiando; } };

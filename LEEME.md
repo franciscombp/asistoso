@@ -72,6 +72,21 @@ lo que hace que un personaje se sienta vivo:
 - Nada de esto sale del navegador (`localStorage` `mimo_memoria`), salvo lo que viaja al modelo
   mientras Fran conversa.
 
+## Como el Alien Child de «Her»: picardía y «Guíame»
+
+El otro benchmark (también en `docs/benchmark-tolan.md`) es el personaje del juego de la película
+*Her*: un alien chiquito que vive en la sala, sin pantalla ni mandos, con genio propio, que guía a
+Theodore por unos túneles mientras lo insulta con gracia y se mete en la conversación con Samantha.
+
+- **Picardía con cariño**: Uku puede molestar un poquito, quejarse, negarse con humor o pedir algo a
+  cambio; nunca hiere y lo deja apenas algo es serio.
+- **Guíame** (tecla `7` o decir «guíame» / «te guío»): Uku se pierde a la entrada del bosque y tú lo
+  traes a su casa con la voz («izquierda», «derecha», «arriba», «sigue», «para») o señalando con la
+  mano (a un lado de la cámara lo lleva para allá; arriba, al fondo). Comenta el camino, se queja si
+  lo dejas parado, avisa si choca con algo, celebra al llegar y a los dos minutos se rinde. «Ya no»
+  lo termina.
+- **A tres**: con Fran en cámara y una visita hablándole, Uku incluye a los dos.
+
 ## Modo guardián y modo demo
 
 - **Guardián** (por defecto): Uku atiende a los demás. Cuando quien está enfrente es Fran
@@ -475,7 +490,7 @@ frase hasta haber dicho todas**, y la primera de la baraja nueva nunca es la
 | `X` | Muestra u oculta los controles (también tocando el reloj). **Por defecto están ocultos**: quedan Uku, su globo, el reloj y el clima |
 | `M` / `V` | Voz de Uku / oído (micrófono con Whisper) |
 | `A` | Cómo va la descarga de la IA |
-| `G` / `Z` | Jugar piedra, papel o tijera / una travesura al azar |
+| `G` / `7` / `Z` | Jugar piedra, papel o tijera / guíame / una travesura al azar |
 | `S` | Pantalla despierta: encender o apagar |
 | `N` | Modo guardián / modo demo |
 | `← ↑ → ↓` | Manejar a Uku por su claro |
