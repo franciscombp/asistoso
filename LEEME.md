@@ -99,44 +99,22 @@ Theodore por unos túneles mientras lo insulta con gracia y se mete en la conver
   `?modo=demo` lo deja en demo. Se recuerda en este equipo. Las teclas de quien opera
   (`Q`, `G`, `Z`…) siguen funcionando en los dos modos.
 
-## Habla con Uku (IA en el navegador)
+## Habla con Uku
 
-Uku escucha por el micrófono y **conversa** por Fran:
+Uku escucha por el micrófono y **conversa** por Fran. El cerebro es **Groq** a través del Worker
+`uku-cerebro` (abajo), más la lógica propia de Uku (`atiende.js`: respuestas al toque, memoria, tono).
 
-- **Oído** (`oido.js`), dos opciones en el inicio:
-  - **Del navegador** (por defecto en Chrome y Edge): el reconocimiento de voz
-    del propio navegador. Entiende mucho mejor el español, muestra lo que va
-    oyendo mientras hablas y no descarga nada. El audio lo procesa el servicio
-    del navegador (Google o Microsoft), así que necesita internet.
-  - **Whisper en este equipo** (privado): Transformers.js con **Whisper small**
-    sobre la tarjeta gráfica (WebGPU) o **base** sin ella. Nada sale del
-    navegador. `?whisper=onnx-community/whisper-base` elige otro.
-  - Mientras Uku habla o el panel está abierto, no escucha.
-- **Conversación libre, experimental y apagada por defecto** (`mente.js`):
-  en las pruebas no dio resultados confiables, así que Uku responde con su
-  compendio de frases (ver abajo). Se puede encender en el inicio. Es un modelo de lenguaje, **Qwen3 1.7B**
-  (o 0.6B si el primero no carga), corre en el navegador con WebGPU
-  (~1 GB la primera vez, luego desde la caché). Uku conversa de lo que sea, en
-  dos frases cortas, y la respuesta aparece en el globo mientras se escribe.
-  Sabe:
-  - dónde está Fran y cuándo vuelve (lo que eligió en **P › Estado**; no lo
-    inventa);
-  - con quién habla (por su nombre si lo conoce) y lo que ya hablaron;
-  - **solo con Fran**: quién vino y sus mensajes.
-
-  Sin WebGPU, o si la descarga falla, Uku responde con sus frases de siempre.
-  `?llm=onnx-community/Qwen3-0.6B-ONNX` elige otro modelo.
-- **Cerebro en la nube** (`cerebro/worker.js`): la alternativa sin descargas ni tarjeta
-  gráfica y sin depender de que una computadora esté encendida. Un Cloudflare Worker (gratis,
-  `uku-cerebro`) que guarda la key de Groq como secreto y conversa con el modelo; la página solo
-  conoce la URL.
+- **Oído** (`oido.js`): el reconocimiento de voz del propio navegador (Chrome o Edge). Muestra lo que
+  va oyendo mientras hablas y no descarga nada; el audio lo procesa el servicio del navegador, así que
+  necesita internet. Mientras Uku habla o el panel está abierto, no escucha.
+- **Cerebro en la nube** (`cerebro/worker.js`): un Cloudflare Worker (gratis, `uku-cerebro`) que
+  guarda la key de Groq como secreto y conversa con el modelo; la página solo conoce la URL. Sin key,
+  sin red o si tarda más de 15 s, Uku responde con su compendio de frases.
 
   ```
   Página (mente.js, pedirNube) ──POST──► uku-cerebro.francisco-a86.workers.dev (cerebro/worker.js) ──► Groq
   ```
 
-  Al cargar, la página le pregunta al Worker si está listo (`GET /` → `{ listo, modelo }`). Sin key,
-  sin red o si tarda más de 15 s, Uku sigue con el modelo local si está, o con sus frases.
   - **Poner la key**: Cloudflare › **Workers & Pages › uku-cerebro › Settings › Variables and
     Secrets › Add**, tipo **Secret**, nombre `GROQ_API_KEY`, valor: una key de Groq (gratis con
     límites, https://console.groq.com). Con la CLI:
@@ -145,24 +123,22 @@ Uku escucha por el micrófono y **conversa** por Fran:
   - **Variables opcionales**: `GROQ_MODEL` (si no está, el Worker elige el modelo de chat de más
     contexto que ofrece Groq con esa key; la lista en `/modelos`), `ORIGENES` (quién puede llamarlo;
     por defecto GitHub Pages de `franciscombp` y `localhost:8765`).
-  - **Pasar a Claude** (API de pago, centavos por conversación; la suscripción Claude Pro no da
-    acceso a la API): variable `PROVEEDOR = anthropic` y secreto `ANTHROPIC_API_KEY` (opcional
-    `ANTHROPIC_MODEL`, por defecto Claude Haiku 5.5). El código es el mismo.
+  - **Pasar a Claude** (API de pago): variable `PROVEEDOR = anthropic` y secreto `ANTHROPIC_API_KEY`
+    (opcional `ANTHROPIC_MODEL`, por defecto Claude Haiku 5.5). El código es el mismo.
   - **Contrato**: `GET /` → `{ listo, proveedor, modelo }`; `GET /modelos`; `POST /`
     `{ mensajes: [{ role, content }] }` → texto plano por trozos (streaming, se va escribiendo en el
     globo). Errores: `503` sin key, `403` origen no permitido, `429` más de 20 preguntas por minuto
-    por IP, `502` el proveedor falló.
-  - **El prompt lo arma la página** (`atiende.js › sistema`: quién es Uku, dónde está Fran, con
-    quién habla y, solo con Fran, quién vino y sus mensajes) y viaja como primer mensaje; el Worker
-    solo recorta y reenvía. Lo que no se deja al modelo (mensajes, respuestas al toque) sigue igual
-    que con el modelo local.
-  - **Volver a desplegar**: el Worker se subió con la API de Cloudflare (script `uku-cerebro`,
-    módulo `worker.js`). `npx wrangler deploy cerebro/worker.js --name uku-cerebro
+    por IP, `502` el proveedor falló. El prompt (hasta 6000 caracteres) lo arma la página.
+  - **Volver a desplegar**: `npx wrangler deploy cerebro/worker.js --name uku-cerebro
     --compatibility-date 2026-10-01`, o pídeselo a Claude con el conector de Cloudflare. Los
     secretos se conservan.
   - **Probar sin publicar**: `localStorage.setItem('uku-cerebro-url', 'http://localhost:8787/')`
     apunta a otro Worker (p. ej. `wrangler dev`); `'off'` apaga la nube; `?cerebro=URL` en la
     dirección hace lo mismo y se recuerda (`?cerebro=` vacío lo borra).
+- **Modelos locales, solo para pruebas** (quedan en el código, no se cargan ni se ofrecen en el
+  inicio): Whisper en el navegador con `?whisper=onnx-community/whisper-base`, un modelo de lenguaje
+  local (Qwen3 con WebGPU) con `?llm=onnx-community/Qwen3-0.6B-ONNX`, y el modelo de frases MiniLM
+  con `?sentido`.
 - **Lo que no se deja al modelo** (`atiende.js`):
   - Los mensajes: "déjale un mensaje" → Uku lo pide y guarda lo siguiente que
     digas; "dile que la reunión se movió" → lo guarda de una.
@@ -198,9 +174,8 @@ muestra el contexto que recibió el modelo.
 ### Cómo va la descarga
 
 La tarjeta **La IA de Uku** (arriba a la izquierda; tecla `A`) muestra cada
-modelo mientras baja: **Visión** (MediaPipe, ~17 MB), **Caras** (face-api,
-~7 MB), **Oído** (Whisper), **Conversación** (Qwen3) y **Sentido** (MiniLM, solo sin conversación libre), con MB y % y dónde
-corre (tarjeta gráfica, CPU o WebAssembly). Si algo falla lo dice ("Revisa
+modelo mientras baja: **Visión** (MediaPipe, ~17 MB) y **Caras** (face-api, ~7 MB), con MB y % y
+dónde corre (tarjeta gráfica o CPU). Si algo falla lo dice ("Revisa
 la conexión con huggingface.co"). Cuando todo está listo se esconde sola; la
 segunda vez sale de la caché casi al instante.
 
@@ -283,6 +258,31 @@ tienen volumen y giran, y el confeti es una nube de piezas que cae girando. (La 
   `assets/oso/tex-original/` (`?texturas=original`).
 - **Sin marca**: no hay logo en la barra ni en el inicio y el icono es un Uku de línea (`icono.svg`).
 
+## Cámaras: control en tercera persona, vista de pájaro y espejo
+
+Tres botones arriba (o sus teclas) cambian cómo se ve y se usa el claro:
+
+- **🎮 Control** (tecla `K`, o decir «modo control»): la cámara se pone **detrás de Uku** y lo manejas
+  tú. Con la **mano** frente a la cámara: arriba = adelante, abajo = atrás, a un lado = gira hacia
+  ese lado; o con las **flechas** (arriba/abajo avanza y retrocede, izquierda/derecha gira). Al
+  soltar se queda; al apagar el modo sigue en lo suyo. `escena.controlar({ avance, giro })`.
+- **🗺️ Vista** (tecla `O`, o «vista de pájaro»): el claro **desde arriba**. Se arrastra con el mouse o
+  el dedo (en dos ejes), se acerca o aleja con la **rueda** o el **pellizco**, y **Uku sigue en sus
+  cosas** mientras tanto (pasea, lee, mira mariposas). El botón **📍** vuelve a él: la cámara lo sigue
+  hasta que vuelvas a arrastrar. En la vista normal la rueda también acerca y aleja.
+- **🪞 Espejo** (tecla `E`, o «imítame»): Uku **te imita como un Memoji**: gira, cabecea e inclina la
+  cabeza como tú, pestañea cuando pestañeas, pone ojos contentos cuando sonríes, y mueve los brazos
+  como los tuyos (en espejo: tu izquierda es su derecha). La postura que tengas al encenderlo es el
+  «cero», así que no hace falta mirar a la cámara exacto. Mientras imita, las manos no son gestos.
+  Se calcula en `mimo.js › imitar()` (nariz respecto al centro de la cara, línea de los ojos,
+  expresiones de MediaPipe, hombros-codos-muñecas) y se aplica en `bosque3d.js › setEspejo()` (cada
+  hueso del brazo apunta hacia donde va el tuyo; la cabeza gira alrededor de los ejes de Uku).
+- **Depurar la cámara** (tecla `D`): la ventana del video crece y muestra lo que ve y lo que entiende:
+  el esqueleto del cuerpo, los 21 puntos de cada mano con el gesto y su confianza, la caja de cada
+  cara con quién es, los puntos clave de la cara y, debajo, los cuadros por segundo de la visión,
+  las expresiones (pestañeo, sonrisa, boca, cejas), lo que entra al espejo (giro, cabeceo,
+  inclinación) y lo que sale del control por manos.
+
 ## Senderos: por dónde se navega
 
 El claro tiene **caminos de tierra** (`assets/bosque3d.js › SENDEROS`) que salen de la plazuela entre
@@ -293,7 +293,11 @@ entrada del bosque (pasando entre el farol y la cerca, junto a la leña) y el pu
 - Son **corredores siempre libres**: nada se pone encima (la tortuga, las hojas grandes y las
   heliconias se corrieron a los lados) y los árboles del bosque los esquivan. `senderosChocan()`
   revisa el diseño y dice qué cosa queda sobre un sendero.
-- Se dibujan como una cinta de tierra clara apoyada en el planeta, con piedritas al borde.
+- Se dibujan como una cinta de tierra clara apoyada en el planeta, con piedritas al borde, con
+  **farolitos** en las esquinas y un **poste indicador** entre el lago y la cascada.
+- Con escenario el claro se **llena** (`decoEsc()`): unas 200 matas, 90 margaritas, 70 florcitas
+  silvestres, 30 helechitos, 22 arbustos y 16 piedras repartidos por todo el claro sin pisar los
+  senderos, el lago ni lo que hay puesto.
 - **Uku pasea por ellos** (su planificador los usa porque son celdas libres) y por ahí se lo
   guía en «Guíame». El claro es más ancho (2,4 m a los lados, hasta 0,85 m al frente).
 - Cada sendero termina en un **destino con nombre** (`destinos()`: plaza, casa, lago, cascada,
@@ -356,15 +360,6 @@ recordada en el navegador):
 
 Si se apaga la opción, Uku vuelve a responder a todo lo que oye, como antes.
 
-## El cerebro en la nube se ve en el inicio
-
-Debajo de las opciones hay una línea de estado: **«Cerebro en la nube: listo · Uku conversa con <modelo>»**
-(y la casilla del modelo local queda apagada porque no hace falta), o **«no responde (<motivo>)»** si el
-Worker no contesta, con lo que Uku usa sus frases o el modelo local. Antes se mostraba como una casilla
-desmarcada y bloqueada, que parecía «apagado» aunque funcionara. El Worker `uku-cerebro` tiene los
-registros encendidos en Cloudflare (Workers & Pages › uku-cerebro › Logs) para ver cada llamada y su
-resultado.
-
 ## Tareas por voz: «Uku…», recordatorios y post-its
 
 Con el micrófono encendido, cualquier cosa que empiece por «Uku» (también «uko», «ucu») es para él:
@@ -391,8 +386,7 @@ avisan al volver. El código es `tareas.js` (el analizador de frases, sin red) y
   no tiembla). Las plantas altas que quedaban frente a la cámara (heliconias, hojas grandes) se
   reubicaron a los costados.
 - **Cuotas del modelo: apagadas** (uso libre). Para volver a limitar hay dos interruptores:
-  - En el navegador, `mente.js`: `CUOTAS_ACTIVAS = true`, o abrir la página con `?cuotas=on`. Los topes son
-    300 respuestas al día y 25 cada 10 minutos (`CUOTA`).
+  - En el navegador, abrir la página con `?cuotas=on`: 300 respuestas al día y 25 cada 10 minutos (`mente.js › CUOTA`).
   - En el Worker `uku-cerebro`, sin volver a subir código: Cloudflare › Workers & Pages › uku-cerebro › Settings ›
     Variables and Secrets, variable de texto `LIMITES` = `on`. Para apagarlo, `off` o borrar la variable. Con
     `on`, aplican los topes del Worker (20 por minuto y 400 al día por IP, 3 000 al día en total). Pasado el tope, Uku responde con sus frases. Las tareas («Uku…
@@ -502,10 +496,11 @@ frase hasta haber dicho todas**, y la primera de la baraja nueva nunca es la
 | `F` | Pantalla completa |
 | `P` | Quién vino (visitas y personas) |
 | `H` / `?` | Ayuda en pantalla |
-| `D` | Depurar: cámara grande con los puntos detectados y el gesto de cada mano |
+| `D` | Depurar la cámara: esqueleto, manos con gesto y confianza, caras, expresiones, espejo y control |
+| `K` / `O` / `E` | Modo control (tercera persona) / vista de pájaro / modo espejo |
 | `C` | Mostrar u ocultar tu imagen en espejo |
 | `X` | Muestra u oculta los controles (también tocando el reloj). **Por defecto están ocultos**: quedan Uku, su globo, el reloj y el clima |
-| `M` / `V` | Voz de Uku / oído (micrófono con Whisper) |
+| `M` / `V` | Voz de Uku / oído (micrófono) |
 | `A` | Cómo va la descarga de la IA |
 | `G` / `7` / `Z` | Jugar piedra, papel o tijera / guíame / una travesura al azar |
 | `S` | Pantalla despierta: encender o apagar |
@@ -550,18 +545,18 @@ frase hasta haber dicho todas**, y la primera de la baraja nueva nunca es la
 | Archivo | |
 | --- | --- |
 | `index.html`, `mimo.css` | Pantalla, globo, pistas de gestos, paneles. Variables de color y radio en `:root`. |
-| `mimo.js` | Orquesta: cámara, bucle de visión, reacciones, frases, personas, teclado. |
-| `escena.js` | Adapta el mundo de Uku (`assets/bosque3d.js`) a la pantalla grande: el claro de Fran, Uku con sus gestos, paseo y mariposas; cielo y entornos detrás del lienzo. |
-| `vision.js` | MediaPipe Tasks Vision: manos con gesto, cuerpo (pose lite) y cara (giro y expresiones). |
+| `mimo.js` | Orquesta: cámara, bucle de visión, reacciones, frases, personas, teclado, modos (control, vista, espejo), depurar. |
+| `escena.js` | Adapta el mundo de Uku (`assets/bosque3d.js`) a la pantalla grande: el claro de Fran, Uku con sus gestos, paseo y mariposas; cielo y entornos detrás del lienzo; cámaras, control y espejo. |
+| `vision.js` | MediaPipe Tasks Vision: manos con gesto, cuerpo (pose lite) y cara (puntos clave y expresiones). |
 | `gestos.js` | De los puntos a eventos: gestos sostenidos, de una o dos manos, 👌, 🫶, 👋 y 🙌. |
 | `efectos.js` | Reacciones en 2D: la tabla de emojis y el respaldo si no hay WebGL (lo normal es `efectos3d.js`). |
 | `caras.js` | face-api: huella y foto de cada cara; identifica (o crea un visitante sin nombre), renombra, junta y marca al dueño. |
 | `visitas.js` | Historial de visitas: quién, desde y hasta cuándo, gestos y si Fran ya la vio. |
 | `panel.js` | Panel «Quién vino»: visitas y personas. |
 | `voz.js` | Voz de Uku (speechSynthesis) y palabras de juego. |
-| `oido.js` | Oído: reconocimiento del navegador, o micrófono con detección de voz y Whisper; modelo de frases (Transformers.js). |
+| `oido.js` | Oído: el reconocimiento de voz del navegador (Whisper y MiniLM quedan solo para pruebas). |
 | `tareas.js` | Tareas por voz: «Uku…» con recordatorios y post-its (en este navegador, sin red). |
-| `mente.js` | Conversación libre: Qwen3 en el navegador (Transformers.js + WebGPU) o el cerebro en la nube (`?cerebro=URL`). |
+| `mente.js` | Conversación: el cerebro en la nube (Groq por el Worker); el modelo local queda solo para pruebas (`?llm=`). |
 | `cerebro/worker.js` | Worker de Cloudflare `uku-cerebro` que conecta a Uku con Groq o Claude; la key queda en el Worker. |
 | `atiende.js` | Estado de Fran, entender, responder y mensajes. El prompt (ficha, estilo, tono, memoria, situación). |
 | `memoria.js` | Hechos que Uku sabe de Fran, diario, relación y el claro que crece. |
@@ -577,8 +572,8 @@ frase hasta haber dicho todas**, y la primera de la baraja nueva nunca es la
 | `assets/clima.js` | Clima del lugar (Open-Meteo) y cómo se viste Uku. |
 
 - **Sin imitación:** se probó que Uku copiara cabeza y brazos, pero la cabeza quedaba mirando hacia arriba; se quitó. Uku queda en su animación de reposo y responde con gestos.
-- **Todo corre en el navegador.** Librerías y modelos se cargan de su CDN
-  (jsDelivr y Google): ~18 MB la primera vez; luego quedan en caché.
+- **La visión corre en el navegador** (MediaPipe y face-api desde su CDN, ~24 MB la primera vez;
+  luego en caché). La conversación va a Groq por el Worker: no se descarga ningún modelo de lenguaje.
 
 ### Sin internet
 
@@ -616,8 +611,6 @@ Windows, Ajustes › Sistema › Energía › «Nunca» para apagar pantalla y s
 - El reconocimiento de caras es para una demo con pocas personas y buena luz;
   no es una verificación de identidad. Con poca luz o de perfil, la misma
   persona puede quedar como dos visitantes: se juntan desde el panel.
-- Whisper base entiende bien frases cortas en un lugar tranquilo; con mucho
-  ruido puede equivocarse (se ve en el subtítulo «…» lo que entendió).
-- El modelo de conversación es pequeño (corre en el navegador): conversa
-  bien de cosas cotidianas pero puede equivocarse en datos. Por eso lo
-  importante (mensajes, dónde está Fran) sale de los datos.
+- El reconocimiento del navegador entiende bien frases cortas; con mucho ruido puede equivocarse (se ve en el subtítulo «…» lo que entendió).
+- El modelo de conversación puede equivocarse en datos. Por eso lo
+  importante (mensajes, dónde está Fran, lo que recuerda) sale de los datos.

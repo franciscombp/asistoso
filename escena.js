@@ -166,6 +166,26 @@ export function distanciaACasa() { if (!b3d) return 99; const c = b3d.casa(); re
 export function destinos() { return b3d ? Object.keys(b3d.destinos()) : []; }
 export function distanciaA(nombre) { if (!b3d) return 99; const d = b3d.destino(nombre); return d ? b3d.distanciaA(d.x, d.z) : 99; }
 export function dondeEsta() { return b3d ? b3d.dondeEsta() : null; }
+/* ---------- Cámaras, control en tercera persona y espejo ---------- */
+// setCamara('libre' | 'tercera' | 'pajaro'): en tercera, Uku deja de pasear y queda a la espera del control
+export function setCamara(m) {
+  if (!b3d) return;
+  b3d.setCamara(m);
+  if (m === 'tercera') { clearTimeout(venirTimer); frente = false; b3d.setFront(false); b3d.setAmbient(null); }
+}
+export function camara() { return b3d ? b3d.camaraActual() : 'libre'; }
+export function centrarEnUku() { if (b3d) b3d.centrarEnUku(); }
+export function vistaSigueAUku() { return b3d ? b3d.vistaSigueAUku() : true; }
+export function zoomVista(f) { if (b3d) b3d.zoomVista(f); }
+// Control relativo a Uku: { avance, giro } o null
+export function controlar(c) { if (b3d) b3d.manejarRelativo(c); }
+// Espejo: Uku imita (frame de mimo.js) o deja de imitar (null)
+export function espejo(f) {
+  if (!b3d) return;
+  if (f && !b3d.espejoActivo()) { clearTimeout(venirTimer); frente = true; frenteDesde = performance.now(); b3d.setAmbient(null); b3d.setFront(true); encuadre(true); b3d.setZoom(.75); }
+  if (!f && b3d.espejoActivo()) { b3d.setEspejo(null); libre(0, { cerca: true }); return; }
+  if (f) b3d.setEspejo(f);
+}
 // El módulo del mundo 3D (para dibujar efectos dentro de la escena)
 export const mundo = () => b3d;
 export function _debug() { return { b3d, entorno, frente }; }

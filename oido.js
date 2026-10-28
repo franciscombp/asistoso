@@ -26,7 +26,8 @@ export const SIMULADO = Q.get('oido') === 'simulado';
 
 const Reconocedor = window.SpeechRecognition || window.webkitSpeechRecognition;
 export const HAY_NAVEGADOR = !!Reconocedor;
-let modo = HAY_NAVEGADOR ? 'navegador' : 'whisper';
+// El oído es el del navegador. Whisper (todo en este equipo) queda en el código para pruebas: ?whisper=<modelo>
+let modo = HAY_NAVEGADOR && !MODELO_VOZ ? 'navegador' : 'whisper';
 export function setModo(m) { modo = m === 'navegador' && HAY_NAVEGADOR ? 'navegador' : 'whisper'; }
 export function getModo() { return modo; }
 

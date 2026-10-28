@@ -330,6 +330,16 @@ Object.assign(PARTS, {
     ...[.13, -.13].flatMap(z => [pc(CYL(.004, .004, .42, 4), CARTON, [0, .19, z], [0, 0, Math.PI / 2]), pc(CYL(.004, .004, .42, 4), CARTON, [0, .13, z], [0, 0, Math.PI / 2])]),
     pc(new THREE.BoxGeometry(.5, .012, .2), AGUA(pal), [0, .004, 0])],
   arroyo: pal => [pc(new THREE.BoxGeometry(.2, .012, .9), AGUA(pal), [0, .004, 0]), ...[-.06, .05, 0].map((x, i) => pc(new THREE.BoxGeometry(.012, .013, .3), '#dfe9f8', [x, .005, -.3 + i * .3]))],
+  // Florcitas silvestres: tres tallos con flores chicas (relleno del claro)
+  silvestre: (pal, v) => [[0, 0, 0], [.05, .03, 1], [-.04, .04, 2]].flatMap(([x, z, i]) => [pc(CYL(.003, .004, .07 + i * .012, 3), pal.grass, [x, .035 + i * .006, z]), pc(new THREE.SphereGeometry(.016, 6, 4), [pal.flower, pal.guaya[1], pal.dust][(i + v) % 3], [x, .075 + i * .012, z], 0, [1, .7, 1])]),
+  // Helechito de suelo: cinco frondas cortas que se abren
+  helechito: (pal, v) => [0, 1, 2, 3, 4].map(i => pc(new THREE.ConeGeometry(.025, .16, 3), pal.round[(i + v) % pal.round.length], TRS([0, .02, 0], [0, i / 5 * 6.28 + v, 0]).multiply(TRS([.05, .04, 0], [0, 0, 1.15], [1, 1, .2])))),
+  // Poste indicador: un palo con tres tablitas en punta que señalan los senderos
+  poste: pal => [pc(CYL(.014, .018, .42, 6), pal.trunk, [0, .21, 0]), pc(new THREE.SphereGeometry(.022, 6, 5), pal.trunk, [0, .42, 0]),
+    ...[[.36, .9], [.29, 2.4], [.22, -.8]].map(([y, a]) => pc(new THREE.BoxGeometry(.17, .045, .012), CARTON, TRS([0, y, 0], [0, a, 0]).multiply(TRS([.07, 0, 0])))),
+    ...[[.36, .9], [.29, 2.4], [.22, -.8]].map(([y, a]) => pc(new THREE.ConeGeometry(.024, .04, 4), CARTON, TRS([0, y, 0], [0, a, 0]).multiply(TRS([.17, 0, 0], [0, 0, -Math.PI / 2]))))],
+  // Farolito de sendero: un poste corto con una lucecita amarilla
+  farolito: pal => [pc(CYL(.009, .012, .22, 5), MARINO, [0, .11, 0]), pc(new THREE.BoxGeometry(.05, .05, .05), CREMA, [0, .245, 0]), pc(new THREE.SphereGeometry(.018, 6, 5), AMARILLO, [0, .245, 0]), pc(new THREE.ConeGeometry(.04, .03, 4), MARINO, [0, .285, 0], [0, .78, 0])],
   // Bandera: un asta con una banderita amarilla
   bandera: pal => [pc(CYL(.007, .009, .3, 5), pal.trunk, [0, .15, 0]), pc(new THREE.BoxGeometry(.13, .08, .008), AMARILLO, [.07, .26, 0]), pc(new THREE.SphereGeometry(.014, 6, 5), MARINO, [0, .31, 0])]
 });
@@ -396,7 +406,7 @@ const LAGO_P = [1.5, .05], LAGO_R = .5;
 /* Repartido por todo el claro (unos 4,4 m de ancho): a la izquierda el huerto con su cerca y la bandera; al frente a la
    izquierda la banca con el farol; la leña y el buzón junto a la casa; a la derecha el lago con la cascada detrás, el
    arroyo que sale al frente con su puente, la tortuga en la orilla; al fondo a la izquierda, a la entrada del bosque, el letrero; más hongos en la orilla derecha del lago. */
-const ESC_ZONA = { farol: [-.95, .12], banca: [-1.3, .35], cerca: [-1.6, -.55], huerto: [-1.95, -.2], buzon: [-.15, -.62], hongos: [-.6, -.05], hongos2: [2.2, -.35], lena: [-.9, -1.5], tortuga: [1.95, .5], bandera: [-2.05, .22], cascada: [1.75, -.7], puente: [1.05, .7], arroyo: [1.05, .7], heliconias: [[-1.6, .35], [1.1, -1.35], [-1.9, .5], [-1.45, -.95], [2.15, -.05]], hojonas: [[-.3, .95], [-1.85, -.82], [1.55, .9], [-.25, -1.52]], cartel: [-1.6, -1.42], guayas: [[-1.95, -1.05], [2.15, -.75], [-2.15, -.4], [.55, -1.95], [2.3, -1.45]] };
+const ESC_ZONA = { farol: [-.95, .12], banca: [-1.3, .35], cerca: [-1.6, -.55], huerto: [-1.95, -.2], buzon: [-.15, -.62], hongos: [-.6, -.05], hongos2: [2.2, -.35], lena: [-.9, -1.5], tortuga: [1.95, .5], bandera: [-2.05, .22], cascada: [1.75, -.7], puente: [1.05, .7], arroyo: [1.05, .7], heliconias: [[-1.6, .35], [1.1, -1.35], [-1.9, .5], [-1.45, -.95], [2.15, -.05]], hojonas: [[-.3, .95], [-1.85, -.82], [1.55, .9], [-.25, -1.52]], cartel: [-1.6, -1.42], poste: [.95, -.35], farolitos: [[-.42, .86], [.42, .84], [.36, -.25], [-1.35, -.55]], guayas: [[-1.95, -1.05], [2.15, -.75], [-2.15, -.4], [.55, -1.95], [2.3, -1.45]] };
 const PASEO = [[1.45, -1.4], [.95, -1.5], [-1.2, -1.45]]; // pasillos por detrás del lago y junto al letrero que los árboles no tapan
 /* ---------- Senderos ----------
    Caminos de tierra que unen los lugares del claro, saliendo de la plazuela entre los canteros: a la casa, al lago,
@@ -482,6 +492,8 @@ function escenario(want, pal, Z, id) {
   put('farol', E.farol, 1.1); put('banca', E.banca, 1.3, .9); put('cerca', E.cerca, 1.4, face(...E.cerca) * .3); put('huerto', E.huerto, 1.25);
   put('buzon', E.buzon, 1.1); put('hongos', E.hongos, 1.2); want['Shongos2'] = () => Z(item('hongos', '', pal, { x: E.hongos2[0], z: E.hongos2[1], rot: 1 }, 1.4, { gs: 1.1 }), 'escenario');
   put('lena', E.lena, 1.1);
+  // El poste indicador entre el lago y la cascada, y farolitos en las esquinas de los senderos
+  put('poste', E.poste, 1.2, .6); (E.farolitos || []).forEach(([x, z], i) => { want['SFAROL' + i] = () => Z(item('farolito', '', pal, { x, z, rot: i }, 1.1, { gs: 1.2 }), 'escenario'); });
   // Más guayacanes en flor repartidos por el claro
   (E.guayas || []).forEach(([x, z], i) => { want['SG' + i] = () => Z(item('guaya', (i + 1) % 3, pal, { x, z, rot: i * 2.1 }, 1.05 + (i % 2) * .15, { sway: .015, gs: .7, crown: .95 }), 'escenario'); });
   if (esc.cartel) want['SCARTEL'] = () => {
@@ -559,14 +571,31 @@ function buildForest(full) {
 }
 // Lo que siempre está, tenga lo que tenga: pasto, piedras, arbustos y florcitas blancas (una sola malla)
 const _dum = new THREE.Object3D();
+/* Con escenario el claro se llena: más matas, piedras, arbustos y margaritas, y además florcitas silvestres y helechitos,
+   repartidos por todo el claro (más densos cerca de los senderos y lejos del centro) sin pisar los senderos, el lago ni lo
+   que hay puesto. Se calcula una vez. */
+let DECO_ESC = null;
+function decoEsc() {
+  if (DECO_ESC) return DECO_ESC;
+  const libre = (x, z) => distSendero(x, z) > .15 && Math.hypot(x - LAGO_P[0], z - LAGO_P[1]) > lagoEnForma() + .14 && !quienBloquea(x, z) && Math.hypot(x, z * .8) < 2.5 && z < .95 && z > -1.75;
+  const esp = (gap) => (x, z) => libre(x, z);
+  return DECO_ESC = {
+    tufts: scatter(5, 200, .25, 2.7, esp(), .11), rocks: scatter(17, 16, .6, 2.6, esp(), .4),
+    bushes: scatter(23, 22, .9, 2.6, (x, z) => libre(x, z) && Math.hypot(x, z) > 1.0, .38), daisies: scatter(43, 90, .3, 2.6, esp(), .1),
+    silvestres: scatter(61, 70, .3, 2.6, esp(), .13), helechitos: scatter(67, 30, .8, 2.6, (x, z) => libre(x, z) && Math.hypot(x, z) > .9, .3)
+  };
+}
 function buildGarden(pal) {
   if (garden) { scene.remove(garden); garden.geometry.dispose(); }
   const enLago = (p) => !esc || Math.hypot(p.x - LAGO_P[0], p.z - LAGO_P[1]) > lagoEnForma() * 1.1 + .1;
   const parts = [], M = (p, s) => { placeAt(_dum, p.x, p.z, p.rot); return new THREE.Matrix4().compose(_dum.position, _dum.quaternion, _s4.setScalar(s)); };
-  DECO.tufts.filter(enLago).forEach(p => { const m = M(p, .8 + p.s * .5); [-.35, 0, .35].forEach((a, i) => parts.push(pc(new THREE.ConeGeometry(.009, .055 + (i % 2) * .025, 3), pal.grass, m.clone().multiply(TRS([a * .035, .035 + (i % 2) * .015, 0], [0, 0, a]))))); });
-  DECO.rocks.filter(enLago).forEach(p => parts.push(pc(new THREE.DodecahedronGeometry(.06, 0), pal.rock, M(p, .7 + p.s).multiply(TRS([0, .015, 0], [p.t, 0, 0], [1, .55, .8])))));
-  DECO.bushes.filter(enLago).forEach(p => { const m = M(p, 1 + p.s * .5), c = pal.round[p.v % pal.round.length]; [[0, .1, 0, .13], [.1, .07, .04, .09], [-.09, .06, -.03, .08]].forEach(([x, y, z, r]) => parts.push(pc(new THREE.IcosahedronGeometry(r, 0), c, m.clone().multiply(TRS([x, y, z], [p.t, 0, 0]))))); });
-  DECO.daisies.filter(enLago).forEach(p => { const m = M(p, .8 + p.s * .4); parts.push(pc(CYL(.003, .004, .05, 3), pal.grass, m.clone().multiply(TRS([0, .025, 0]))), pc(new THREE.SphereGeometry(.01, 5, 3), pal.dust, m.clone().multiply(TRS([0, .052, 0], 0, [1, .6, 1])))); });
+  const D = esc ? decoEsc() : DECO;
+  D.tufts.filter(enLago).forEach(p => { const m = M(p, .8 + p.s * .5); [-.35, 0, .35].forEach((a, i) => parts.push(pc(new THREE.ConeGeometry(.009, .055 + (i % 2) * .025, 3), pal.grass, m.clone().multiply(TRS([a * .035, .035 + (i % 2) * .015, 0], [0, 0, a]))))); });
+  D.rocks.filter(enLago).forEach(p => parts.push(pc(new THREE.DodecahedronGeometry(.06, 0), pal.rock, M(p, .7 + p.s).multiply(TRS([0, .015, 0], [p.t, 0, 0], [1, .55, .8])))));
+  D.bushes.filter(enLago).forEach(p => { const m = M(p, 1 + p.s * .5), c = pal.round[p.v % pal.round.length]; [[0, .1, 0, .13], [.1, .07, .04, .09], [-.09, .06, -.03, .08]].forEach(([x, y, z, r]) => parts.push(pc(new THREE.IcosahedronGeometry(r, 0), c, m.clone().multiply(TRS([x, y, z], [p.t, 0, 0]))))); });
+  D.daisies.filter(enLago).forEach(p => { const m = M(p, .8 + p.s * .4); parts.push(pc(CYL(.003, .004, .05, 3), pal.grass, m.clone().multiply(TRS([0, .025, 0]))), pc(new THREE.SphereGeometry(.01, 5, 3), pal.dust, m.clone().multiply(TRS([0, .052, 0], 0, [1, .6, 1])))); });
+  (D.silvestres || []).forEach(p => { const m = M(p, .9 + p.s * .5); PARTS.silvestre(pal, p.v).forEach(g => parts.push(g.applyMatrix4(m))); });
+  (D.helechitos || []).forEach(p => { const m = M(p, .8 + p.s * .6); PARTS.helechito(pal, p.v).forEach(g => parts.push(g.applyMatrix4(m))); });
   if (esc) parts.push(...senderosGeo(pal));
   garden = new THREE.Mesh(kit(parts), LAMB); garden.visible = !focus; scene.add(garden);
 }
@@ -755,7 +784,14 @@ function brain(dt) {
   if (gesture || !free) { goal = null; ruta = []; }
   if (front || focus) turnTo = 0;
   let want = 0;
-  if (manual && !gesture && !focus) {
+  if (manualRel && !gesture && !focus) {
+    // Manejo en tercera persona: giro = a su derecha (heading baja) o a su izquierda; avance hacia donde mira (o de espaldas)
+    heading -= manualRel.giro * dt * 2.1;
+    want = manualRel.avance * WALK_V * 1.6;
+    const sg = Math.sign(want) || 1, nx = pos.x + Math.sin(heading) * .06 * sg, nz = pos.z + Math.cos(heading) * .06 * sg;
+    if (want && !okWalk(nx, nz) && okWalk(pos.x, pos.z)) want = 0;
+    idleFor = 2.5;
+  } else if (manual && !gesture && !focus) {
     const err = angDiff(Math.atan2(manual.x, manual.z), heading);
     heading += clamp(err, -dt * 4, dt * 4);
     want = Math.abs(err) < 1.2 ? WALK_V * 1.6 : 0;
@@ -780,7 +816,7 @@ function brain(dt) {
     if (free && !gesture && (idleFor -= dt) <= 0) next();
   }
   speed = lerp(speed, want, Math.min(1, dt * 3));
-  moving = speed > .03 || want > 0;
+  moving = Math.abs(speed) > .03 || want !== 0;
   pos.x += Math.sin(heading) * speed * dt; pos.z += Math.cos(heading) * speed * dt;
 }
 /* Por dónde puede andar Uku: todo el claro a la vista, sin pisar los canteros, el lago ni lo que tiene puesto
@@ -799,9 +835,10 @@ function okWalk(x, z) {
   for (let i = 0; i < ng && i < ZONA.guayacanes.length; i++) if (Math.hypot(x - ZONA.guayacanes[i][0], z - ZONA.guayacanes[i][1]) <= (esc ? .28 : .38)) return false;
   if (esc) {
     if (Math.hypot(x - LAGO_P[0], z - LAGO_P[1]) < lagoEnForma() + .12) return false;
-    const RADIO = { cascada: .42, puente: .3, arroyo: .3, farol: .18, banca: .3, cerca: .3, huerto: .3, cartel: .32, lena: .18, tortuga: .18, hongos: .16, hongos2: .16, buzon: .14, bandera: .1 };
+    const RADIO = { cascada: .42, puente: .3, arroyo: .3, farol: .18, banca: .3, cerca: .3, huerto: .3, cartel: .32, lena: .18, tortuga: .18, hongos: .16, hongos2: .16, buzon: .14, bandera: .1, poste: .14 };
     for (const k in ESC_ZONA) { const v = ESC_ZONA[k]; if (!Array.isArray(v[0]) && Math.hypot(x - v[0], z - v[1]) < (RADIO[k] || .22)) return false; }
     if (!(ESC_ZONA.hojonas || []).every(([hx, hz]) => Math.hypot(x - hx, z - hz) > .16)) return false;
+    if (!(ESC_ZONA.farolitos || []).every(([hx, hz]) => Math.hypot(x - hx, z - hz) > .1)) return false;
     if (!ESC_ZONA.guayas.every(([gx, gz]) => Math.hypot(x - gx, z - gz) > .32)) return false;
   }
   return true;
@@ -900,9 +937,12 @@ function next() {
   idleFor = 2;
 }
 // Manejo a mano (flechas del teclado): dir = { x, z } hacia dónde ir (en el mundo), o null para soltar
-let manual = null, manualAt = -1e9;
-export function manejar(dir) { manual = dir && (dir.x || dir.z) ? { x: dir.x, z: dir.z } : null; if (manual) { manualAt = performance.now(); goal = null; ruta = []; } }
-export function manejando() { return !!manual; }
+let manual = null, manualAt = -1e9, manualRel = null;
+export function manejar(dir) { manual = dir && (dir.x || dir.z) ? { x: dir.x, z: dir.z } : null; if (manual) { manualRel = null; manualAt = performance.now(); goal = null; ruta = []; } }
+// Manejo relativo a Uku (modo control, tercera persona): { avance: -1…1 (adelante/atrás), giro: -1…1 (izquierda/derecha) }
+export function manejarRelativo(c) { manualRel = c && (c.avance || c.giro) ? { avance: clamp(+c.avance || 0, -1, 1), giro: clamp(+c.giro || 0, -1, 1) } : null; if (manualRel) { manual = null; manualAt = performance.now(); goal = null; ruta = []; } }
+export function manejando() { return !!manual || !!manualRel; }
+export function rumbo() { return heading; }
 export function sitiosDePaseo() { return sitios().map(l => l.nombre); }
 // Para probar: deja a Uku en un punto del claro (si se puede pisar) mirando hacia `rumbo`
 export function caminarA(x, z) { return irANuevo(x, z); }
@@ -996,6 +1036,7 @@ function eyes(dt, t) {
     const s = -blinkT; k = s < .05 ? 'half' : s < .15 ? 'shut' : s < .21 ? 'half' : 'open';
     if (s >= .21) blinkT = Math.random() < .18 ? .2 : 2.2 + Math.random() * 3.8;
   }
+  if (espejo.on && espejo.cara) { const c = espejo.cara; k = c.blink > .5 ? 'shut' : c.blink > .3 ? 'half' : c.smile > .45 ? 'happy' : 'open'; } // en espejo, los ojos son los tuyos
   if (k !== eyeKind) { eyeKind = k; rig.face.eyes(k); }
   // Boca: al hablar se abre y cierra como sílabas; contento, sonríe con la boca abierta
   const talking = gesture === 'talk' && gestureT < 2, m = RM ? 0 : talking ? Math.max(0, Math.sin(t * 13) * .6 + Math.sin(t * 7.3) * .4) : gesture === 'happy' && gestureT < 2 ? .7 : 0;
@@ -1248,7 +1289,7 @@ function frame(now) {
     shadow.scale.setScalar(bear.scale.x / BEAR_S * (gesture === 'plant' ? 1.15 : 1)); shadow.visible = !focus;
     bear.quaternion.setFromUnitVectors(_nrm, _sp).multiply(_yaw.setFromAxisAngle(_nrm, heading + swayB));
     bear.updateMatrixWorld(true);
-    lookAround(dt);
+    if (espejo.on) espejoPaso(dt); else lookAround(dt);
     eyes(dt, t);
     if (umb) placeUmbrella();
   }
@@ -1307,7 +1348,7 @@ function frame(now) {
   }
   if (Math.abs(zoomCur - zoomTo) > 1e-3 || Math.abs(camVel.z) > 1e-4) { if (RM) { zoomCur = zoomTo; camVel.z = 0; } else zoomCur = spring(zoomCur, zoomTo, 'z', sdt); }
   // La cámara acompaña a Uku por el claro: en libertad un poco menos (se le ve pasear), con un mensaje o conversando del todo
-  folCur = lerp(folCur, front || focus || manual || performance.now() - manualAt < 4000 ? 1 : .8, Math.min(1, dt * 1.5)); // manejándolo, la cámara lo sigue del todo
+  folCur = lerp(folCur, front || focus || manual || manualRel || performance.now() - manualAt < 4000 ? 1 : .8, Math.min(1, dt * 1.5)); // manejándolo, la cámara lo sigue del todo
   const fx = pos.x * folCur, fz = pos.z * folCur, fy = groundY(fx, fz);
   // Ningún objeto se mete entre la cámara y Uku: si uno le tapa la cabeza, la cámara sube y se aleja (suave, con histéresis)
   const bx = Math.sin(yaw) * cd + Math.cos(yaw) * sway + fx, by = ch + fy, bz = Math.cos(yaw) * cd - Math.sin(yaw) * sway + fz;
@@ -1318,11 +1359,90 @@ function frame(now) {
   }
   ocl = RM ? ocT : lerp(ocl, ocT, Math.min(1, dt * 3));
   const cdF = cd * (1 + .9 * ocl), chF = ch + .9 * ocl;
-  camera.position.set(Math.sin(yaw) * cdF + Math.cos(yaw) * sway + fx, chF + fy, Math.cos(yaw) * cdF - Math.sin(yaw) * sway + fz);
+  _cp.set(Math.sin(yaw) * cdF + Math.cos(yaw) * sway + fx, chF + fy, Math.cos(yaw) * cdF - Math.sin(yaw) * sway + fz);
+  _cl.set(fx, .32 + .04 * focusAmt + .1 * planoAmt + fy, fz);
+  // Tercera persona (detrás de Uku, mirando adelante) y vista de pájaro (el claro desde arriba): se funden con la libre
+  camAmt.tercera = RM ? (camModo === 'tercera' ? 1 : 0) : lerp(camAmt.tercera, camModo === 'tercera' ? 1 : 0, Math.min(1, dt * 2.5));
+  camAmt.pajaro = RM ? (camModo === 'pajaro' ? 1 : 0) : lerp(camAmt.pajaro, camModo === 'pajaro' ? 1 : 0, Math.min(1, dt * 2.5));
+  if (camAmt.tercera > .001) {
+    terceraYaw += angDiff(heading, terceraYaw) * Math.min(1, dt * 3);
+    // Detrás y un poco arriba (Uku ocupa el tercio inferior de la pantalla y se ve el camino por delante)
+    const d = 1.7 * zoomCur, tx = pos.x - Math.sin(terceraYaw) * d, tz = pos.z - Math.cos(terceraYaw) * d;
+    _tp.set(tx, groundY(tx, tz) + .95, tz); _tl.set(pos.x + Math.sin(terceraYaw) * .9, groundY(pos.x, pos.z) + .22, pos.z + Math.cos(terceraYaw) * .9);
+    _cp.lerp(_tp, camAmt.tercera); _cl.lerp(_tl, camAmt.tercera);
+  }
+  if (camAmt.pajaro > .001) {
+    if (pajaro.seguir) { pajaro.x = lerp(pajaro.x, pos.x, Math.min(1, dt * 2)); pajaro.z = lerp(pajaro.z, pos.z, Math.min(1, dt * 2)); }
+    const py = groundY(pajaro.x, pajaro.z), z = pajaro.zoom;
+    _tp.set(pajaro.x, py + 2.3 * z, pajaro.z + 1.6 * z); _tl.set(pajaro.x, py, pajaro.z);
+    _cp.lerp(_tp, camAmt.pajaro); _cl.lerp(_tl, camAmt.pajaro);
+  }
+  camera.position.copy(_cp);
   camera.up.set(0, 1, 0);
-  camera.lookAt(fx, .32 + .04 * focusAmt + .1 * planoAmt + fy, fz);
+  camera.lookAt(_cl);
   draw();
 }
+/* ---------- Espejo (como los Memoji): Uku imita tu cabeza, tus ojos y tus brazos ----------
+   setEspejo(f): f = null apaga; si no, { cabeza: { yaw, pitch, roll } (rad, ya en espejo: positivo = hacia la izquierda de la
+   pantalla / arriba / inclinado a la izquierda), cara: { blink: 0–1, smile: 0–1 }, brazos: { L: { arm, fore }, R: { arm, fore } } }
+   donde arm y fore son direcciones [x, y, z] en pantalla (x = izquierda de la pantalla, y = arriba) del brazo y el antebrazo.
+   La cabeza se gira alrededor de los ejes de Uku (como la mirada); cada hueso del brazo se apunta en esa dirección
+   (el eje del hueso es el que va hacia su hijo). Todo con suavizado: se evita el temblor de la cámara. */
+const espejo = { on: false, cabeza: { yaw: 0, pitch: 0, roll: 0 }, cara: null, brazos: null, q: {} };
+const _ed = new THREE.Vector3(), _eq = new THREE.Quaternion(), _ea = new THREE.Vector3(), _ef = new THREE.Vector3(), _er = new THREE.Vector3();
+export function setEspejo(f) {
+  if (!f) { espejo.on = false; espejo.cara = null; espejo.brazos = null; return; }
+  espejo.on = true;
+  if (f.cabeza) espejo.cabeza = f.cabeza;
+  if (f.cara) espejo.cara = f.cara;
+  espejo.brazos = f.brazos || null;
+}
+export function espejoActivo() { return espejo.on; }
+function espejoPaso(dt) {
+  if (!bones.head || !bones.neck || !rig) return;
+  const k = Math.min(1, dt * 9), c = espejo.cabeza;
+  // Cabeza: el giro (yaw), el cabeceo (pitch) y la inclinación (roll) alrededor de los ejes de Uku, repartidos cuello/cabeza
+  lookY = lerp(lookY, clamp(c.yaw, -.9, .9), k); lookP = lerp(lookP, clamp(c.pitch, -.5, .5), k); espejo.roll = lerp(espejo.roll || 0, clamp(c.roll, -.6, .6), k);
+  _au.set(0, 1, 0).applyQuaternion(bear.quaternion); _ar.set(1, 0, 0).applyQuaternion(bear.quaternion); _ef.set(0, 0, 1).applyQuaternion(bear.quaternion);
+  [[bones.neck, .35], [bones.head, .65]].forEach(([b, w]) => {
+    b.parent.getWorldQuaternion(_qp);
+    _qa.setFromAxisAngle(_au, lookY * w).multiply(_qb.setFromAxisAngle(_ar, -lookP * w)).multiply(_eq.setFromAxisAngle(_ef, -espejo.roll * w));
+    b.quaternion.premultiply(_qa.premultiply(_qp.clone().invert()).multiply(_qp));
+    b.updateWorldMatrix(true, true);
+  });
+  // Brazos: cada hueso apunta hacia donde va el tuyo (en el plano de la pantalla, un poco hacia adelante)
+  if (!espejo.brazos) return;
+  const lado = (L, br) => {
+    if (!br) return;
+    const arm = rig.B('mixamorig:' + L + 'Arm'), fore = rig.B('mixamorig:' + L + 'ForeArm'), hand = rig.B('mixamorig:' + L + 'Hand');
+    [[arm, fore, br.arm], [fore, hand, br.fore]].forEach(([b, hijo, dir]) => {
+      if (!b || !hijo || !dir) return;
+      // dirección en el mundo: x de pantalla es -x del mundo (la cámara mira hacia -z); y arriba; z hacia la cámara
+      _ed.set(-dir[0], dir[1], dir[2] || .15).normalize();
+      _ea.copy(hijo.position).normalize(); // el eje del hueso, en su propio espacio
+      b.parent.getWorldQuaternion(_qp);
+      _er.copy(_ed).applyQuaternion(_qp.clone().invert()); // la dirección deseada, en el espacio del padre
+      _eq.setFromUnitVectors(_ea, _er);
+      const key = b.name; espejo.q[key] = espejo.q[key] || b.quaternion.clone();
+      espejo.q[key].slerp(_eq, k); b.quaternion.copy(espejo.q[key]);
+      b.updateWorldMatrix(true, true);
+    });
+  };
+  lado('Left', espejo.brazos.L); lado('Right', espejo.brazos.R);
+}
+
+/* ---------- Cámaras: libre (la de siempre), tercera (detrás de Uku, para manejarlo) y pájaro (el claro desde
+   arriba: se arrastra con el mouse o el dedo, hace zoom con la rueda o el pellizco, y Uku sigue en lo suyo) ---------- */
+let camModo = 'libre', terceraYaw = 0;
+const camAmt = { tercera: 0, pajaro: 0 }, pajaro = { x: 0, z: 0, zoom: 1, seguir: true };
+const _cp = new THREE.Vector3(), _cl = new THREE.Vector3(), _tp = new THREE.Vector3(), _tl = new THREE.Vector3();
+export function setCamara(m) { camModo = m === 'tercera' || m === 'pajaro' ? m : 'libre'; if (camModo === 'tercera') terceraYaw = heading; if (camModo === 'pajaro') { pajaro.seguir = true; } if (renderer) renderer.domElement.style.touchAction = camModo === 'pajaro' ? 'none' : 'pan-y'; }
+export function camaraActual() { return camModo; }
+export function vistaSigueAUku() { return camModo !== 'pajaro' || pajaro.seguir; }
+export function centrarEnUku() { pajaro.seguir = true; }
+// Mover la vista de pájaro (en metros del claro) y hacer zoom (factor); en la vista libre el zoom es el de siempre
+export function moverVista(dx, dz) { pajaro.seguir = false; pajaro.x = clamp(pajaro.x + dx, -2.8, 2.8); pajaro.z = clamp(pajaro.z + dz, -2.4, 1.4); }
+export function zoomVista(f) { if (camModo === 'pajaro') pajaro.zoom = clamp(pajaro.zoom * f, .4, 2.4); else setZoom(zoomTo * f); }
 
 // El mundo es una ilustración plana; Uku va encima con su propia luz suave (como un muñeco de verdad),
 // sin borrar la profundidad: lo que está delante de él lo sigue tapando
@@ -1410,14 +1530,25 @@ function init() {
   });
   const cv = renderer.domElement;
   cv.style.touchAction = 'pan-y'; // el scroll vertical de la página sigue funcionando
-  cv.addEventListener('pointerdown', e => { drag = { x: e.clientX, y0: yawTo, moved: false, id: e.pointerId }; });
+  const dedos = new Map(); let pellizco = 0; // los dedos en pantalla (para el pellizco)
+  cv.addEventListener('pointerdown', e => { dedos.set(e.pointerId, { x: e.clientX, y: e.clientY }); if (dedos.size === 2) { const [a, b] = [...dedos.values()]; pellizco = Math.hypot(a.x - b.x, a.y - b.y); } if (!drag) drag = { x: e.clientX, y: e.clientY, y0: yawTo, moved: false, id: e.pointerId }; });
   cv.addEventListener('pointermove', e => {
+    if (dedos.has(e.pointerId)) dedos.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (dedos.size === 2 && pellizco) { const [a, b] = [...dedos.values()], d = Math.hypot(a.x - b.x, a.y - b.y); if (d > 10) { zoomVista(pellizco / d); pellizco = d; } return; }
     if (!drag || e.pointerId !== drag.id) return;
-    const dx = e.clientX - drag.x;
-    if (!drag.moved && Math.abs(dx) > 8) { drag.moved = true; try { cv.setPointerCapture(e.pointerId); } catch (x) {} }
+    const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
+    if (!drag.moved && Math.hypot(dx, dy) > 8) { drag.moved = true; try { cv.setPointerCapture(e.pointerId); } catch (x) {} }
+    if (!drag.moved) return;
+    if (camModo === 'pajaro') { // arrastrar el claro: lo que se arrastra se queda bajo el dedo (más o menos)
+      const k = pajaro.zoom * 2.6 / Math.max(300, host ? host.clientHeight : 600);
+      moverVista(-dx * k, -dy * k); drag.x = e.clientX; drag.y = e.clientY; return;
+    }
     // ±65°: lo alto del claro está detrás del oso, así nunca queda un árbol delante de la cámara
-    if (drag.moved) { const v = drag.y0 - dx * .011, L = 1.13; yawTo = Math.max(-L - .15, Math.min(L + .15, v)); idleAt = performance.now(); }
+    const v = drag.y0 - dx * .011, L = 1.13; yawTo = Math.max(-L - .15, Math.min(L + .15, v)); idleAt = performance.now();
   });
+  cv.addEventListener('wheel', e => { e.preventDefault(); zoomVista(e.deltaY > 0 ? 1.1 : 1 / 1.1); }, { passive: false });
+  const soltarDedo = e => { dedos.delete(e.pointerId); if (dedos.size < 2) pellizco = 0; };
+  cv.addEventListener('pointerup', soltarDedo); cv.addEventListener('pointercancel', soltarDedo);
   const end = e => {
     if (!drag) return;
     const moved = drag.moved; drag = null; idleAt = performance.now();
@@ -1494,7 +1625,7 @@ export function setClaro(f) {
   f = f || {};
   claro = { brotes: !!f.brotes, flores: !!f.flores, guayacanes: +f.guayacanes || 0, casa: !!f.casa,
     mariposas: f.mariposas == null ? null : Math.max(0, +f.mariposas || 0) };
-  const antes = !!esc; esc = f.escenario || null; ESC_TREES = null; celdas = null;
+  const antes = !!esc; esc = f.escenario || null; ESC_TREES = null; celdas = null; DECO_ESC = null;
   if (renderer) { if (antes !== !!esc || esc) { const pal = palette(); buildGarden(pal); if (ground) ground.material.color.set(pal.ground); if (dust) dust.material.color.set(pal.dust); } buildForest(); }
 }
 // Para que la cámara no quede tapada: un rayo de la cabeza de Uku a la cámara, contra el escenario (no contra él mismo)

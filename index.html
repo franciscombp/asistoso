@@ -38,6 +38,10 @@
       <span id="reloj-c" class="mr-clima" hidden></span>
     </div>
     <div class="mimo-acciones">
+      <button type="button" id="btn-control" class="mp-btn" aria-pressed="false" title="Modo control: lo manejas en tercera persona con las manos o las flechas (K)">🎮 <span>Control</span></button>
+      <button type="button" id="btn-espejo" class="mp-btn" aria-pressed="false" title="Modo espejo: Uku imita tu cabeza, tus ojos y tus brazos (E)">🪞 <span>Espejo</span></button>
+      <button type="button" id="btn-pajaro" class="mp-btn" aria-pressed="false" title="Vista de pájaro: arrastra para moverte, rueda o pellizco para el zoom (O)">🗺️ <span>Vista</span></button>
+      <button type="button" id="btn-ubicar" class="mp-btn mp-btn--icono" aria-label="Volver a Uku" title="Volver a Uku (la cámara lo sigue)">📍</button>
       <button type="button" id="btn-visitas" class="mp-btn mimo-visitas" aria-label="Quién vino" title="Quién vino (P)">👤 <span>Quién vino</span> <b class="mimo-visitas__n"></b></button>
       <button type="button" id="btn-ayuda" class="mp-btn mp-btn--icono" aria-label="Ayuda y atajos" title="Ayuda (H)">?</button>
     </div>
@@ -56,6 +60,7 @@
   <div id="camara" class="mimo-camara">
     <video id="video" playsinline muted></video>
     <canvas id="marcas"></canvas>
+    <pre id="debug-texto" class="mimo-debug" hidden></pre>
   </div>
 
   <!-- Qué puedes hacer: se resalta el gesto que Uku acaba de ver -->
@@ -84,13 +89,7 @@
       <label class="mp-check" title="Evita que la computadora apague la pantalla o entre en reposo mientras Uku cuida"><input type="checkbox" id="opt-despierto" checked> Mantener la pantalla despierta (que la compu no entre en reposo)</label>
       <label class="mp-check"><input type="checkbox" id="opt-mic" checked> Uku escucha y conversa por ti («¿dónde está Fran?», «déjale un mensaje»…)</label>
       <label class="mp-check" title="Para oficinas con ruido: ignora lo que no empiece por «Uku». Después de responderte, te sigue escuchando 25 s sin que repitas su nombre"><input type="checkbox" id="opt-llamada" checked> Solo responde cuando le dicen «Uku» (ignora las conversaciones de alrededor)</label>
-      <fieldset class="mimo-inicio__oido" id="opt-oido">
-        <legend>Cómo te escucha</legend>
-        <label class="mp-check" id="opt-navegador-l"><input type="radio" name="oido" value="navegador" checked> Del navegador: entiende mucho mejor y muestra lo que oye, pero el audio lo procesa el servicio del navegador.</label>
-        <label class="mp-check"><input type="radio" name="oido" value="whisper"> Whisper en este equipo: privado, nada sale del navegador (descarga ~250 MB).</label>
-      </fieldset>
-      <p class="mp-check mimo-inicio__nube" id="nube-estado">☁️ Cerebro en la nube: comprobando…</p>
-      <label class="mp-check" id="opt-mente-l"><input type="checkbox" id="opt-mente"> Experimental: conversación libre con IA en este equipo (Qwen3, ~1 GB, necesita tarjeta gráfica). Sin esto, Uku responde con su compendio de frases.</label>
+      <p class="mp-check mimo-inicio__nube" id="nube-estado">☁️ Cerebro: comprobando…</p>
       <button type="button" id="empezar" class="mp-btn mp-btn--primario">Empezar</button>
       <button type="button" id="sin-camara" class="mp-btn mp-btn--terciario">Probar sin cámara</button>
       <p class="mimo-inicio__nota">La cámara se usa solo en esta pantalla: no se graba video ni se envía nada. De cada persona que se acerca, Uku guarda en este equipo una foto pequeña de la cara y una huella numérica para reconocerla. Se borran desde «Quién vino».</p>
@@ -126,6 +125,8 @@
         <p>Lo que le cuentas de tu vida lo anota (a qué te dedicas, qué tienes esta semana, cómo estás) y después te pregunta cómo te fue. Al despedirte escribe su diario. Todo está en <kbd>P</kbd> › Diario, donde también puedes borrarlo. Su claro crece con lo que conversan: flores, guayacanes, mariposas, el lago…</p>
         <h3>Tareas por voz</h3>
         <p>Empieza con «Uku…»: «Uku, recuérdame en 10 minutos tomar agua», «Uku, pon un post-it que diga comprar pan», «Uku, qué recordatorios tengo», «Uku, borra los post-its».</p>
+        <h3>Cámara y control</h3>
+        <p><b>🎮 Control</b> (tecla <kbd>K</kbd>): la cámara se pone detrás de Uku y lo manejas tú: con la mano frente a la cámara (arriba = adelante, abajo = atrás, a un lado = gira) o con las flechas. Suelta y sigue en lo suyo. <b>🗺️ Vista</b> (tecla <kbd>O</kbd>): vista de pájaro; arrastra con el mouse o el dedo para moverte por el claro y usa la rueda o el pellizco para acercar o alejar; Uku sigue en sus cosas. <b>📍</b> vuelve a él. <b>🪞 Espejo</b> (tecla <kbd>E</kbd>): Uku imita tu cabeza, tus ojos y tus brazos, como un Memoji.</p>
         <h3>Más gestos</h3>
         <ul>
           <li>🖕 El dedo del medio: Uku responde con humor (¡no tiene dedos!).</li>
@@ -155,8 +156,9 @@
       <div>
         <h3>Teclado (para quien opera)</h3>
         <ul class="mp-teclas">
-          <li><kbd>F</kbd> pantalla completa · <kbd>P</kbd> quién vino · <kbd>D</kbd> depurar · <kbd>C</kbd> cámara</li>
+          <li><kbd>F</kbd> pantalla completa · <kbd>P</kbd> quién vino · <kbd>C</kbd> cámara</li>
           <li><kbd>X</kbd> mostrar u ocultar los controles (por defecto ocultos: quedan el globo de Uku, el reloj y el clima; también tocando el reloj) · <kbd>M</kbd> voz · <kbd>V</kbd> oído (micrófono) · <kbd>A</kbd> descargas de la IA · <kbd>G</kbd> jugar · <kbd>7</kbd> guíame · <kbd>Z</kbd> travesura al azar · <kbd>S</kbd> pantalla despierta · <kbd>N</kbd> modo guardián / demo · <kbd>H</kbd> esta ayuda</li>
+          <li><kbd>K</kbd> modo control (tercera persona) · <kbd>O</kbd> vista de pájaro · <kbd>E</kbd> modo espejo · <kbd>D</kbd> depurar la cámara (puntos, gestos, cara, expresiones)</li>
           <li><kbd>←</kbd> <kbd>↑</kbd> <kbd>→</kbd> <kbd>↓</kbd> manejar a Uku por su claro (al soltar, sigue paseando)</li>
           <li><kbd>1</kbd>–<kbd>6</kbd> día, atardecer, noche, lluvia, fiesta, jardín</li>
           <li><kbd>Q</kbd> 👍 · <kbd>W</kbd> ✌️ · <kbd>E</kbd> 🫶 · <kbd>R</kbd> 👌 · <kbd>Y</kbd> 👋 · <kbd>U</kbd> 🙌</li>

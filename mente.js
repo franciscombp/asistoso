@@ -19,7 +19,9 @@ import { TF } from './oido.js?v=__BUILD__';
 
 const Q = new URLSearchParams(location.search);
 // El primero que cargue: el de 1,7B conversa mejor; el de 0,6B baja la mitad
-const MODELOS = Q.get('llm') ? [Q.get('llm')] : ['onnx-community/Qwen3-1.7B-ONNX', 'onnx-community/Qwen3-0.6B-ONNX'];
+// El cerebro es el Worker (Groq). El modelo local (Qwen3 con WebGPU) queda en el código para pruebas: ?llm=<modelo>
+export const LOCAL = !!Q.get('llm');
+const MODELOS = LOCAL ? [Q.get('llm')] : ['onnx-community/Qwen3-1.7B-ONNX', 'onnx-community/Qwen3-0.6B-ONNX'];
 export const SIMULADA = Q.get('mente') === 'simulada';
 /* Cerebro en la nube: el Worker uku-cerebro (cerebro/worker.js).
    localStorage 'uku-cerebro-url' cambia la dirección ('off' lo apaga); ?cerebro=URL la guarda (?cerebro= vacío la borra).

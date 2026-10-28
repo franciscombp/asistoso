@@ -87,6 +87,9 @@ body.sin-pip .mimo-camara { opacity: 0; }
 body.debug .mimo-camara { width: 420px; opacity: 1; }
 .mimo-camara video, .mimo-camara canvas { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
 .mimo-camara video { transform: scaleX(-1); }
+/* Depurar (tecla D): el texto con lo que entiende la cámara, bajo el video */
+.mimo-debug { position: absolute; left: 0; right: 0; bottom: 0; margin: 0; padding: 8px 10px; background: rgb(15 38 92 / .78); color: #fff; font: 500 12px/1.45 ui-monospace, Menlo, Consolas, monospace; white-space: pre-wrap; pointer-events: none; }
+.mimo-top .mp-btn[aria-pressed="true"] { background: var(--texto-fuerte); color: #fff; }
 
 /* ---------- Pistas de gestos ---------- */
 .mimo-pistas {

@@ -89,7 +89,9 @@ export function normalizar(g, p, c, t) {
     const xs = pts.map(q => q.x), ys = pts.map(q => q.y);
     // Caja de la cara (0–1 de la imagen): caras.js recorta ahí para reconocer
     const caja = { x0: Math.min(...xs), y0: Math.min(...ys), x1: Math.max(...xs), y1: Math.max(...ys) };
-    caras.push({ matriz: m ? Array.from(m.data) : null, forma, nariz: pts[1], caja, area: (caja.x1 - caja.x0) * (caja.y1 - caja.y0) });
+    // Puntos clave (para el espejo y el depurador): nariz, rabillos de los ojos, mejillas, frente, mentón y labios
+    const clave = { nariz: pts[1], ojoI: pts[263], ojoD: pts[33], mejI: pts[454], mejD: pts[234], frente: pts[10], menton: pts[152], labioS: pts[13], labioI: pts[14] };
+    caras.push({ matriz: m ? Array.from(m.data) : null, forma, nariz: pts[1], clave, caja, area: (caja.x1 - caja.x0) * (caja.y1 - caja.y0) });
   });
   caras.sort((a, b) => b.area - a.area);
   const cara = caras[0] || null;

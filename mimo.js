@@ -41,7 +41,7 @@ import * as memoria from './memoria.js?v=__BUILD__';
 
 const $ = (s) => document.querySelector(s);
 const ui = {
-  inicio: $('#inicio'), empezar: $('#empezar'), sinCamara: $('#sin-camara'), optVoz: $('#opt-voz'), optMic: $('#opt-mic'), optHud: $('#opt-hud'), optDemo: $('#opt-demo'), modo: $('#modo'), optDespierto: $('#opt-despierto'), despierto: $('#despierto'), optMente: $('#opt-mente'), optOido: $('#opt-oido'),
+  inicio: $('#inicio'), empezar: $('#empezar'), sinCamara: $('#sin-camara'), optVoz: $('#opt-voz'), optMic: $('#opt-mic'), optHud: $('#opt-hud'), optDemo: $('#opt-demo'), modo: $('#modo'), optDespierto: $('#opt-despierto'), despierto: $('#despierto'),
   escena: $('#escena'), efectos: $('#efectos'), globo: $('#globo'), globoT: $('#globo-t'),
   pistas: $('#pistas'), estado: $('#estado'), camara: $('#camara'), video: $('#video'), marcas: $('#marcas'),
   panel: $('#personas'), ayuda: $('#ayuda'), mic: $('#mic'), oido: $('#oido'), aviso: $('#btn-visitas'), avisoN: $('#btn-visitas .mimo-visitas__n')
@@ -428,15 +428,47 @@ document.addEventListener('mimo:mensajes', pintarAviso);
 pintarAviso();
 
 /* ---------- Depuración: cámara con los puntos ---------- */
+/* ---------- Depurar la cámara (tecla D): qué ve y qué entiende ----------
+   Sobre el video en espejo: el esqueleto del cuerpo (hombros, codos, muñecas), los 21 puntos de cada mano con su gesto y
+   su confianza, la caja de cada cara con quién es (o «?»), y los puntos clave de la cara más grande. Al lado, un texto con
+   los cuadros por segundo de la visión, las expresiones (pestañeo, sonrisa, boca), la cabeza (giro, cabeceo, inclinación),
+   lo que entró al espejo y lo que sale del control por manos. */
+let debugFps = { n: 0, t: performance.now(), v: 0 };
 function dibujarMarcas(r) {
-  const c = ui.marcas, x = c.getContext('2d');
-  if (!st.debug || !r) { x.clearRect(0, 0, c.width, c.height); return; }
+  const c = ui.marcas, x = c.getContext('2d'), txt = $('#debug-texto');
+  if (!st.debug || !r) { x.clearRect(0, 0, c.width, c.height); if (txt) txt.hidden = true; return; }
+  if (++debugFps.n >= 10) { const ahora = performance.now(); debugFps.v = Math.round(10000 / (ahora - debugFps.t)); debugFps.t = ahora; debugFps.n = 0; }
   c.width = ui.camara.clientWidth; c.height = ui.camara.clientHeight;
   const P = (p) => [(1 - p.x) * c.width, p.y * c.height];
-  x.fillStyle = '#ffdd00';
-  if (r.pose) r.pose.puntos.forEach((p, i) => { if (i > 10 && i < 25) { const [a, b] = P(p); x.fillRect(a - 3, b - 3, 6, 6); } });
-  x.fillStyle = '#7fa6e8';
-  r.manos.forEach(m => { m.puntos.forEach(p => { const [a, b] = P(p); x.fillRect(a - 2, b - 2, 4, 4); }); const [a, b] = P(m.puntos[0]); x.font = '600 14px sans-serif'; x.fillText(m.gesto, a, b + 18); });
+  const linea = (a, b, col) => { if (!a || !b) return; x.strokeStyle = col; x.lineWidth = 2; x.beginPath(); x.moveTo(...P(a)); x.lineTo(...P(b)); x.stroke(); };
+  // Cuerpo: hombros, codos, muñecas y el torso
+  if (r.pose) {
+    const q = r.pose.puntos;
+    [[11, 13], [13, 15], [12, 14], [14, 16], [11, 12], [11, 23], [12, 24], [23, 24]].forEach(([a, b]) => linea(q[a], q[b], '#ffdd00'));
+    x.fillStyle = '#ffdd00'; [11, 12, 13, 14, 15, 16].forEach(i => { const [a, b] = P(q[i]); x.beginPath(); x.arc(a, b, 4, 0, 6.3); x.fill(); });
+  }
+  // Manos: puntos, dedos y el gesto con su confianza
+  r.manos.forEach(m => {
+    [[0, 1, 2, 3, 4], [0, 5, 6, 7, 8], [0, 9, 10, 11, 12], [0, 13, 14, 15, 16], [0, 17, 18, 19, 20]].forEach(d => { for (let i = 1; i < d.length; i++) linea(m.puntos[d[i - 1]], m.puntos[d[i]], '#7fa6e8'); });
+    x.fillStyle = '#7fa6e8'; m.puntos.forEach(p => { const [a, b] = P(p); x.fillRect(a - 2, b - 2, 4, 4); });
+    const [a, b] = P(m.puntos[0]); x.font = '600 13px sans-serif'; x.fillStyle = '#ffffff'; x.fillText(`${m.lado === 'Left' ? 'izq' : m.lado === 'Right' ? 'der' : ''} ${m.gesto} ${Math.round((m.score || 0) * 100)}%`, a - 30, b + 18);
+  });
+  // Caras: la caja de cada una con quién es; la más grande, sus puntos clave
+  (r.caras || []).forEach((f, i) => {
+    const [x0, y0] = P({ x: f.caja.x1, y: f.caja.y0 }), [x1, y1] = P({ x: f.caja.x0, y: f.caja.y1 });
+    const tr = st.tracks.find(t => t.cara === f || (t.caja && Math.abs(t.caja.x0 - f.caja.x0) < .03 && Math.abs(t.caja.y0 - f.caja.y0) < .03));
+    x.strokeStyle = i === 0 ? '#2e9d4a' : '#ffffff'; x.lineWidth = 2; x.strokeRect(x0, y0, x1 - x0, y1 - y0);
+    x.fillStyle = '#ffffff'; x.font = '600 13px sans-serif'; x.fillText(tr && tr.persona ? caras.nombreDe(tr.persona) + (tr.persona.dueno ? ' (dueño)' : '') : tr ? 'reconociendo…' : '?', x0 + 4, y0 - 6);
+    if (i === 0 && f.clave) { x.fillStyle = '#2e9d4a'; Object.values(f.clave).forEach(p => { const [a, b] = P(p); x.beginPath(); x.arc(a, b, 3, 0, 6.3); x.fill(); }); }
+  });
+  if (!txt) return;
+  const f = r.cara && r.cara.forma, n = (v) => (v == null ? '–' : Math.round(v * 100) + '%');
+  const l = [`visión ${debugFps.v} fps · manos ${r.manos.length} · caras ${(r.caras || []).length} · cuerpo ${r.pose ? 'sí' : 'no'}`];
+  if (f) l.push(`pestañeo ${n(f.eyeBlinkLeft)}/${n(f.eyeBlinkRight)} · sonrisa ${n(((f.mouthSmileLeft || 0) + (f.mouthSmileRight || 0)) / 2)} · boca ${n(f.jawOpen)} · cejas ${n(f.browInnerUp)}`);
+  if (espejoUltimo) l.push(`espejo: giro ${espejoUltimo.cabeza.yaw.toFixed(2)} · cabeceo ${espejoUltimo.cabeza.pitch.toFixed(2)} · inclinación ${espejoUltimo.cabeza.roll.toFixed(2)}${espejoUltimo.brazos ? ' · brazos sí' : ' · brazos no'}`);
+  if (modoControl) l.push(`control: avance ${controlUltimo.avance.toFixed(2)} · giro ${controlUltimo.giro.toFixed(2)}`);
+  l.push('pistas: ' + (st.tracks.map(t => (t.persona ? caras.nombreDe(t.persona) : '?')).join(', ') || 'ninguna') + ' · último evento: ' + (st.eventos[st.eventos.length - 1] || '–'));
+  txt.textContent = l.join('\n'); txt.hidden = false;
 }
 
 /* ---------- Bucle de visión ---------- */
@@ -451,9 +483,96 @@ const gestos = crearGestos((e) => {
 });
 function procesar(r) {
   st.ultimo = r;
-  gestos.procesar(r);
+  if (modoEspejo) imitar(r);
+  if (modoControl) controlPorMano(r);
+  if (!modoEspejo) gestos.procesar(r); else gestos.procesar(Object.assign({}, r, { manos: [] })); // imitando, las manos no son gestos
   seguirCaras(r);
   dibujarMarcas(r);
+}
+
+/* ---------- Modos: control (tercera persona), vista de pájaro y espejo ----------
+   Control (🎮, tecla K): la cámara va detrás de Uku y lo manejas con la mano frente a la cámara (arriba = adelante,
+   abajo = atrás, a un lado = gira) o con las flechas. Vista (🗺️, tecla O): el claro desde arriba; se arrastra con el
+   mouse o el dedo y hace zoom con la rueda o el pellizco; Uku sigue en lo suyo; 📍 vuelve a él. Espejo (🪞, tecla E):
+   Uku imita tu cabeza, tus ojos y tus brazos, como un Memoji. */
+let modoControl = false, modoEspejo = false, vistaPajaro = false;
+const btnModo = { control: $('#btn-control'), espejo: $('#btn-espejo'), pajaro: $('#btn-pajaro'), ubicar: $('#btn-ubicar') };
+const pintarModos = () => { btnModo.control.setAttribute('aria-pressed', String(modoControl)); btnModo.espejo.setAttribute('aria-pressed', String(modoEspejo)); btnModo.pajaro.setAttribute('aria-pressed', String(vistaPajaro)); btnModo.ubicar.hidden = !vistaPajaro; document.body.classList.toggle('modo-control', modoControl); document.body.classList.toggle('modo-espejo', modoEspejo); };
+function setControl(on) {
+  if (on === modoControl) return;
+  modoControl = on;
+  if (on) { if (modoEspejo) setEspejo(false); if (vistaPajaro) { vistaPajaro = false; } if (guiando) terminarGuia('rindo'); escena.setCamara('tercera'); decir('Modo control: me manejas tú. La mano arriba, adelante; abajo, atrás; a un lado, giro.', 5000, { hablar: false }); }
+  else { escena.controlar(null); escena.setCamara(vistaPajaro ? 'pajaro' : 'libre'); escena.libre(0); }
+  st.ultimaActividad = performance.now(); pintarModos();
+}
+function setPajaro(on) {
+  if (on === vistaPajaro) return;
+  vistaPajaro = on;
+  if (on && modoControl) setControl(false);
+  if (on && modoEspejo) setEspejo(false);
+  escena.setCamara(on ? 'pajaro' : 'libre');
+  if (on) estado('Vista de pájaro: arrastra para moverte, rueda o pellizco para el zoom', '');
+  pintarModos();
+}
+function setEspejo(on) {
+  if (on === modoEspejo) return;
+  modoEspejo = on;
+  if (on) { if (modoControl) setControl(false); if (vistaPajaro) { vistaPajaro = false; escena.setCamara('libre'); } espejoBase = null; espejoUltimo = null; escena.espejo({ cabeza: { yaw: 0, pitch: 0, roll: 0 }, cara: null }); decir('Modo espejo: haz lo que quieras, que yo te copio.', 4500, { hablar: false }); }
+  else escena.espejo(null);
+  st.ultimaActividad = performance.now(); pintarModos();
+}
+btnModo.control.addEventListener('click', () => setControl(!modoControl));
+btnModo.pajaro.addEventListener('click', () => setPajaro(!vistaPajaro));
+btnModo.espejo.addEventListener('click', () => setEspejo(!modoEspejo));
+btnModo.ubicar.addEventListener('click', () => { escena.centrarEnUku(); estado('La cámara vuelve a Uku', 'ok'); });
+pintarModos();
+// Control por mano: la mano más alta manda. Arriba (y < .4) avanza, abajo (y > .6) retrocede; a los lados, gira.
+let controlUltimo = { avance: 0, giro: 0 }, controlSinMano = 0;
+function controlPorMano(r) {
+  const m = (r.manos || []).filter(h => h.puntos && h.puntos.length === 21).sort((a, b) => a.puntos[9].y - b.puntos[9].y)[0];
+  if (!m) { if (++controlSinMano === 6 && !flechas.size) { controlUltimo = { avance: 0, giro: 0 }; escena.controlar(null); } return; }
+  controlSinMano = 0;
+  const x = 1 - m.puntos[9].x, y = m.puntos[9].y;
+  const avance = y < .4 ? Math.min(1, (.4 - y) / .25) : y > .62 ? -Math.min(1, (y - .62) / .25) : 0;
+  const giro = x < .4 ? -Math.min(1, (.4 - x) / .25) : x > .6 ? Math.min(1, (x - .6) / .25) : 0;
+  controlUltimo = { avance, giro };
+  escena.controlar(avance || giro ? controlUltimo : null);
+  if (avance || giro) { st.ultimaActividad = performance.now(); st.interactuo = true; }
+}
+/* Espejo: de los puntos de la cara y del cuerpo a lo que imita Uku. La cabeza se calcula con la nariz respecto al centro de la
+   cara (giro y cabeceo) y la línea de los ojos (inclinación), siempre respecto a cómo estabas al encender el espejo (así no
+   hace falta mirar a la cámara exacto). Las expresiones vienen de MediaPipe (pestañeo, sonrisa). Los brazos, de los hombros,
+   codos y muñecas, en espejo: tu izquierda es su derecha. La imagen está en espejo, así que x de pantalla = 1 - x. */
+let espejoBase = null, espejoUltimo = null;
+const ESPEJO_K = { yaw: 3.4, pitch: 3.2 };
+function imitar(r) {
+  const c = r.cara && r.cara.clave;
+  let cabeza = espejoUltimo ? espejoUltimo.cabeza : { yaw: 0, pitch: 0, roll: 0 };
+  if (c) {
+    const aspecto = (ui.video.videoWidth || 16) / (ui.video.videoHeight || 9);
+    const anchoCara = Math.hypot((c.mejI.x - c.mejD.x) * aspecto, c.mejI.y - c.mejD.y) || .1, altoCara = Math.hypot((c.menton.x - c.frente.x) * aspecto, c.menton.y - c.frente.y) || .1;
+    const yawRaw = (c.nariz.x - (c.mejI.x + c.mejD.x) / 2) * aspecto / anchoCara, pitchRaw = (c.nariz.y - (c.frente.y + c.menton.y) / 2) / altoCara;
+    const rollRaw = Math.atan2(c.ojoI.y - c.ojoD.y, (c.ojoI.x - c.ojoD.x) * aspecto);
+    // Los primeros cuadros fijan el «cero» (tu postura al encender)
+    if (!espejoBase) espejoBase = { yaw: yawRaw, pitch: pitchRaw, roll: rollRaw, n: 1 };
+    else if (espejoBase.n < 15) { const n = ++espejoBase.n; espejoBase.yaw += (yawRaw - espejoBase.yaw) / n; espejoBase.pitch += (pitchRaw - espejoBase.pitch) / n; espejoBase.roll += (rollRaw - espejoBase.roll) / n; }
+    // En la pantalla (espejo): tu izquierda queda a la izquierda. La nariz hacia la derecha de la imagen cruda es tu izquierda:
+    // Uku gira hacia la izquierda de la pantalla (su +x). El cabeceo hacia abajo baja la cabeza. La inclinación va invertida.
+    cabeza = { yaw: (yawRaw - espejoBase.yaw) * ESPEJO_K.yaw, pitch: -(pitchRaw - espejoBase.pitch) * ESPEJO_K.pitch, roll: -(rollRaw - espejoBase.roll) };
+  }
+  const f = r.cara && r.cara.forma, cara = f ? { blink: Math.max(f.eyeBlinkLeft || 0, f.eyeBlinkRight || 0), smile: ((f.mouthSmileLeft || 0) + (f.mouthSmileRight || 0)) / 2 } : null;
+  let brazos = null;
+  if (r.pose && r.pose.puntos) {
+    const q = r.pose.puntos, aspecto = (ui.video.videoWidth || 16) / (ui.video.videoHeight || 9), ok = (i) => q[i] && (q[i].visibility == null || q[i].visibility > .5);
+    // dirección de a hacia b en pantalla: la derecha de la imagen cruda es la izquierda de la pantalla (espejo); y arriba; un
+    // poco hacia la cámara
+    const d = (a, b) => ok(a) && ok(b) ? [(q[b].x - q[a].x) * aspecto, q[a].y - q[b].y, .15] : null;
+    // tu brazo izquierdo (11 → 13 → 15) es el derecho de Uku, y al revés
+    brazos = { R: { arm: d(11, 13), fore: d(13, 15) }, L: { arm: d(12, 14), fore: d(14, 16) } };
+    if (!brazos.R.arm && !brazos.L.arm) brazos = null;
+  }
+  espejoUltimo = { cabeza, cara, brazos };
+  escena.espejo(espejoUltimo);
 }
 function bucleVision() {
   if (!st.corriendo) return;
@@ -480,9 +599,9 @@ setInterval(() => {
     }
     // Sin nadie por un minuto, vuelve el ambiente de la hora (día, atardecer, noche o lluvia)
     if (ahora - st.vacioDesde > 60000) { const e = tiempo.entornoReal(); if (escena.setEntorno(e)) entornoAuto = e; }
-    // Sin nadie, después de reaccionar vuelve a pasear
-    if (escena.enCasa() && ahora - st.ultimaActividad > 10000) escena.libre();
-  } else if (ahora - st.ultimaActividad > (callandoPorDueno() ? 8000 : 12000) && escena.enCasa()) { // con Fran, a los 8 s de saludar sigue en lo suyo
+    // Sin nadie, después de reaccionar vuelve a pasear (salvo que lo estén manejando o imitando)
+    if (!modoControl && !modoEspejo && escena.enCasa() && ahora - st.ultimaActividad > 10000) escena.libre();
+  } else if (!modoControl && !modoEspejo && ahora - st.ultimaActividad > (callandoPorDueno() ? 8000 : 12000) && escena.enCasa()) { // con Fran, a los 8 s de saludar sigue en lo suyo
     escena.libre(0, { cerca: true });
   }
   if (st.presente && !callandoPorDueno() && ahora - st.ultimaActividad > 16000 && ahora - st.ultimaPista > 16000) {
@@ -683,7 +802,7 @@ async function activarOido(on) {
   try {
     ui.mic.hidden = false; ui.mic.textContent = '🎙️ Preparando el oído…';
     // Con conversación libre no hace falta el modelo de frases (entiende el modelo de lenguaje)
-    await oido.cargar((p) => { ui.mic.textContent = `🎙️ Cargando el oído de Uku… ${p}%`; }, { sentido: new URLSearchParams(location.search).has('sentido') });
+    await oido.cargar((p) => { ui.mic.textContent = `🎙️ Cargando el oído de Uku… ${p}%`; }, { sentido: false });
     if (!oido.SIMULADO) await oido.escuchar({
       alTexto: (t) => { ui.mic.textContent = '🎙️ Te escucho'; oir(t); },
       alParcial: (t) => { if (callandoPorDueno()) return; mostrarOido(t, true); pensar(); },
@@ -702,8 +821,8 @@ async function activarOido(on) {
     descargas.mostrar(true);
     estado(/Permission|NotAllowed/i.test(e.name + e.message) ? 'Sin permiso para el micrófono' : 'No pude cargar el oído de Uku', 'error');
   } finally { oyendo = false; }
-  // La mente después del oído (es la descarga más grande); si falla, Uku responde con sus frases
-  if (ui.optMente.checked) mente.cargar().catch((e) => console.warn('Uku: sin conversación libre', e));
+  // Solo para pruebas (?llm=…): el modelo local después del oído; si falla, Uku responde con sus frases
+  if (mente.LOCAL) mente.cargar().catch((e) => console.warn('Uku: sin conversación libre', e));
 }
 function mostrarOido(texto, parcial = false) {
   ui.oido.textContent = parcial ? texto + '…' : '«' + texto + '»';
@@ -787,6 +906,10 @@ async function oir(texto) {
   const jugada = (texto.toLowerCase().match(/\b(piedra|papel|tijeras?)\b/) || [])[1];
   if (jugando) { if (jugada) jugando.voz = jugada.replace(/s$/, ''); return; }
   if (/\b(gu[ií]ame|te gu[ií]o|est[aá]s perdido|pi[eé]rdete)\b/i.test(texto)) return guiarme(destinoEn(texto.toLowerCase()));
+  if (/\b(modo control|te controlo|te manejo|d[eé]jame manejarte)\b/i.test(texto)) return setControl(true);
+  if (/\b(vista de p[aá]jaro|desde arriba|modo vista)\b/i.test(texto)) return setPajaro(true);
+  if (/\b(modo espejo|im[ií]tame|c[oó]piame|haz lo que yo)\b/i.test(texto)) return setEspejo(true);
+  if (/\b(modo normal|vista normal|ya no (me imites|te controlo)|deja de imitar|su[eé]ltate|libre)\b/i.test(texto)) { setControl(false); setPajaro(false); setEspejo(false); return decir('Listo, sigo en lo mío.', 3000); }
   if (/\b(jugamos|juguemos|jugar|piedra,? papel)/i.test(texto)) return jugar();
   if (st.visita) visitas.seguir(st.visita);
   // Palabras de juego dichas solas ("¡fiesta!", "globos") mueven el mundo; lo demás se conversa
@@ -828,21 +951,15 @@ async function oir(texto) {
   setTimeout(() => (escena.enCasa() ? responder() : escena.venir(responder)), espera);
 }
 
-// Opciones del inicio según lo que el navegador permite
-if (!oido.HAY_NAVEGADOR) { ui.optOido.querySelector('[value="whisper"]').checked = true; $('#opt-navegador-l').hidden = true; }
-// El cerebro en la nube se muestra como lo que es: un estado (listo con su modelo, o por qué no), no una casilla.
-// Con la nube lista el modelo local no hace falta y su casilla queda apagada; si la nube falla, se dice y queda el local.
+// El cerebro (el Worker con Groq) se muestra como lo que es: un estado (listo con su modelo, o por qué no)
 const notaNube = (n) => {
   const el = $('#nube-estado'); if (!el) return;
-  if (!mente.cerebro()) { el.textContent = '☁️ Cerebro en la nube: apagado (uku-cerebro-url = off).'; return; }
-  if (n.lista) { el.textContent = '☁️ Cerebro en la nube: listo · Uku conversa con ' + n.modelo + '. No hace falta el modelo local.'; el.dataset.tipo = 'ok'; ui.optMente.checked = false; ui.optMente.disabled = true; return; }
-  el.textContent = n.error ? '☁️ Cerebro en la nube: no responde (' + n.error + '). Uku usa sus frases o el modelo local.' : '☁️ Cerebro en la nube: comprobando…';
+  if (!mente.cerebro()) { el.textContent = '☁️ Cerebro: apagado (uku-cerebro-url = off). Uku responde con sus frases.'; return; }
+  if (n.lista) { el.textContent = '☁️ Cerebro: listo · Uku conversa con ' + n.modelo + '.'; el.dataset.tipo = 'ok'; return; }
+  el.textContent = n.error ? '☁️ Cerebro: no responde (' + n.error + '). Uku responde con sus frases.' : '☁️ Cerebro: comprobando…';
   el.dataset.tipo = n.error ? 'error' : '';
 };
 document.addEventListener('mimo:cerebro', (e) => notaNube(e.detail)); notaNube(mente.estadoNube());
-mente.hayGPU().then(g => { if (!g && !mente.SIMULADA) { ui.optMente.checked = false; ui.optMente.disabled = true; $('#opt-mente-l').title = 'Este navegador no tiene WebGPU'; } });
-ui.optOido.addEventListener('change', () => oido.setModo(ui.optOido.querySelector('input:checked').value));
-oido.setModo(ui.optOido.querySelector('input:checked').value);
 ui.modo.addEventListener('click', () => setModo(modo === 'demo' ? 'guardian' : 'demo'));
 ui.optDemo.addEventListener('change', () => setModo(ui.optDemo.checked ? 'demo' : 'guardian'));
 setModo(modo);
@@ -870,6 +987,9 @@ addEventListener('keydown', (e) => {
   if (k === 'h' || k === '?') { ui.ayuda.hidden = !ui.ayuda.hidden; return; }
   if (k === 'd') { st.debug = !st.debug; document.body.classList.toggle('debug', st.debug); return; }
   if (k === 'c') return document.body.classList.toggle('sin-pip');
+  if (k === 'k') return setControl(!modoControl);
+  if (k === 'o') return setPajaro(!vistaPajaro);
+  if (k === 'e') return setEspejo(!modoEspejo);
   if (k === 'x') return alternarHud(); // muestra u oculta los controles (quedan el globo, el reloj y el clima)
   if (k === 'm') { voz.setVoz(!voz.vozActiva()); estado(voz.vozActiva() ? 'Voz encendida' : 'Voz apagada'); return; }
   if (k === 'v') return activarOido(!oido.escuchando());
@@ -889,6 +1009,8 @@ const FLECHA = { arrowup: [0, -1], arrowdown: [0, 1], arrowleft: [-1, 0], arrowr
 function empujar() {
   let x = 0, z = 0; flechas.forEach(k => { x += FLECHA[k][0]; z += FLECHA[k][1]; });
   const n = Math.hypot(x, z) || 1;
+  // En modo control las flechas son relativas a Uku (arriba = adelante, izquierda = gira a su izquierda)
+  if (modoControl) { controlUltimo = { avance: -z, giro: x }; escena.controlar(x || z ? controlUltimo : null); if (x || z) { st.ultimaActividad = performance.now(); st.interactuo = true; } return; }
   escena.manejar(x || z ? { x: x / n, z: z / n } : null);
   if (x || z) { st.ultimaActividad = performance.now(); st.interactuo = true; }
 }
@@ -929,4 +1051,4 @@ escena.iniciar(ui.escena).then(async () => {
 document.addEventListener('mimo:aprendio', () => { if (document.body.classList.contains('lista')) { efectos.lanzar('jardin', { x: .62, y: .55 }); escena.setClaro(memoria.mundo()); } });
 
 // Para pruebas y para operar desde la consola
-window.Mimo = { alternarHud, tiempo, ambienteReal, seguirCaras, hayDueno, hayVisita, cartel, setModo, get modo() { return modo; }, callandoPorDueno, despierto, jugar, fx, REACCION, mente, escena, reaccionar, procesar, decir, efectos, caras, visitas, atiende, panel, st, gestos, oir, oido, descargas, modoDueno, memoria, abrirTema, cerrarConversacionConFran, guiarme, get guiando() { return !!guiando; } };
+window.Mimo = { alternarHud, tiempo, ambienteReal, seguirCaras, hayDueno, hayVisita, cartel, setModo, get modo() { return modo; }, callandoPorDueno, despierto, jugar, fx, REACCION, mente, escena, reaccionar, procesar, decir, efectos, caras, visitas, atiende, panel, st, gestos, oir, oido, descargas, modoDueno, memoria, abrirTema, cerrarConversacionConFran, guiarme, get guiando() { return !!guiando; }, setControl, setPajaro, setEspejo, imitar, get espejo() { return espejoUltimo; } };
