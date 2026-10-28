@@ -1,9 +1,10 @@
-# Despliegue MANUAL a GitHub Pages para probar a Uku en otra computadora.
-# Sólo corre con "Run workflow" (workflow_dispatch); ningún push lo dispara.
-# Un sitio de Pages es público: desactívalo en Settings > Pages al terminar.
-name: Pages (manual)
+# Publica a Uku en GitHub Pages (público): https://franciscombp.github.io/asistoso/
+# Corre con cada push a la rama principal y también a mano con "Run workflow".
+name: Pages
 
 on:
+  push:
+    branches: [claude/gallant-mccarthy-1utlkz, main]
   workflow_dispatch:
 
 permissions:

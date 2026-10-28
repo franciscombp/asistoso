@@ -6,8 +6,10 @@ compendio de frases y su propio mundo 3D: un claro en el bosque nublado.
 
 **Abrir:** `index.html` servido por HTTP (por ejemplo `python3 -m http.server 8765` y
 `http://localhost:8765/`). Chrome o Edge de escritorio, con webcam. Se toca **Empezar**: pide
-la cámara y pasa a pantalla completa. Para publicarla, el workflow manual
-`.github/workflows/pages.yml` (Actions › Pages (manual) › Run workflow) la sube a GitHub Pages.
+la cámara y pasa a pantalla completa.
+
+**Publicado (público):** https://franciscombp.github.io/asistoso/ — lo sube
+`.github/workflows/pages.yml` con cada push a la rama principal (o a mano: Actions › Pages › Run workflow).
 
 ## La idea
 
