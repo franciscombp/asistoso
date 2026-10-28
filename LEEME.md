@@ -80,8 +80,8 @@ Theodore por unos túneles mientras lo insulta con gracia y se mete en la conver
 
 - **Picardía con cariño**: Uku puede molestar un poquito, quejarse, negarse con humor o pedir algo a
   cambio; nunca hiere y lo deja apenas algo es serio.
-- **Guíame** (tecla `7` o decir «guíame» / «te guío»): Uku se pierde a la entrada del bosque y tú lo
-  traes a su casa con la voz («izquierda», «derecha», «arriba», «sigue», «para») o señalando con la
+- **Guíame** (tecla `7` o decir «guíame» / «te guío», o «guíame al lago»): Uku se pierde lejos y tú lo
+  llevas a un destino (su casa, el lago, la banca, el huerto, el letrero, la cascada o el puente) con la voz («izquierda», «derecha», «arriba», «sigue», «para») o señalando con la
   mano (a un lado de la cámara lo lleva para allá; arriba, al fondo). Comenta el camino, se queja si
   lo dejas parado, avisa si choca con algo, celebra al llegar y a los dos minutos se rinde. «Ya no»
   lo termina.
@@ -282,6 +282,23 @@ tienen volumen y giran, y el confeti es una nube de piezas que cae girando. (La 
   triángulos grises en el dobladillo ni en las mangas. La cara va en otra textura y no se toca. La original sigue en
   `assets/oso/tex-original/` (`?texturas=original`).
 - **Sin marca**: no hay logo en la barra ni en el inicio y el icono es un Uku de línea (`icono.svg`).
+
+## Senderos: por dónde se navega
+
+El claro tiene **caminos de tierra** (`assets/bosque3d.js › SENDEROS`) que salen de la plazuela entre
+los canteros y unen todos los lugares: la puerta de la casa, la orilla del lago, la cascada (por
+detrás del lago), la banca con el farol, el huerto con la cerca y la bandera, el letrero a la
+entrada del bosque (pasando entre el farol y la cerca, junto a la leña) y el puente sobre el arroyo.
+
+- Son **corredores siempre libres**: nada se pone encima (la tortuga, las hojas grandes y las
+  heliconias se corrieron a los lados) y los árboles del bosque los esquivan. `senderosChocan()`
+  revisa el diseño y dice qué cosa queda sobre un sendero.
+- Se dibujan como una cinta de tierra clara apoyada en el planeta, con piedritas al borde.
+- **Uku pasea por ellos** (su planificador los usa porque son celdas libres) y por ahí se lo
+  guía en «Guíame». El claro es más ancho (2,4 m a los lados, hasta 0,85 m al frente).
+- Cada sendero termina en un **destino con nombre** (`destinos()`: plaza, casa, lago, cascada,
+  banca, huerto, letrero, puente). En «Guíame» Uku elige uno al azar y lo dice; «llévame al lago»
+  o «mejor a la banca» lo cambia a mitad de camino. Arranca en el rincón más lejano al destino.
 
 ## El claro, más amplio
 

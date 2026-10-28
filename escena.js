@@ -147,17 +147,24 @@ export function manejar(dir) {
 }
 /* ---------- Guíame (el juego de Her): Uku se pierde y lo traes a casa ---------- */
 // perderse(): Uku aparece lejos, a la entrada del bosque o tras el lago, quieto y sin pasear
-export function perderse() {
+export function perderse(lejosDe) {
   if (!b3d) return false;
   clearTimeout(venirTimer); frente = false; b3d.setFront(false); b3d.setAmbient(null);
-  const sitios = ['cartel', 'cascada', 'lena', 'huerto'].filter(s => b3d.sitiosDePaseo().includes(s));
-  const ok = sitios.length ? b3d.colocarEn(sitios[Math.floor(Math.random() * sitios.length)]) : false;
+  // Arranca en un rincón, lo más lejos posible de adonde tiene que llegar
+  const d = lejosDe && b3d.destino(lejosDe), sitios = ['cartel', 'cascada', 'lena', 'huerto', 'tortuga', 'puente'].filter(s => b3d.sitiosDePaseo().includes(s));
+  if (!sitios.length) return false;
+  let mejor = sitios[Math.floor(Math.random() * sitios.length)];
+  if (d) { b3d.colocarEn(mejor); let md = -1; for (const s of sitios) { b3d.colocarEn(s); const dd = b3d.distanciaA(d.x, d.z); if (dd > md) { md = dd; mejor = s; } } }
+  const ok = b3d.colocarEn(mejor);
   encuadre(false);
   return ok;
 }
 // guiar(dir): lo empuja en esa dirección de pantalla ({ x, z } o null para que pare)
 export function guiar(dir) { if (b3d) b3d.manejar(dir); }
 export function distanciaACasa() { if (!b3d) return 99; const c = b3d.casa(); return b3d.distanciaA(c.x, c.z); }
+// Los destinos de los senderos (casa, lago, banca, huerto, letrero, cascada, puente, plaza) y a cuánto está de uno
+export function destinos() { return b3d ? Object.keys(b3d.destinos()) : []; }
+export function distanciaA(nombre) { if (!b3d) return 99; const d = b3d.destino(nombre); return d ? b3d.distanciaA(d.x, d.z) : 99; }
 export function dondeEsta() { return b3d ? b3d.dondeEsta() : null; }
 // El módulo del mundo 3D (para dibujar efectos dentro de la escena)
 export const mundo = () => b3d;

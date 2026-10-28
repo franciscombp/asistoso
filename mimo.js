@@ -556,25 +556,30 @@ async function empezar({ conCamara = true } = {}) {
    camino, se queja si lo dejas plantado y celebra al llegar. Tecla 7 o decir «guíame» / «te guío». */
 let guiando = null;
 const GUIA_DIR = { izquierda: [-1, 0], derecha: [1, 0], arriba: [0, -1], fondo: [0, -1], atras: [0, -1], atrás: [0, -1], abajo: [0, 1], adelante: [0, 1], sigue: null, para: 'para', alto: 'para', quieto: 'para', espera: 'para' };
+const GUIA_DESTINOS = { casa: 'mi casa', lago: 'el lago', banca: 'la banca', huerto: 'el huerto', letrero: 'el letrero del bosque', cascada: 'la cascada', puente: 'el puente' };
 const GUIA_FRASES = {
-  inicio: ['¡Ay! Me fui a mirar la cascada y ya no sé por dónde es mi casa. ¿Me guías? Dime izquierda, derecha o sigue, o señala con la mano.', '¡Me perdí! Esto me pasa por seguir a una mariposa. Guíame a mi casa: izquierda, derecha, arriba… o apunta con la mano.'],
+  inicio: ['¡Ay! Me fui a mirar las mariposas y ya no sé por dónde queda {a}. ¿Me guías? Dime izquierda, derecha, arriba o sigue, o señala con la mano. Mejor por los senderos.', '¡Me perdí! Esto me pasa por distraerme. Llévame a {a}: izquierda, derecha, arriba… o apunta con la mano. Los senderos ayudan.'],
+  cambio: ['Ah, ¿mejor a {a}? Bueno, vamos.', 'Cambio de plan: a {a}. Guíame.'],
   andando: ['¿Seguro que es por aquí?', 'Voy, voy. No me apures.', 'Confío en ti. Más o menos.', 'Si me llevas al lago, nado. Pero no me gusta.', 'Ya huelo la chimenea… o es el deseo.', '¿Y si mejor me cargas?'],
   trabado: ['Por ahí no paso: hay algo. ¿Por otro lado?', 'Choqué. ¿Me rodeas eso, porfa?', 'Ahí hay un bicho o un árbol. Dame otra dirección.', 'No avanzo. ¿Izquierda o derecha?'],
   quieto: ['¿Hola? ¿Me vas a dejar aquí parado?', 'Sigo perdido, por si no te diste cuenta.', 'Un oso solo en el bosque. Qué drama.', 'Dime algo: izquierda, derecha… lo que sea.'],
-  cerca: ['¡Ahí está mi puerta! Ya casi.', '¡Esa es mi casa! Un pasito más.'],
-  llego: ['¡Llegué! Eres mejor guía que las mariposas. Y gratis.', '¡Mi casa! Gracias. Te debo una miel.', '¡En casa! Esto sí fue trabajo en equipo. Yo caminé, eso cuenta.'],
+  cerca: ['¡Ahí está {a}! Ya casi.', '¡Ya veo {a}! Un pasito más.'],
+  llego: ['¡Llegué a {a}! Eres mejor guía que las mariposas. Y gratis.', '¡{A}! Gracias. Te debo una miel.', '¡Llegamos! Esto sí fue trabajo en equipo. Yo caminé, eso cuenta.'],
   rindo: ['Bueno, me quedo a vivir aquí. Ya me acostumbré.', 'Se me acabó la paciencia de oso. Vuelvo solo, pero conste.']
 };
-const gf = (k) => GUIA_FRASES[k][Math.floor(Math.random() * GUIA_FRASES[k].length)];
-function guiarme() {
+const gf = (k) => { const a = guiando ? GUIA_DESTINOS[guiando.destino] : 'mi casa'; return GUIA_FRASES[k][Math.floor(Math.random() * GUIA_FRASES[k].length)].replace(/\{a\}/g, a).replace(/\{A\}/g, a.charAt(0).toUpperCase() + a.slice(1)).replace(/\ba el\b/g, 'al'); };
+const destinoEn = (t) => Object.keys(GUIA_DESTINOS).find(k => new RegExp('\\b' + (k === 'casa' ? 'casa|casita' : k === 'letrero' ? 'letrero|cartel|bosque' : k) + '\\b').test(t));
+function guiarme(destino) {
   if (guiando || jugando) return;
-  if (!escena.perderse()) return decir('Hoy no me puedo perder: la escena no está lista.', 4000);
-  guiando = { desde: performance.now(), ultimoEmpuje: 0, ultimaFrase: performance.now(), cerca: false, dir: null };
+  const ks = Object.keys(GUIA_DESTINOS);
+  destino = GUIA_DESTINOS[destino] ? destino : ks[Math.floor(Math.random() * ks.length)];
+  if (!escena.perderse(destino)) return decir('Hoy no me puedo perder: la escena no está lista.', 4000);
+  guiando = { desde: performance.now(), ultimoEmpuje: 0, ultimaFrase: performance.now(), cerca: false, dir: null, destino };
   st.ultimaActividad = performance.now(); st.interactuo = true; prestarAtencion();
   decir(gf('inicio'), 8000); escena.gesto('worried');
   guiando.timer = setInterval(() => {
     if (!guiando) return;
-    const ahora = performance.now(), d = escena.distanciaACasa();
+    const ahora = performance.now(), d = escena.distanciaA(guiando.destino);
     // La mano, a un lado de la cámara, lo lleva para allá (la imagen está en espejo: x ya viene invertida)
     const m = st.ultimo && st.ultimo.manos && st.ultimo.manos[0];
     if (m && m.puntos && m.puntos.length === 21) {
@@ -593,23 +598,27 @@ function guiarme() {
       guiando.trabado = guiando.dir && quieto ? (guiando.trabado || 0) + 1 : 0;
       if (guiando.trabado === 6) { guiando.ultimaFrase = ahora; decir(gf('trabado'), 4000); escena.gesto('worried'); }
     }
-    if (d < .6) return terminarGuia('llego');
-    if (d < 1.1 && !guiando.cerca) { guiando.cerca = true; decir(gf('cerca'), 4000); guiando.ultimaFrase = ahora; escena.gesto('happy'); }
+    if (d < .4) return terminarGuia('llego');
+    if (d < .9 && !guiando.cerca) { guiando.cerca = true; decir(gf('cerca'), 4000); guiando.ultimaFrase = ahora; escena.gesto('happy'); }
     if (ahora - guiando.ultimaFrase > 9000) { guiando.ultimaFrase = ahora; decir(gf(guiando.dir ? 'andando' : 'quieto'), 4500); if (!guiando.dir) escena.gesto('worried'); }
     if (ahora - guiando.desde > 120000) terminarGuia('rindo');
   }, 250);
 }
 function terminarGuia(como) {
   if (!guiando) return;
+  const texto = gf(como === 'llego' ? 'llego' : 'rindo');
   clearInterval(guiando.timer); guiando = null; escena.guiar(null);
   st.ultimaActividad = performance.now();
-  if (como === 'llego') { decir(gf('llego'), 6000); escena.gesto('happy'); efectos.lanzar('confeti', { x: .5, y: .5 }); fx('salto'); }
-  else { decir(gf('rindo'), 5000); escena.libre(0); }
+  if (como === 'llego') { decir(texto, 6000); escena.gesto('happy'); efectos.lanzar('confeti', { x: .5, y: .5 }); fx('salto'); }
+  else { decir(texto, 5000); escena.libre(0); }
 }
 // Lo que se dice durante el juego: izquierda, derecha, arriba, sigue, para… (o «ya no juego»)
 function guiarPorVoz(texto) {
   const t = texto.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
   if (/\b(ya no|basta|dejalo|me rindo|cancela|salir)\b/.test(t)) return terminarGuia('rindo');
+  // «Llévame al lago», «mejor a la banca»: cambia adónde va
+  const nd = /\b(llevame|vamos|mejor|quiero ir|ve)\b/.test(t) && destinoEn(t);
+  if (nd && nd !== guiando.destino) { guiando.destino = nd; guiando.cerca = false; decir(gf('cambio'), 4000); return; }
   const k = Object.keys(GUIA_DIR).find(w => new RegExp('\\b' + w + '\\b').test(t));
   if (!k) return;
   const v = GUIA_DIR[k];
@@ -777,7 +786,7 @@ async function oir(texto) {
   // Piedra, papel o tijera: «jugamos» empieza; durante el juego lo que digan es la jugada
   const jugada = (texto.toLowerCase().match(/\b(piedra|papel|tijeras?)\b/) || [])[1];
   if (jugando) { if (jugada) jugando.voz = jugada.replace(/s$/, ''); return; }
-  if (/\b(gu[ií]ame|te gu[ií]o|est[aá]s perdido|pi[eé]rdete)\b/i.test(texto)) return guiarme();
+  if (/\b(gu[ií]ame|te gu[ií]o|est[aá]s perdido|pi[eé]rdete)\b/i.test(texto)) return guiarme(destinoEn(texto.toLowerCase()));
   if (/\b(jugamos|juguemos|jugar|piedra,? papel)/i.test(texto)) return jugar();
   if (st.visita) visitas.seguir(st.visita);
   // Palabras de juego dichas solas ("¡fiesta!", "globos") mueven el mundo; lo demás se conversa
