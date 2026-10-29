@@ -329,6 +329,10 @@ Tres botones arriba (o sus teclas) cambian cómo se ve y se usa el claro:
   cara con quién es, los puntos clave de la cara y, debajo, los cuadros por segundo de la visión,
   las expresiones (pestañeo, sonrisa, boca, cejas), lo que entra al espejo (giro, cabeceo,
   inclinación) y lo que sale del control por manos.
+- **Botón del micrófono** (🎙️ / 🔇 junto al reloj, o tecla `V`): enciende o apaga lo que Uku
+  escucha. Está siempre a la vista, también con los controles ocultos. Apagado, el navegador suelta
+  el micrófono y Uku no oye nada; lo que quedara en camino no cuenta. Se recuerda en este navegador
+  y es lo que se usa al empezar.
 - **Chat de depurar** (también con `D`, o `?debug` en la dirección): a la izquierda, un chat para
   escribirle a Uku. Lo escrito pasa por el mismo camino que la voz, sin los filtros de la voz. Por
   cada frase dice qué pasó: si un filtro la ignoró y por qué (por ejemplo «Solo responde cuando le
@@ -579,7 +583,7 @@ frase hasta haber dicho todas**, y la primera de la baraja nueva nunca es la
 | `K` / `O` / `E` / `8` | Modo control (tercera persona) / vista de pájaro / modo espejo / decorar |
 | `C` | Mostrar u ocultar tu imagen en espejo |
 | `X` | Muestra u oculta los controles (también tocando el reloj). **Por defecto están ocultos**: quedan Uku, su globo, el reloj y el clima |
-| `M` / `V` | Voz de Uku / oído (micrófono) |
+| `M` / `V` | Voz de Uku / micrófono (también con el botón 🎙️ junto al reloj) |
 | `A` | Cómo va la descarga de la IA |
 | `G` / `7` / `Z` | Jugar piedra, papel o tijera / guíame / una travesura al azar |
 | `S` | Pantalla despierta: encender o apagar |

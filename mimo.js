@@ -966,17 +966,39 @@ document.addEventListener('mimo:despierto', (e) => {
 // Whisper a veces "oye" frases de subtítulos en el silencio: se descartan
 const ALUCINA = /(subt[ií]tulos|amara\.org|gracias por ver|suscr[ií]bete|m[uú]sica|^\W*$)/i;
 let oyendo = false;
+/* Botón 🎙️ Micrófono (arriba, o tecla V): enciende o apaga lo que Uku escucha. Apagado, no oye nada (el micrófono
+   del navegador se suelta). Se recuerda en este navegador y es lo que se usa al empezar. */
+const KMIC = 'mimo_mic', btnMic = $('#btn-mic');
+try { const v = localStorage.getItem(KMIC); if (v !== null) ui.optMic.checked = v === '1'; } catch (e) {}
+let micQuiere = false; // lo que eligió la persona (el oído tarda en arrancar: manda esto, no si ya arrancó)
+function pintarMic() {
+  const on = micQuiere;
+  btnMic.setAttribute('aria-pressed', on ? 'true' : 'false');
+  btnMic.firstChild.textContent = on ? '🎙️ ' : '🔇 ';
+  btnMic.title = (on ? 'Micrófono encendido: Uku te escucha. Toca para apagarlo' : 'Micrófono apagado: Uku no escucha. Toca para encenderlo') + ' (V)';
+}
+async function alternarMic(on = !micQuiere) {
+  micQuiere = on;
+  try { localStorage.setItem(KMIC, on ? '1' : '0'); } catch (e) {}
+  ui.optMic.checked = on;
+  if (on) { await pedirMicrofono(); await activarOido(true); }
+  else { await activarOido(false); oidoPensando = false; ui.oido.classList.remove('is-visible'); ui.globo.classList.remove('is-pensando'); }
+  chatDebug.motivo(on ? 'micrófono encendido' : 'micrófono apagado: Uku no escucha');
+  pintarMic();
+}
+btnMic.addEventListener('click', () => alternarMic()); pintarMic();
 async function activarOido(on) {
-  if (!on) { oido.dejarDeEscuchar(); ui.mic.hidden = true; return; }
+  micQuiere = !!on;
+  if (!on) { oido.dejarDeEscuchar(); ui.mic.hidden = true; pintarMic(); return; }
   if (oyendo || oido.escuchando()) return;
-  oyendo = true;
+  oyendo = true; pintarMic();
   try {
     ui.mic.hidden = false; ui.mic.textContent = '🎙️ Preparando el oído…';
     // Con conversación libre no hace falta el modelo de frases (entiende el modelo de lenguaje)
     await oido.cargar((p) => { ui.mic.textContent = `🎙️ Cargando el oído de Uku… ${p}%`; }, { sentido: false });
     if (!oido.SIMULADO) await oido.escuchar({
-      alTexto: (t) => { oidoPensando = false; ui.mic.textContent = '🎙️ Te escucho'; oir(t); },
-      alParcial: (t) => { ultimaParcial = st.ultimaActividad = performance.now(); if (callandoPorDueno()) return; mostrarOido(t, true); pensar(); },
+      alTexto: (t) => { oidoPensando = false; if (!micQuiere) return; ui.mic.textContent = '🎙️ Te escucho'; oir(t); }, // apagado: nada de lo que quede en camino cuenta
+      alParcial: (t) => { if (!micQuiere) return; ultimaParcial = st.ultimaActividad = performance.now(); if (callandoPorDueno()) return; mostrarOido(t, true); pensar(); },
       alPensando: () => { oidoPensando = true; setTimeout(() => { oidoPensando = false; }, 4000); ui.mic.textContent = '🎙️ Pensando…'; if (!callandoPorDueno()) pensar(); },
       alNivel: (n) => ui.mic.style.setProperty('--nivel', n.toFixed(2)),
       alError: (e) => estado(e.message === 'sin-red' ? 'El reconocimiento del navegador necesita internet' : 'El micrófono se detuvo', 'error'),
@@ -991,7 +1013,7 @@ async function activarOido(on) {
     ui.mic.hidden = true;
     descargas.mostrar(true);
     estado(/Permission|NotAllowed/i.test(e.name + e.message) ? 'Sin permiso para el micrófono' : 'No pude cargar el oído de Uku', 'error');
-  } finally { oyendo = false; }
+  } finally { oyendo = false; if (!micQuiere) { oido.dejarDeEscuchar(); ui.mic.hidden = true; } pintarMic(); } // si lo apagaron mientras arrancaba, queda apagado
   // Solo para pruebas (?llm=…): el modelo local después del oído; si falla, Uku responde con sus frases
   if (mente.LOCAL) mente.cargar().catch((e) => console.warn('Uku: sin conversación libre', e));
 }
@@ -1174,7 +1196,7 @@ addEventListener('keydown', (e) => {
   if (k === '8') return setDecorar(!decorando);
   if (k === 'x') return alternarHud(); // muestra u oculta los controles (quedan el globo, el reloj y el clima)
   if (k === 'm') { voz.setVoz(!voz.vozActiva()); estado(voz.vozActiva() ? 'Voz encendida' : 'Voz apagada'); return; }
-  if (k === 'v') return activarOido(!oido.escuchando());
+  if (k === 'v') return alternarMic();
   if (k === 'a') return descargas.alternar();
   if (k === 'n') return setModo(modo === 'demo' ? 'guardian' : 'demo');
   if (k === 'g') return jugar();
