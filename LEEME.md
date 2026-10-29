@@ -304,8 +304,11 @@ entrada del bosque (pasando entre el farol y la cerca, junto a la leña) y el pu
 - **Casi vacío, como el planeta de Tolan**: el relleno automático es mínimo (`decoEsc()`: unas 28
   matas, 14 margaritas, 10 florcitas, 6 piedras, 5 arbustos, 5 helechitos y 7 parches de suelo de
   otro tono, muy separados y regados hasta el borde del bosque). Lo demás lo pone Fran con
-  **Decorar**. El planeta es chico (8 m de radio, 16 veces la altura de Uku): se nota redondo, y al
-  alejar del todo en la vista de pájaro se ve entero, como un planetita con el claro encima.
+  **Decorar**. El planeta es chico (8 m de radio, 16 veces la altura de Uku) y es una **esfera
+  entera**: al alejar del todo en la vista de pájaro (más de 2,5 de zoom) la cámara se va al espacio
+  y orbita el planeta completo, con cielo de noche y estrellas, el claro encima y el resto de la
+  superficie con parches de dos tonos, árboles, arbustos, matas y piedras repartidos por toda la
+  esfera (`planetaGeo()`).
 - **Uku pasea por ellos** (su planificador los usa porque son celdas libres) y por ahí se lo
   guía en «Guíame». El claro es más ancho (2,4 m a los lados, hasta 0,85 m al frente).
 - Cada sendero termina en un **destino con nombre** (`destinos()`: plaza, casa, lago, cascada,

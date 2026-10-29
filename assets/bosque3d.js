@@ -591,7 +591,7 @@ function decoEsc() {
   };
 }
 function buildGarden(pal) {
-  if (garden) { scene.remove(garden); garden.geometry.dispose(); }
+  if (garden) { scene.remove(garden); garden.geometry.dispose(); } PLANETA = null;
   const enLago = (p) => !esc || Math.hypot(p.x - LAGO_P[0], p.z - LAGO_P[1]) > lagoEnForma() * 1.1 + .1;
   const parts = [], M = (p, s) => { placeAt(_dum, p.x, p.z, p.rot); return new THREE.Matrix4().compose(_dum.position, _dum.quaternion, _s4.setScalar(s)); };
   const D = esc ? decoEsc() : DECO;
@@ -599,10 +599,28 @@ function buildGarden(pal) {
   D.rocks.filter(enLago).forEach(p => parts.push(pc(new THREE.DodecahedronGeometry(.06, 0), pal.rock, M(p, .7 + p.s).multiply(TRS([0, .015, 0], [p.t, 0, 0], [1, .55, .8])))));
   D.bushes.filter(enLago).forEach(p => { const m = M(p, 1 + p.s * .5), c = pal.round[p.v % pal.round.length]; [[0, .1, 0, .13], [.1, .07, .04, .09], [-.09, .06, -.03, .08]].forEach(([x, y, z, r]) => parts.push(pc(new THREE.IcosahedronGeometry(r, 0), c, m.clone().multiply(TRS([x, y, z], [p.t, 0, 0]))))); });
   D.daisies.filter(enLago).forEach(p => { const m = M(p, .8 + p.s * .4); parts.push(pc(CYL(.003, .004, .05, 3), pal.grass, m.clone().multiply(TRS([0, .025, 0]))), pc(new THREE.SphereGeometry(.01, 5, 3), pal.dust, m.clone().multiply(TRS([0, .052, 0], 0, [1, .6, 1])))); });
+  if (esc) planetaGeo(pal).forEach(g => parts.push(g));
   (D.parches || []).forEach((p, i) => { const col = pal.bg === '#1f1f1f' ? ['#30333b', '#2f3238'][i % 2] : ['#c7ccd4', '#b0b7c2'][i % 2]; parts.push(pc(new THREE.CircleGeometry(.5 + p.s * .5, 18), col, M(p, 1).multiply(TRS([0, .004, 0], [-Math.PI / 2, 0, 0], [1, .7 + p.t * .5, 1])))); });
   (D.silvestres || []).forEach(p => { const m = M(p, .9 + p.s * .5); PARTS.silvestre(pal, p.v).forEach(g => parts.push(g.applyMatrix4(m))); });
   (D.helechitos || []).forEach(p => { const m = M(p, .8 + p.s * .6); PARTS.helechito(pal, p.v).forEach(g => parts.push(g.applyMatrix4(m))); });
   garden = new THREE.Mesh(kit(parts), LAMB); garden.visible = !focus; scene.add(garden);
+}
+/* El resto del planeta (lo que no es el claro): parches grandes de dos tonos, árboles, arbustos y matas repartidos por
+   toda la esfera, para que al alejar se vea un mundo entero y no un claro flotando. Puntos al azar sobre la esfera
+   (fuera del casquete del claro, a más de 4,6 m de arco del centro), con semilla fija. Se calcula una vez. */
+let PLANETA = null;
+function planetaGeo(pal) {
+  if (PLANETA) return PLANETA;
+  const r = rng(131), out = [], M = (x, z, rot, sc) => { placeAt(_dum, x, z, rot); return new THREE.Matrix4().compose(_dum.position, _dum.quaternion, _s4.setScalar(sc)); };
+  // un punto al azar de la esfera, dado como coordenadas de arco (las que usa surf), fuera del claro
+  const punto = () => { const a = Math.acos(1 - 2 * r()) * .92 + .58, b = r() * 6.283, d = Math.min(a, 3.05) * PLANET_R; return { x: Math.sin(b) * d, z: Math.cos(b) * d, rot: r() * 6.28, s: r(), v: Math.floor(r() * 3) }; };
+  const oscuro = pal.bg === '#1f1f1f';
+  for (let i = 0; i < 40; i++) { const p = punto(), col = oscuro ? ['#30333b', '#2a2d34'][i % 2] : ['#c7ccd4', '#aeb5c0'][i % 2]; out.push(pc(new THREE.CircleGeometry(1.2 + p.s * 1.6, 24), col, M(p.x, p.z, p.rot, 1).multiply(TRS([0, .004, 0], [-Math.PI / 2, 0, 0], [1, .6 + p.s * .6, 1])))); }
+  for (let i = 0; i < 44; i++) { const p = punto(); PARTS[p.v === 0 ? 'guaya' : 'nublado'](pal, p.v).forEach(g => out.push(g.applyMatrix4(M(p.x, p.z, p.rot, 1.1 + p.s * .5)))); }
+  for (let i = 0; i < 50; i++) { const p = punto(); PARTS.arbusto(pal).forEach(g => out.push(g.applyMatrix4(M(p.x, p.z, p.rot, 1 + p.s)))); }
+  for (let i = 0; i < 60; i++) { const p = punto(); PARTS.tufts(pal).forEach(g => out.push(g.applyMatrix4(M(p.x, p.z, p.rot, 1.2 + p.s)))); }
+  for (let i = 0; i < 16; i++) { const p = punto(); PARTS.piedra(pal).forEach(g => out.push(g.applyMatrix4(M(p.x, p.z, p.rot, 1.2 + p.s * 1.5)))); }
+  return PLANETA = out;
 }
 /* ---------- Polvo de luz (motas blancas que flotan) ---------- */
 let dust = null;
@@ -1352,10 +1370,13 @@ function frame(now) {
     // Cuanto más lejos, más desde arriba (de cerca se ve en perspectiva; de lejos, el planeta entero centrado)
     const atras = 1.6 * z / (1 + Math.max(0, z - 1) * .6);
     _tp.set(pajaro.x, py + 2.3 * z, pajaro.z + atras); _tl.set(pajaro.x, py - Math.max(0, z - 1) * .35, pajaro.z);
+    // Más allá de 2,5 de zoom la cámara se va al espacio y orbita el planeta entero (como en Tolan): mira al centro
+    const esp = clamp((z - 2.5) / 4, 0, 1), D = PLANET_R * (2.4 + 2.3 * esp);
+    if (esp > 0) { _ep.set(0, 1.15, 1).normalize().multiplyScalar(D).add(PLANET_C); _tp.lerp(_ep, esp); _tl.lerp(PLANET_C, esp); }
     _cp.lerp(_tp, camAmt.pajaro); _cl.lerp(_tl, camAmt.pajaro);
   }
   // Desde lejos la niebla se abre: así, alejando del todo, se ve el claro entero y el planeta redondo (como en Tolan)
-  if (scene.fog) { const lejos = camAmt.pajaro * Math.max(0, pajaro.zoom - 1) * 4; scene.fog.near = FOG_NEAR + lejos; scene.fog.far = 9.5 + lejos * 2.5; }
+  if (scene.fog) { const lejos = camAmt.pajaro * Math.max(0, pajaro.zoom - 1) * 6; scene.fog.near = FOG_NEAR + lejos; scene.fog.far = 9.5 + lejos * 3; }
   camera.position.copy(_cp);
   camera.up.set(0, 1, 0);
   camera.lookAt(_cl);
@@ -1463,7 +1484,7 @@ export function pantallaDe(x, z, alto = 0) {
    arriba: se arrastra con el mouse o el dedo, hace zoom con la rueda o el pellizco, y Uku sigue en lo suyo) ---------- */
 let camModo = 'libre', terceraYaw = 0;
 const camAmt = { tercera: 0, pajaro: 0 }, pajaro = { x: 0, z: 0, zoom: 1, seguir: true };
-const _cp = new THREE.Vector3(), _cl = new THREE.Vector3(), _tp = new THREE.Vector3(), _tl = new THREE.Vector3();
+const _cp = new THREE.Vector3(), _cl = new THREE.Vector3(), _tp = new THREE.Vector3(), _tl = new THREE.Vector3(), _ep = new THREE.Vector3();
 export function setCamara(m) { camModo = m === 'tercera' || m === 'pajaro' ? m : 'libre'; if (camModo === 'tercera') terceraYaw = heading; if (camModo === 'pajaro') { pajaro.seguir = true; } if (renderer) renderer.domElement.style.touchAction = camModo === 'pajaro' ? 'none' : 'pan-y'; }
 export function camaraActual() { return camModo; }
 export function vistaSigueAUku() { return camModo !== 'pajaro' || pajaro.seguir; }
@@ -1472,6 +1493,7 @@ export function centrarEnUku() { pajaro.seguir = true; }
 export function moverVista(dx, dz) { pajaro.seguir = false; pajaro.x = clamp(pajaro.x + dx, -2.8, 2.8); pajaro.z = clamp(pajaro.z + dz, -2.4, 1.4); }
 export function zoomVista(f) { if (camModo === 'pajaro') pajaro.zoom = clamp(pajaro.zoom * f, .4, 7.5); else setZoom(zoomTo * f); }
 export function zoomPajaro() { return pajaro.zoom; }
+export function enElEspacio() { return camModo === 'pajaro' && pajaro.zoom > 2.5; }
 
 // El mundo es una ilustración plana; Uku va encima con su propia luz suave (como un muñeco de verdad),
 // sin borrar la profundidad: lo que está delante de él lo sigue tapando
@@ -1510,13 +1532,13 @@ function init() {
   const pal = palette();
   scene.background = null; // transparente: la máscara del contenedor funde la escena con la página
   scene.fog = new THREE.Fog(pal.bg, FOG_NEAR, 9.5); // el fondo del claro se aclara con la distancia, como en una ilustración
-  camera = new THREE.PerspectiveCamera(30, 1, .05, 20);
+  camera = new THREE.PerspectiveCamera(30, 1, .05, 90); // lejos: el planeta entero desde el espacio
   camera.position.set(0, .75, 2.6);
   // Ilustración: solo luz ambiente, colores planos sin sombreado
   ambLight = new THREE.AmbientLight('#ffffff', Math.PI); scene.add(ambLight);
   LAMB = new THREE.MeshLambertMaterial({ vertexColors: true });
   smokeM = new THREE.MeshBasicMaterial({ color: pal.dust, transparent: true, opacity: .85 });
-  ground = new THREE.Mesh(new THREE.SphereGeometry(PLANET_R, 160, 48, 0, Math.PI * 2, 0, .55), new THREE.MeshLambertMaterial({ color: pal.ground }));
+  ground = new THREE.Mesh(new THREE.SphereGeometry(PLANET_R, 128, 96), new THREE.MeshLambertMaterial({ color: pal.ground }));
   ground.position.copy(PLANET_C); scene.add(ground);
   // Uku tiene su escena con su luz: un cielo claro, un rebote del suelo y un sol suave arriba a la izquierda
   bearScene = new THREE.Scene();

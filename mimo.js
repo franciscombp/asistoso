@@ -544,8 +544,9 @@ function pintarDecorar() {
   dec.que.textContent = D[k] ? D[k].nombre : k;
   dec.barra.querySelector('[data-d="girar"]').disabled = dec.barra.querySelector('[data-d="quitar"]').disabled = !decorando.actual;
 }
-// El aro sigue a lo elegido (la cámara se mueve)
+// El aro sigue a lo elegido (la cámara se mueve); y de lejos, en la vista de pájaro, el cielo es el espacio
 setInterval(() => {
+  document.body.classList.toggle('espacio', !!(vistaPajaro && B3() && B3().enElEspacio()));
   if (!decorando || !decorando.actual) { dec.aro.hidden = true; return; }
   const d = B3().decoracionLista().find(x => x.id === decorando.actual);
   const p = d && B3().pantallaDe(d.x, d.z, .05);
