@@ -182,35 +182,18 @@ kbd { display: inline-block; min-width: 26px; padding: 2px 6px; border-radius: 6
 /* Entornos oscuros: logo blanco y textos claros sobre el cielo */
 
 /* Sueño: los bordes se desenfocan y se funden con el color del cielo (--sueno lo pone la escena) */
-.mimo-sueno {
-  position: fixed; inset: 0; z-index: 1; pointer-events: none;
-  /* El foco es Uku (--ux, --uy los pone mimo.js cada cuadro): alrededor, el mundo se desenfoca y se funde con el cielo */
-  background: radial-gradient(ellipse 52vw 58vh at var(--ux, 40%) var(--uy, 56%), transparent 40%, color-mix(in srgb, var(--sueno, #f6f6f5) 55%, transparent) 100%);
-  -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px);
-  -webkit-mask-image: radial-gradient(ellipse 40vw 46vh at var(--ux, 40%) var(--uy, 56%), transparent 30%, #000 92%);
-  mask-image: radial-gradient(ellipse 40vw 46vh at var(--ux, 40%) var(--uy, 56%), transparent 30%, #000 92%);
-  transition: background .8s ease;
-}
-/* Una segunda capa, más borrosa, solo en el borde: la profundidad de campo de una lente abierta */
-.mimo-sueno::after {
-  content: ''; position: absolute; inset: 0;
-  -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px);
-  -webkit-mask-image: radial-gradient(ellipse 62vw 68vh at var(--ux, 40%) var(--uy, 56%), transparent 55%, #000 100%);
-  mask-image: radial-gradient(ellipse 62vw 68vh at var(--ux, 40%) var(--uy, 56%), transparent 55%, #000 100%);
-}
-/* Brillo cálido: luz que entra por arriba a la derecha y un velo suave que lo pasteliza todo */
-.mimo-brillo {
-  position: fixed; inset: 0; z-index: 1; pointer-events: none; mix-blend-mode: soft-light;
-  background: radial-gradient(60vmax 50vmax at 92% -8%, rgb(255 226 140 / .8), transparent 70%), radial-gradient(50vmax 40vmax at 8% 105%, rgb(255 200 170 / .4), transparent 70%);
-}
-/* Rayos de luz entre los árboles: abanico que se mece muy despacio */
+/* Dibujo vectorial plano: sin desenfoque de lente ni velos difusos (las capas quedan, sin efecto, por si se
+   quieren volver a probar) */
+.mimo-sueno, .mimo-brillo { display: none; }
+/* Rayos de luz entre los árboles: abanico plano que se mece muy despacio */
 .mimo-rayos {
-  position: fixed; inset: -10%; z-index: 1; pointer-events: none; mix-blend-mode: screen; opacity: .4; filter: blur(5px);
-  background: repeating-conic-gradient(from 188deg at 88% -6%, transparent 0deg, rgb(255 240 190 / .3) 2.4deg, transparent 6deg, transparent 11deg);
-  -webkit-mask-image: linear-gradient(200deg, #000 0%, transparent 72%); mask-image: linear-gradient(200deg, #000 0%, transparent 72%);
+  position: fixed; inset: -10%; z-index: 1; pointer-events: none; opacity: .2;
+  /* un abanico de rayos planos de borde nítido que termina en un arco limpio */
+  background: repeating-conic-gradient(from 188deg at 88% -6%, transparent 0deg 2.4deg, rgb(255 240 190 / .45) 2.4deg 6deg, transparent 6deg 11deg);
+  -webkit-mask-image: radial-gradient(circle at 88% -6%, #000 0 62vmax, transparent 62vmax); mask-image: radial-gradient(circle at 88% -6%, #000 0 62vmax, transparent 62vmax);
   animation: rayos 18s ease-in-out infinite alternate;
 }
-@keyframes rayos { from { transform: rotate(-1.6deg) scale(1.02); opacity: .28; } to { transform: rotate(1.8deg) scale(1.05); opacity: .46; } }
+@keyframes rayos { from { transform: rotate(-1.6deg) scale(1.02); opacity: .16; } to { transform: rotate(1.8deg) scale(1.05); opacity: .26; } }
 html[data-theme="dark"] .mimo-brillo { background: radial-gradient(60vmax 50vmax at 92% -8%, rgb(255 224 140 / .35), transparent 70%), rgb(40 50 90 / .18); }
 html[data-theme="dark"] .mimo-rayos { opacity: .22; }
 @media (prefers-reduced-motion: reduce) { .mimo-rayos { animation: none; } }

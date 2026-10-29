@@ -3,8 +3,9 @@
    Los globos, los corazones, el confeti, los fuegos, las flores, el sol y
    todas las reacciones son objetos 3D del mundo de Uku (three.js, la misma
    escena de su claro), no imágenes ni emojis. Estilo sobrio, como el juego de
-   «Her»: sin contornos, volumen suave (un matcap claro con un borde de luz),
-   una paleta corta (azul, amarillo, crema, blanco), pocas piezas que entran y
+   «Her», como un dibujo vectorial plano: sin contornos ni degradados, cada
+   pieza de su color con un solo tono de sombra nítido (el mismo material
+   de dos tonos del mundo, bosque3d › materialPlano), una paleta corta (azul, amarillo, crema, blanco), pocas piezas que entran y
    se desvanecen con calma y un aro de luz donde estaba el gesto. Estrellas,
    notas, gotas, copos, tarro de miel, abeja, flores, tazas, trofeos,
    pasteles, regalos, rayos, lunas, zetas… Viven en
@@ -43,26 +44,18 @@ export function crearEfectos3d(b3d) {
   /* ---------- Materiales y formas que se comparten ---------- */
   const texturas = {};
   function lienzo(w, h, pintar) { const c = document.createElement('canvas'); c.width = w; c.height = h; pintar(c.getContext('2d'), w, h); const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t; }
-  // Matcap: la «luz» de las piezas, sin depender de las luces de la escena. Claro arriba a la izquierda, un poco más
-  // oscuro abajo y un borde de luz blanca (el brillo suave de las figuras de «Her»)
-  const MATCAP = lienzo(256, 256, (g, w) => {
-    const c = w / 2;
-    let d = g.createRadialGradient(c * .72, c * .62, c * .05, c, c, c);
-    d.addColorStop(0, '#ffffff'); d.addColorStop(.55, '#f3f4f7'); d.addColorStop(1, '#d2d6df');
-    g.fillStyle = d; g.beginPath(); g.arc(c, c, c, 0, 7); g.fill();
-    d = g.createRadialGradient(c, c, c * .78, c, c, c);
-    d.addColorStop(0, 'rgba(255,255,255,0)'); d.addColorStop(1, 'rgba(255,255,255,.55)');
-    g.fillStyle = d; g.beginPath(); g.arc(c, c, c, 0, 7); g.fill();
-  });
   const MATS = {};
-  const basico = (c, o) => MATS[c + JSON.stringify(o || '')] || (MATS[c + JSON.stringify(o || '')] = new THREE.MeshMatcapMaterial(Object.assign({ color: c, matcap: MATCAP }, o)));
+  const plano = (o) => b3d.materialPlano ? b3d.materialPlano(o) : new THREE.MeshBasicMaterial(o);
+  const basico = (c, o) => MATS[c + JSON.stringify(o || '')] || (MATS[c + JSON.stringify(o || '')] = plano(Object.assign({ color: c }, o)));
   const hilo = new THREE.MeshBasicMaterial({ color: '#c9d3e6', transparent: true, opacity: .6 });
   const emojiTex = (e) => texturas[e] || (texturas[e] = lienzo(128, 128, (g) => { g.font = '100px "Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(e, 64, 70); }));
-  const puntoTex = () => texturas.punto || (texturas.punto = lienzo(64, 64, (g) => { const d = g.createRadialGradient(32, 32, 0, 32, 32, 32); d.addColorStop(0, 'rgba(255,255,255,1)'); d.addColorStop(.4, 'rgba(255,255,255,.8)'); d.addColorStop(1, 'rgba(255,255,255,0)'); g.fillStyle = d; g.fillRect(0, 0, 64, 64); }));
+  // Formas planas de borde nítido (nada de brillos difusos): un disco y un sol de círculos con rayos
+  const puntoTex = () => texturas.punto || (texturas.punto = lienzo(64, 64, (g) => { g.fillStyle = '#fff'; g.beginPath(); g.arc(32, 32, 30, 0, 7); g.fill(); }));
   const solTex = () => texturas.sol || (texturas.sol = lienzo(256, 256, (g) => {
-    const d = g.createRadialGradient(128, 128, 0, 128, 128, 128); d.addColorStop(0, 'rgba(255,230,120,.95)'); d.addColorStop(.35, 'rgba(255,221,0,.45)'); d.addColorStop(1, 'rgba(255,221,0,0)');
-    g.fillStyle = d; g.fillRect(0, 0, 256, 256);
-    for (let i = 0; i < 16; i++) { const a = i / 16 * 6.283; g.save(); g.translate(128, 128); g.rotate(a); const l = g.createLinearGradient(0, 0, 0, -128); l.addColorStop(0, 'rgba(255,221,0,.5)'); l.addColorStop(1, 'rgba(255,221,0,0)'); g.fillStyle = l; g.beginPath(); g.moveTo(-5, 0); g.lineTo(5, 0); g.lineTo(1.5, -128); g.lineTo(-1.5, -128); g.fill(); g.restore(); }
+    g.translate(128, 128);
+    g.fillStyle = 'rgba(246,200,74,.35)';
+    for (let i = 0; i < 12; i++) { g.save(); g.rotate(i / 12 * 6.283); g.beginPath(); g.moveTo(-9, -58); g.lineTo(9, -58); g.lineTo(0, -122); g.closePath(); g.fill(); g.restore(); }
+    [[96, 'rgba(246,200,74,.18)'], [70, 'rgba(246,200,74,.32)'], [48, 'rgba(248,212,112,1)']].forEach(([rr, c]) => { g.fillStyle = c; g.beginPath(); g.arc(0, 0, rr, 0, 7); g.fill(); });
   }));
 
   // Corazón con volumen (una forma extruida con bisel) y su silueta azul detrás
@@ -186,7 +179,7 @@ export function crearEfectos3d(b3d) {
   // Un aro de luz fino que se abre y se apaga donde estaba el gesto (el «sí, te vi» de cada reacción)
   const ARO = new THREE.RingGeometry(.47, .5, 64);
   function aro(sx, sy, d, color = '#ffffff') {
-    const mat = new THREE.MeshBasicMaterial({ color, transparent: true, opacity: .8, depthWrite: false, side: THREE.DoubleSide, blending: THREE.AdditiveBlending, fog: false });
+    const mat = new THREE.MeshBasicMaterial({ color, transparent: true, opacity: .8, depthWrite: false, side: THREE.DoubleSide, fog: false });
     const o = new THREE.Mesh(ARO, mat); o.position.copy(punto(sx, sy, d - .9));
     agregar({ o, tipo: 'especial', vida: 1.1, dispose: () => mat.dispose(), update: (p) => {
       const k = suave(p.t / p.vida); o.quaternion.copy(camera.quaternion); o.scale.setScalar((.15 + k * .55) * K * 1.6); mat.opacity = .75 * (1 - k); } });
@@ -231,7 +224,7 @@ export function crearEfectos3d(b3d) {
     },
     // Sol: un resplandor con rayos allá al fondo, que sube y se apaga
     sol(sx, sy, d) {
-      const m = new THREE.SpriteMaterial({ map: solTex(), transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, fog: false }), o = new THREE.Sprite(m);
+      const m = new THREE.SpriteMaterial({ map: solTex(), transparent: true, depthWrite: false, fog: false }), o = new THREE.Sprite(m);
       o.position.copy(punto(.5, .22, d + 3.4)); o.scale.set(7, 7, 1);
       agregar({ o, tipo: 'especial', vida: 2.6, update: (p) => { m.opacity = Math.sin(Math.min(1, p.t / p.vida) * Math.PI) * .95; m.rotation = p.t * .25; o.scale.setScalar(7 + p.t * .6); } });
     }

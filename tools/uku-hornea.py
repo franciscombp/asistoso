@@ -7,10 +7,11 @@ Por eso cada texel se calcula en 3D, en la pose de reposo del modelo:
     dibuja ahora el shader de la cara (uku-rig.js › cara), que puede pestañear y hablar;
   - el suéter (azul), la guayabera (lino) y la bufanda (amarilla) son patrones en 3D: punto acanalado en
     puños, ruedo y bufanda, punto fino en el cuerpo. Así no dependen del atlas UV, que viene en pedazos;
-  - la luz: oclusión ambiental (cuánto cielo ve cada punto, con 48 mapas de profundidad) y una luz suave
-    desde arriba y adelante. Queda como un muñeco de vinilo con sombras suaves, no un dibujo plano.
+  - por defecto, plano (dibujo vectorial): sin luz horneada; la sombra la pone en vivo el material de dos tonos
+    del mundo. Con --volumen se hornea la luz de antes: oclusión ambiental (48 mapas de profundidad) y una luz
+    suave desde arriba y adelante, como un muñeco de vinilo.
 
-Uso: python3 tools/uku-hornea.py   (escribe assets/oso/tex/*.png y actualiza los materiales de uku-rig-v2.glb)
+Uso: python3 tools/uku-hornea.py [cabeza|brazos|piernas|ropa|bufanda|glb …] [--volumen]   (escribe assets/oso/tex/*.png y actualiza los materiales de uku-rig-v2.glb)
 Necesita numpy y Pillow. Tarda un par de minutos.
 """
 import json, os, struct, sys
@@ -110,7 +111,13 @@ def oclusion(P, Nn, sin=()):
 LUZ = np.array([-.35, .8, .55]); LUZ /= np.linalg.norm(LUZ)
 
 
+# Dibujo vectorial plano (por defecto): colores planos, sin sombras horneadas. La sombra la pone el material de dos
+# tonos del mundo (bosque3d › toon), en vivo. --volumen hornea la luz suave de antes (oclusión ambiental).
+PLANO = '--volumen' not in sys.argv
+
+
 def luz(P, Nn, cuanto=1.0, sin=()):
+    if PLANO: return np.ones(len(P))
     ao = oclusion(P, Nn, sin)
     ao = np.clip(ao * 1.25, 0, 1) ** 1.3                    # el cielo abierto no se oscurece; los huecos sí
     lam = np.clip(Nn @ LUZ * .5 + .5, 0, 1)                # media Lambert: sin negro del lado oscuro
@@ -195,8 +202,10 @@ def ropa():
     v = np.abs((col % 1) - .5) * 2
     punto = 1 - .07 * smooth(.25, .0, np.abs(v - (fila % 1)))
     banda = np.where(manga, smooth(puno - .075, puno - .06, np.abs(X)), smooth(ruedo + .075, ruedo + .06, Y))
+    if PLANO: banda = np.where(manga, smooth(puno - .0685, puno - .0665, np.abs(X)), smooth(ruedo + .0685, ruedo + .0665, Y))  # borde nítido
     canal = .9 + .1 * np.abs(np.cos(alrededor / .0125 * np.pi))
     tex = np.where(banda > .5, canal, punto)
+    if PLANO: tex = np.where(banda > .5, .9, 1.)   # plano: el cuerpo liso y ruedo y puños en una franja un poco más oscura
     borde = 1 - .1 * banda * smooth(.004, 0, np.abs(np.where(manga, puno - .075 - np.abs(X), Y - ruedo - .075)))
     for nombre, color, k in (('uku_ropa', AZUL, 1.0), ('uku_ropa_lino', LINO, .45)):
         # con la guayabera no hay bufanda: su sombra no va
@@ -205,7 +214,7 @@ def ropa():
         t = 1 + (tex * borde - 1) * k
         if nombre == 'uku_ropa_lino':
             # Guayabera: lino liso con sus dos pliegues al frente (sin punto ni acanalado)
-            t = (1 + (punto - 1) * .2) * (1 - .1 * ((~manga) & (Z > .05) & (np.abs(np.abs(X) - .085) < .0035)))
+            t = (1 + (punto - 1) * (0 if PLANO else .2)) * (1 - .1 * ((~manga) & (Z > .05) & (np.abs(np.abs(X) - .085) < .0035)))
         img[ok] = color * t[:, None] * l[:, None]
         guardar(nombre, img, ok)
 
@@ -221,6 +230,7 @@ def bufanda():
     alrededor = np.where(vuelta, Y, X + Z * .3)
     canal = .88 + .12 * np.abs(np.cos(alrededor / .011 * np.pi))
     img = np.zeros((res, res, 3))
+    if PLANO: canal = np.ones(len(Q))   # plano: amarillo liso
     img[ok] = AMARILLO * canal[:, None] * luz(Q, M)[:, None]
     guardar('uku_bufanda', img, ok)
 
@@ -249,7 +259,7 @@ def materiales():
 
 
 if __name__ == '__main__':
-    solo = sys.argv[1:]
+    solo = [a for a in sys.argv[1:] if not a.startswith('--')]
     if solo:
         for n in solo: {'cabeza': lambda: pelaje('uku_cabeza', 'uku_cabeza_final', 2048, cara=True), 'brazos': lambda: pelaje('uku_brazos', 'uku_brazos', 1024),
                          'piernas': lambda: pelaje('uku_piernas', 'uku_piernas_final', 1024, unas=False), 'ropa': ropa, 'bufanda': bufanda, 'glb': materiales}[n]()

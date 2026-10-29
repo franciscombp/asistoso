@@ -3,11 +3,11 @@
    Que todo el claro parezca un sueño idílico:
    - Polvo de luz: motas doradas que flotan despacio entre los árboles
      (puntos con brillo aditivo, de dos tamaños, que titilan).
-   - Bokeh: discos grandes y borrosos muy cerca de la cámara, como una
-     lente con poco foco; se mueven con la cámara.
+   - Bokeh: discos grandes, planos y translúcidos muy cerca de la cámara;
+     se mueven con la cámara. Todo de borde nítido, como un dibujo
+     vectorial (nada borroso).
    - Bruma: la niebla de la escena se acerca y todo lo lejano se aclara.
-   El desenfoque de los bordes que sigue a Uku, el brillo cálido y los
-   rayos de luz son de mimo.css (.mimo-sueno, .mimo-brillo, .mimo-rayos).
+   Los rayos de luz son de mimo.css (.mimo-rayos), planos y de borde nítido.
    ?sueno=0 lo apaga.
    ===================================================================== */
 const r = (a, b) => a + Math.random() * (b - a);
@@ -17,12 +17,12 @@ export function crearSueno(b3d) {
   const { THREE, scene, camera } = b3d.mundo3d();
   const grupo = new THREE.Group(); grupo.name = 'sueno'; scene.add(grupo);
 
-  // Textura suave: un disco con borde difuso; con `anillo`, un poco más marcado en el borde (el bokeh real)
+  // Un disco plano de borde nítido (dibujo vectorial, sin difuminar); con `anillo`, además un aro más marcado
   const disco = (anillo) => {
     const c = document.createElement('canvas'); c.width = c.height = 128;
-    const g = c.getContext('2d'), d = g.createRadialGradient(64, 64, 0, 64, 64, 64);
-    d.addColorStop(0, 'rgba(255,255,255,' + (anillo ? .55 : 1) + ')'); d.addColorStop(anillo ? .78 : .35, 'rgba(255,255,255,' + (anillo ? .75 : .7) + ')'); d.addColorStop(anillo ? .92 : 1, 'rgba(255,255,255,' + (anillo ? .95 : 0) + ')'); if (anillo) d.addColorStop(1, 'rgba(255,255,255,0)');
-    g.fillStyle = d; g.fillRect(0, 0, 128, 128);
+    const g = c.getContext('2d');
+    g.fillStyle = 'rgba(255,255,255,' + (anillo ? .55 : 1) + ')'; g.beginPath(); g.arc(64, 64, 60, 0, Math.PI * 2); g.fill();
+    if (anillo) { g.strokeStyle = '#fff'; g.lineWidth = 5; g.beginPath(); g.arc(64, 64, 57, 0, Math.PI * 2); g.stroke(); }
     const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t;
   };
 
@@ -36,7 +36,7 @@ export function crearSueno(b3d) {
     return { o, m, g, pos, fase, vel, n, base: opacidad };
   }
   // Pequeñas y doradas (se ven sobre el día y brillan de noche) y unas pocas grandes y suaves
-  const polvo = [motas(240, .06, '#ffc93a', .95, THREE.NormalBlending), motas(60, .16, '#fff1b0', .38, THREE.AdditiveBlending)];
+  const polvo = [motas(240, .06, '#ffc93a', .95, THREE.NormalBlending), motas(60, .16, '#fff1b0', .38, THREE.NormalBlending)];
 
   /* ---------- Bokeh: discos borrosos cerca de la lente ---------- */
   const bokeh = [];

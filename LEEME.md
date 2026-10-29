@@ -221,7 +221,7 @@ Los globos, corazones, confeti, fuegos artificiales, monedas, el sol y **todas l
 objetos 3D del mundo de Uku** (`efectos3d.js`, three.js), no imágenes ni emojis pegados a la
 pantalla: tienen volumen, pasan delante o detrás de Uku y de los árboles, se desvanecen con la
 niebla y se mueven con la cámara. Estilo sobrio, como el juego de «Her»: sin contornos, volumen
-suave con un matcap claro y borde de luz, una paleta corta, la mitad de piezas que antes, que entran
+plano de dos tonos (como el resto del mundo), una paleta corta, la mitad de piezas que antes, que entran
 y se desvanecen con calma, y un aro de luz fino donde estaba el gesto. Cada pieza (`PIEZAS`) está
 hecha con geometría simple: estrellas, chispas, corazones, rayos,
 zetas de sueño, check y cruz, gotas, lunas, notas musicales, signos ¡ y ?, copos, burbujas,
@@ -247,23 +247,39 @@ si no hay WebGL.
 - Para volver atrás: `?oso=clasico` (modelo original, con su cara pintada); también con
   `localStorage` `uku_oso`.
 
+## Dibujo vectorial plano
+
+Todo el mundo (el claro, Uku, lo que lleva puesto y las reacciones) se ve como un dibujo vectorial
+plano (`assets/bosque3d.js › toon`):
+
+- **Dos tonos por objeto**: su color exacto donde le da la luz y un solo tono de sombra, un poco
+  más oscuro y más frío, con el borde nítido (`MeshToonMaterial` con un degradado de dos pasos sin
+  filtrar). Ni degradados, ni brillos, ni facetas de varios grises. `SOMBRA` (0,16) dice cuánto
+  oscurece; en 0 todo queda de un solo tono.
+- **La luz sigue a la cámara**, desde arriba a la izquierda: la sombra cae siempre del mismo lado,
+  como en una ilustración.
+- **Sin difuminados**: los puntos de polvo, la bruma de la cascada, el bokeh, los fuegos y la
+  sombra de Uku son discos de borde nítido; los rayos de luz son un abanico plano que termina en un
+  arco; el sol de las reacciones son círculos planos con rayos. El desenfoque de lente y el brillo
+  cálido se apagaron (las capas siguen en `mimo.css`, sin efecto).
+- Las reacciones usan el mismo material (`bosque3d › materialPlano`).
+
 ## Aspecto de Uku: suéter azul, bufanda y lentes amarillos, cara que habla
 
 Más sobrio y menos infantil, con la referencia del juego de «Her»:
 
 - **Colores**: suéter azul (`#2a4ea0`), bufanda amarilla (`#f6c426`) y lentes amarillos. Con calor,
   la guayabera de lino con sus dos pliegues al frente.
-- **Horneado nuevo** (`python3 tools/uku-hornea.py`, un par de minutos; o solo una parte:
-  `cabeza`, `brazos`, `piernas`, `ropa`, `bufanda`, `glb`). En el mundo, las piezas con textura se
-  dibujan sin luz, así que la textura es el aspecto final. Cada texel se calcula en 3D, en la pose de
-  reposo:
-  - **Oclusión ambiental** con 48 mapas de profundidad y una luz suave de arriba: sombras suaves
-    bajo la bufanda, entre los brazos y en los pliegues, como un muñeco de vinilo. La guayabera se
-    hornea sin la bufanda, que no lleva.
+- **Horneado plano** (`python3 tools/uku-hornea.py`, un minuto; o solo una parte: `cabeza`,
+  `brazos`, `piernas`, `ropa`, `bufanda`, `glb`). Cada texel se calcula en 3D, en la pose de reposo,
+  y queda de un color plano, sin luz horneada (la sombra la pone el material de dos tonos, ver
+  «Dibujo vectorial plano»):
   - **Pelaje con bordes nítidos**: las clases (pelaje, parche claro, oreja, uñas) salen de la textura
     original y se vuelven a cortar con antialias. Patas sin manchas.
-  - **Suéter y bufanda en punto**: punto fino en el cuerpo y acanalado en ruedo, puños y bufanda.
-    Se definen sobre el cuerpo, así que no importa que el atlas UV venga en pedazos. Ya no hay zigzag.
+  - **Suéter liso** con ruedo y puños en una franja un poco más oscura de borde nítido; **bufanda
+    lisa**. Se definen sobre el cuerpo, así que no importa que el atlas UV venga en pedazos.
+  - `--volumen` hornea en cambio la luz suave de antes (oclusión ambiental con 48 mapas de
+    profundidad, punto y acanalado), para un aspecto de muñeco de vinilo.
 - **La cara la dibuja un shader** (`assets/uku-rig.js › CARA`) sobre la cabeza, en la pose de reposo
   del modelo. Ojos con brillo, nariz y sonrisa quedan nítidos a cualquier distancia. Pestañea,
   entrecierra y pone ojos contentos ^ ^.
@@ -461,13 +477,11 @@ siguiente toque. La tecla `F` la alterna en cualquier momento.
 
 Todo el claro parece un sueño idílico (`sueno.js` y `mimo.css`):
 
-- **Desenfoque que sigue a Uku**: él se ve nítido y, alrededor, el mundo se desenfoca en dos
-  capas (como una lente abierta) y se funde con el cielo.
 - **Polvo de luz**: unas 300 motas doradas flotan despacio entre los árboles (pequeñas y nítidas,
   y otras grandes y suaves) y respiran con la luz.
-- **Bokeh**: discos grandes y borrosos muy cerca de la cámara, que se mueven con ella.
-- **Bruma**, un **brillo cálido** que entra por arriba a la derecha y **rayos de luz** que se
-  mecen muy despacio. De noche todo baja de intensidad.
+- **Bokeh**: discos grandes, planos y translúcidos muy cerca de la cámara, que se mueven con ella.
+- **Bruma** y **rayos de luz** planos que se mecen muy despacio. De noche todo baja de intensidad.
+  Todo de borde nítido (ver «Dibujo vectorial plano»).
 - `?sueno=0` apaga el polvo y el bokeh.
 - El **cartel de días sin accidentes** es sobrio: pizarra de papel claro con un filete fino, fichas
   blancas con el número azul oscuro, letras en gris y un marco oscuro, sin franjas ni colores vivos.
@@ -524,8 +538,7 @@ frase hasta haber dicho todas**, y la primera de la baraja nueva nunca es la
   mano cuando está quieto). **Al llegar** alguien, viene al centro a
   saludar (por su nombre si está registrado); si la persona no hace nada un
   rato, pasea cerca y vuelve con cualquier gesto. **Al irse**, se despide.
-- **Paleta de sueño:** todos los entornos son azul gris y amarillo, con los
-  bordes desenfocados que se funden con el cielo.
+- **Paleta de sueño:** todos los entornos son azul gris y amarillo, en colores planos.
 - **Su mundo** (`assets/bosque3d.js`): planeta redondeado,
   colores planos de ilustración, flores, guayacanes y brotes amarillos. De noche
   y en la fiesta usa su paleta oscura; con lluvia, Uku saca el paraguas.
@@ -625,7 +638,7 @@ frase hasta haber dicho todas**, y la primera de la baraja nueva nunca es la
 | `memoria.js` | Hechos que Uku sabe de Fran, diario, relación y el claro que crece. |
 | `tono.js` | Lee el tono de cada frase y dice cómo responder. |
 | `efectos3d.js` | Efectos y reacciones en el mundo 3D: globos, confeti, fuegos y las piezas 3D de cada reacción (`PIEZAS`, `TABLA3D`). |
-| `sueno.js` | Atmósfera de sueño: polvo de luz, bokeh y bruma (el desenfoque, el brillo y los rayos son CSS). |
+| `sueno.js` | Atmósfera de sueño: polvo de luz, bokeh y bruma, en discos planos (los rayos son CSS). |
 | `tiempo.js` | Reloj, clima del lugar y entorno según la hora. |
 | `cartel.js` | Cartel «X días sin accidentes»: días, récord y qué lo cambia. |
 | `despierto.js` | Mantiene la pantalla despierta (Wake Lock y, si no, un video diminuto). |

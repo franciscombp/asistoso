@@ -164,6 +164,18 @@ const DECO = {
    Cada objeto es una sola malla con colores por vértice (una llamada de dibujo por objeto, no una por
    pieza); las geometrías se comparten entre objetos iguales y se rehacen al cambiar el tema. */
 let LAMB = null, GEO = {};
+/* Dibujo vectorial plano: cada objeto lleva su color exacto donde le da la luz y un solo tono de sombra, un poco más
+   oscuro y más frío, con el borde nítido (MeshToonMaterial con un degradado de dos pasos, sin filtrar). No hay
+   degradados ni brillos. La luz sigue a la cámara (arriba a la izquierda), así la sombra cae siempre del mismo lado,
+   como en una ilustración. AMB + SOL = blanco: lo iluminado queda del color exacto; SOMBRA es cuánto oscurece. */
+const SOMBRA = .16;
+const AMB = new THREE.Color(1 - SOMBRA * 1.05, 1 - SOMBRA, 1 - SOMBRA * .7), SOL = new THREE.Color(SOMBRA * 1.05, SOMBRA, SOMBRA * .7);
+const LUZ_CAM = new THREE.Vector3(-.55, .7, .45).normalize(); // de dónde viene la luz, en el espacio de la cámara
+const GRAD = (() => { const t = new THREE.DataTexture(new Uint8Array([0, 255]), 2, 1, THREE.RedFormat); t.minFilter = t.magFilter = THREE.NearestFilter; t.generateMipmaps = false; t.needsUpdate = true; return t; })();
+function toon(o) { const { flatShading, ...resto } = o || {}; return new THREE.MeshToonMaterial(Object.assign({ gradientMap: GRAD }, resto)); }
+let solMundo = null, solUku = null;
+const _luz = new THREE.Vector3();
+function seguirLuz() { if (!camera) return; _luz.copy(LUZ_CAM).applyQuaternion(camera.quaternion).multiplyScalar(10); if (solMundo) solMundo.position.copy(_luz); if (solUku) solUku.position.copy(_luz); }
 const _p4 = new THREE.Vector3(), _q4 = new THREE.Quaternion(), _e4 = new THREE.Euler(), _s4 = new THREE.Vector3(), _c4 = new THREE.Color();
 const TRS = (p, r, s) => new THREE.Matrix4().compose(_p4.set(...(p || [0, 0, 0])), _q4.setFromEuler(_e4.set(...(r || [0, 0, 0]))), typeof s === 'number' ? _s4.setScalar(s) : _s4.set(...(s || [1, 1, 1])));
 // Una pieza: la geometría ya ubicada (p puede ser una Matrix4) y pintada de un color
@@ -631,9 +643,8 @@ function planetaGeo(pal) {
 let dust = null;
 function dotTexture() {
   const c = document.createElement('canvas'); c.width = c.height = 64;
-  const g = c.getContext('2d'), r = g.createRadialGradient(32, 32, 0, 32, 32, 32);
-  r.addColorStop(0, 'rgba(255,255,255,1)'); r.addColorStop(.35, 'rgba(255,255,255,.75)'); r.addColorStop(1, 'rgba(255,255,255,0)');
-  g.fillStyle = r; g.fillRect(0, 0, 64, 64);
+  // un disco liso de borde nítido (vectorial), no un brillo difuso
+  const g = c.getContext('2d'); g.fillStyle = '#fff'; g.beginPath(); g.arc(32, 32, 30, 0, Math.PI * 2); g.fill();
   const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t;
 }
 function buildDust() {
@@ -691,8 +702,8 @@ function wingGeo() {
 }
 function buildFlies() {
   fliesG = new THREE.Group(); scene.add(fliesG);
-  wingM = new THREE.MeshLambertMaterial({ color: palette().flower, side: THREE.DoubleSide });
-  const wg = wingGeo(), bm = new THREE.MeshLambertMaterial({ color: '#3a3c43' }), bg = new THREE.CapsuleGeometry(.0035, .026, 2, 5).rotateX(Math.PI / 2), r = rng(7);
+  wingM = toon({ color: palette().flower, side: THREE.DoubleSide });
+  const wg = wingGeo(), bm = toon({ color: '#3a3c43' }), bg = new THREE.CapsuleGeometry(.0035, .026, 2, 5).rotateX(Math.PI / 2), r = rng(7);
   for (let i = 0; i < 6; i++) {
     const g = new THREE.Group(), wr = new THREE.Mesh(wg, wingM), wl = new THREE.Mesh(wg, wingM); wl.scale.x = -1;
     g.add(wr, wl, new THREE.Mesh(bg, bm)); g.scale.setScalar(.95 + (i % 3) * .15);
@@ -1052,17 +1063,17 @@ function holdObject(kind) {
   if (held) { held.parent && held.parent.remove(held); held = null; }
   if (!kind || !bones.hand_R || umb) return; // con el paraguas en la mano no sostiene otra cosa
   if (kind === 'coin') {
-    held = new THREE.Mesh(new THREE.CylinderGeometry(.06, .06, .014, 28), new THREE.MeshLambertMaterial({ color: '#ffd200' }));
+    held = new THREE.Mesh(new THREE.CylinderGeometry(.06, .06, .014, 28), toon({ color: '#ffd200' }));
     // sobre la palma: en reposo la palma mira a (0, -0.89, 0.45) en el espacio del hueso
     held.rotation.x = -.46; held.position.set(-.03, -.052, .026);
   } else if (kind === 'leaf') {
-    held = new THREE.Mesh(new THREE.ConeGeometry(.035, .1, 4), new THREE.MeshLambertMaterial({ color: palette().pine[0], flatShading: true }));
+    held = new THREE.Mesh(new THREE.ConeGeometry(.035, .1, 4), toon({ color: palette().pine[0], flatShading: true }));
     held.position.set(-.03, -.06, .03); held.rotation.set(-.46 + Math.PI, 0, -.4); // el tallo sale de la palma
   } else if (kind === 'periodico') {
     // Un periódico abierto (dos hojas con cabecera y columnas). Cuelga del pecho y readStep lo pone cada cuadro
     // delante de Uku, entre las manos, inclinado hacia su cara
     held = new THREE.Group();
-    const m = new THREE.MeshLambertMaterial({ map: periodicoTextura(), side: THREE.DoubleSide });
+    const m = toon({ map: periodicoTextura(), side: THREE.DoubleSide });
     held.add(new THREE.Mesh(new THREE.PlaneGeometry(.3, .21), m));
     held.userData.pasa = 0; held.userData.pecho = true;
     const chest = rig.B('mixamorig:Spine2') || bones.hand_R;
@@ -1095,7 +1106,7 @@ function periodicoTextura() {
    (0, 0.64, 0) sin rotación; la cabeza llega hasta y .97, las orejas a .99,
    los ojos están en y .795 y el hocico llega a z .23), así siguen cada gesto. */
 let acc = null, ropaCols = null, rain = null;
-function mat(color, extra) { return new THREE.MeshLambertMaterial(Object.assign({ color, flatShading: true }, extra || {})); }
+function mat(color, extra) { return toon(Object.assign({ color }, extra || {})); }
 // La cabeza medida en el espacio de su hueso (al cargar, en reposo): medio ancho W, la coronilla y la punta del
 // hocico. Los accesorios se ubican y se escalan con eso, así le quedan bien a cualquiera de los dos osos.
 let HEAD = { W: .228, top: .358, front: .233 };
@@ -1281,7 +1292,7 @@ function frame(now) {
     if (s2 !== score) { score = s2; buildForest(); }
   }
   moodTint.lerp(MOOD_TINT[mood] || WHITE, Math.min(1, dt * 2));
-  if (ambLight) ambLight.color.copy(moodTint);
+  if (ambLight) ambLight.color.copy(AMB).multiply(moodTint);
   if (bear) {
     if (bear.userData.grow < 1) { bear.userData.grow = Math.min(1, bear.userData.grow + dt * 1.2); bear.scale.setScalar(Math.max(.001, BEAR_S * (1 - Math.pow(1 - bear.userData.grow, 3)))); }
     brain(dt);
@@ -1512,9 +1523,10 @@ export function zoomVista(f) { if (camModo === 'pajaro') pajaro.zoom = clamp(paj
 export function zoomPajaro() { return pajaro.zoom; }
 export function enElEspacio() { return camModo === 'pajaro' && pajaro.zoom > 2.5; }
 
-// El mundo es una ilustración plana; Uku va encima con su propia luz suave (como un muñeco de verdad),
-// sin borrar la profundidad: lo que está delante de él lo sigue tapando
+// El mundo y Uku son la misma ilustración plana; Uku va en su propia escena, encima, sin borrar la profundidad:
+// lo que está delante de él lo sigue tapando
 function draw() {
+  seguirLuz();
   renderer.render(scene, camera);
   renderer.autoClear = false; renderer.render(bearScene, camera); renderer.autoClear = true;
 }
@@ -1551,18 +1563,19 @@ function init() {
   scene.fog = new THREE.Fog(pal.bg, FOG_NEAR, 9.5); // el fondo del claro se aclara con la distancia, como en una ilustración
   camera = new THREE.PerspectiveCamera(30, 1, .05, 90); // lejos: el planeta entero desde el espacio
   camera.position.set(0, .75, 2.6);
-  // Ilustración: solo luz ambiente, colores planos sin sombreado
-  ambLight = new THREE.AmbientLight('#ffffff', Math.PI); scene.add(ambLight);
-  LAMB = new THREE.MeshLambertMaterial({ vertexColors: true });
+  // Ilustración vectorial: luz ambiente y un sol de dos tonos (ver toon)
+  ambLight = new THREE.AmbientLight(AMB, Math.PI); scene.add(ambLight);
+  solMundo = new THREE.DirectionalLight(SOL, Math.PI); scene.add(solMundo);
+  LAMB = toon({ vertexColors: true });
   smokeM = new THREE.MeshBasicMaterial({ color: pal.dust, transparent: true, opacity: .85 });
-  ground = new THREE.Mesh(new THREE.SphereGeometry(PLANET_R, 128, 96), new THREE.MeshLambertMaterial({ color: pal.ground }));
+  ground = new THREE.Mesh(new THREE.SphereGeometry(PLANET_R, 128, 96), toon({ color: pal.ground }));
   ground.position.copy(PLANET_C); scene.add(ground);
-  // Uku tiene su escena con su luz: un cielo claro, un rebote del suelo y un sol suave arriba a la izquierda
+  // Uku y lo que lleva van en su escena, con la misma luz de dos tonos que el mundo
   bearScene = new THREE.Scene();
-  bearScene.add(new THREE.HemisphereLight('#ffffff', '#c9ccd6', 2.2));
-  const sun = new THREE.DirectionalLight('#ffffff', 1.4); sun.position.set(-1.5, 3, 3); bearScene.add(sun);
+  bearScene.add(new THREE.AmbientLight(AMB, Math.PI));
+  solUku = new THREE.DirectionalLight(SOL, Math.PI); bearScene.add(solUku);
   stage = new THREE.Group(); bearScene.add(stage); // el claro de Uku: arriba del planeta, sin giro
-  shadow = new THREE.Mesh(new THREE.CircleGeometry(.17, 32).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ map: dotTexture(), color: '#4e5870', transparent: true, opacity: .28, depthWrite: false, fog: false }));
+  shadow = new THREE.Mesh(new THREE.CircleGeometry(.14, 48).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ map: dotTexture(), color: '#4e5870', transparent: true, opacity: .16, depthWrite: false, fog: false }));
   shadow.scale.set(1, 1, .8); shadow.visible = false; scene.add(shadow);
   clock = new THREE.Clock();
   import(OSO === 'nuevo' ? './uku-rig-nuevo.js' : './uku-rig.js').then(R => R.loadUkuGltf().then(g => [R, g])).then(([R, g]) => {
@@ -1578,12 +1591,10 @@ function init() {
     bear.traverse(o => {
       if (o.isMesh) {
         o.frustumCulled = false;
-        // Sus colores están en los vértices; la luz suave de su escena le da volumen
-        // El de siempre: su textura tal cual, plana (sin luz), como una ilustración. El nuevo: colores en los
-        // vértices y la luz suave de su escena
+        // Como el resto del mundo: su color plano (la textura o el color de la pieza) y un tono de sombra nítido
         const src = o.material;
-        o.material = src.map ? new THREE.MeshBasicMaterial({ map: src.map, transparent: !!src.transparent, opacity: src.opacity, fog: false })
-          : new THREE.MeshLambertMaterial({ vertexColors: !!o.geometry.attributes.color, color: o.geometry.attributes.color ? 0xffffff : src.color });
+        o.material = src.map ? toon({ map: src.map, transparent: !!src.transparent, opacity: src.opacity, fog: false })
+          : toon({ vertexColors: !!o.geometry.attributes.color, color: o.geometry.attributes.color ? 0xffffff : src.color });
         src.dispose && src.dispose();
       }
     });
@@ -1685,6 +1696,8 @@ export function attach(el, opts) {
    enCuadro(fn) llama fn(dt, t) en cada cuadro y mundo3d() entrega three, la escena, la cámara y a Uku. */
 const frameHooks = [];
 export function enCuadro(fn) { frameHooks.push(fn); }
+// El material plano de dos tonos, para lo que se agrega al mundo desde afuera (efectos3d)
+export function materialPlano(o) { return toon(o); }
 export function mundo3d() { return { THREE, scene, camera, get uku() { return bear; }, groundY }; }
 export function setScore(s) { if (!bear && target != null) { target = s; return; } if (s !== score) { score = s; if (renderer) buildForest(); } }
 export function setBloom(b) { b = b == null ? null : Math.max(0, Math.min(100, b)); if (b !== bloom) { bloom = b; if (renderer) buildForest(); } }
