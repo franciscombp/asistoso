@@ -950,44 +950,108 @@ const soloLlamada = () => $('#opt-llamada').checked;
 let atentoHasta = 0; // hasta cuándo escucha sin que le digan «Uku»
 const ATENCION_MS = 25000;
 function prestarAtencion() { atentoHasta = performance.now() + ATENCION_MS; }
-async function oir(texto) {
+/* ---------- Chat de depurar (tecla D) ----------
+   Para ver por qué Uku responde lo que responde: se le escribe como si se le hablara (pasa por el mismo camino que la
+   voz, sin los filtros de la voz) y, por cada frase, dice qué pasó: si un filtro la ignoró, si fue un comando, o qué
+   intención entendió (por claves o por el modelo de frases), el tono, por dónde respondió (al toque, el modelo o el
+   respaldo) y qué pasó con el cerebro (nube, modelo, milisegundos, error). También quedan las frases que oyó por voz.
+   «Soy Fran» hace que lo escrito cuente como de Fran aunque no haya cámara. «Ver prompt» muestra lo último que se le
+   mandó al modelo. */
+const chatDebug = (() => {
+  const el = document.createElement('section');
+  el.className = 'mimo-chatdbg'; el.setAttribute('aria-label', 'Chat de depurar');
+  el.innerHTML = '<header><b>Chat de depurar</b><span class="mimo-chatdbg__estado"></span></header>' +
+    '<div class="mimo-chatdbg__log" role="log" aria-live="polite"></div>' +
+    '<details class="mimo-chatdbg__prompt"><summary>Ver prompt del último turno</summary><pre></pre></details>' +
+    '<form class="mimo-chatdbg__form"><label class="mimo-chatdbg__fran"><input type="checkbox" checked> Soy Fran</label>' +
+    '<input type="text" placeholder="Escríbele a Uku…" aria-label="Mensaje para Uku" autocomplete="off"><button type="submit" class="mp-btn">Enviar</button></form>';
+  document.body.appendChild(el);
+  const log = el.querySelector('.mimo-chatdbg__log'), est = el.querySelector('.mimo-chatdbg__estado'), pre = el.querySelector('.mimo-chatdbg__prompt pre');
+  const campo = el.querySelector('input[type=text]'), fran = el.querySelector('.mimo-chatdbg__fran input');
+  const linea = (clase, texto) => {
+    const d = document.createElement('div'); d.className = 'mimo-chatdbg__' + clase; d.textContent = texto; log.appendChild(d);
+    while (log.children.length > 120) log.firstChild.remove();
+    log.scrollTop = log.scrollHeight; return d;
+  };
+  const estado = () => {
+    const i = mente.info(), n = mente.estadoNube();
+    const cer = !mente.cerebro() ? 'cerebro apagado' : n.lista ? 'cerebro: ' + n.modelo : 'cerebro no listo' + (n.error ? ' (' + n.error + ')' : '');
+    est.textContent = ' · ' + (i.simulada ? 'mente simulada' : cer) + ' · ' + (soloLlamada() ? 'solo con «Uku»' : 'escucha todo') + (st.persona ? ' · ve a ' + (st.persona.nombre || 'alguien') : '');
+  };
+  const verPrompt = () => {
+    const m = mente.ultimosMensajes && mente.ultimosMensajes();
+    pre.textContent = Array.isArray(m) && m.length ? m.map(x => '[' + x.role + ']\n' + x.content).join('\n\n') : '(todavía no se le mandó nada al modelo)';
+  };
+  el.querySelector('form').addEventListener('submit', (e) => {
+    e.preventDefault();
+    const t = campo.value.trim(); if (!t) return;
+    campo.value = '';
+    oir(t, { escrito: true });
+  });
+  el.querySelector('details').addEventListener('toggle', verPrompt);
+  setInterval(() => { if (st.debug) estado(); }, 1500); estado();
+  return {
+    comoFran: () => fran.checked,
+    entrada(texto, escrito) { linea('yo', (escrito ? '⌨️ ' : '🎙️ ') + texto); },
+    motivo(m) { linea('nota', '↳ ' + m); },
+    respuesta(r, d, { esDueno, quien }) {
+      linea('uku', '🐻 ' + (r.texto || '(sin texto)'));
+      const md = d.modelo, partes = [
+        'intención: ' + (d.intencion || 'ninguna') + (d.por ? ' (por ' + d.por + (d.confianza ? ', ' + d.confianza : '') + ')' : ''),
+        d.tono ? 'tono: ' + d.tono : '',
+        'ruta: ' + (d.ruta || '?'),
+        md ? 'cerebro: ' + (md.via || 'no se usó') + (md.modelo ? ' · ' + md.modelo : '') + (md.ms ? ' · ' + md.ms + ' ms' : '') + (md.error ? ' · error: ' + md.error : '') + (md.motivo ? ' · ' + md.motivo : '') : (mente.lista() ? 'cerebro: no hizo falta' : 'cerebro: no disponible'),
+        'habla con: ' + (esDueno ? 'Fran' : quien)
+      ].filter(Boolean);
+      linea('nota', '↳ ' + partes.join(' · '));
+      if (el.querySelector('details').open) verPrompt();
+    }
+  };
+})();
+
+/* Lo que se dijo (o se escribió en el chat de depurar: escrito = true). Cada salida deja en el chat por qué terminó
+   así (fin): un filtro, un comando o la respuesta con lo que entendió y por dónde respondió. */
+async function oir(texto, { escrito = false } = {}) {
   texto = (texto || '').trim();
-  if (!texto || ALUCINA.test(texto) || texto.length < 2) return;
-  if (voz.estaHablando()) return; // mientras habla Uku, lo que entra es él mismo o gente encima
-  if (guiando) { mostrarOido(texto); st.ultimaActividad = performance.now(); prestarAtencion(); return guiarPorVoz(texto); } // en «guíame», todo lo que se dice es para guiar
+  const fin = (motivo, valor) => { chatDebug.motivo(motivo); return valor; };
+  chatDebug.entrada(texto, escrito);
+  if (!texto || ALUCINA.test(texto) || texto.length < 2) return fin('ignorado: vacío, muy corto o parece una alucinación del reconocimiento de voz');
+  if (!escrito && voz.estaHablando()) return fin('ignorado: Uku estaba hablando (podía ser su propia voz)'); // mientras habla Uku, lo que entra es él mismo o gente encima
+  if (escrito) prestarAtencion(); // lo escrito es siempre para Uku
+  if (guiando) { mostrarOido(texto); st.ultimaActividad = performance.now(); prestarAtencion(); return fin('juego «Guíame»: se tomó como una indicación', guiarPorVoz(texto)); } // en «guíame», todo lo que se dice es para guiar
   // «Uku…» al principio: recordatorios, post-its y lo demás es para Uku (antes del modo guardián: son de quien lo dice)
   const ll = tareas.llamada(texto);
   if (ll) {
     mostrarOido(texto); st.ultimaActividad = performance.now(); st.interactuo = true; prestarAtencion();
-    if (!ll.resto) { escena.gesto('nod'); decir('Dime.', 2500); return; }
+    if (!ll.resto) { escena.gesto('nod'); decir('Dime.', 2500); return fin('solo lo llamaron («Uku»): contestó «Dime.»'); }
     const t = tareas.parsear(ll.resto);
-    if (t) return tarea(t);
+    if (t) return fin('tarea: ' + t.tipo, tarea(t));
     texto = ll.resto; // no era una tarea: sigue como conversación
-  } else if (soloLlamada() && !jugando) {
-    if (performance.now() > atentoHasta) { mostrarOido(texto, true); return; } // no es para Uku: se ve en gris y no responde
-    if (texto.split(/\s+/).length < 2) return; // un suelto («sí», «ya») en medio del ruido no cuenta
+  } else if (soloLlamada() && !jugando && !escrito) {
+    if (performance.now() > atentoHasta) { mostrarOido(texto, true); return fin('ignorado: está activo «Solo responde cuando le dicen Uku» y no empezó por «Uku»'); } // no es para Uku: se ve en gris y no responde
+    if (texto.split(/\s+/).length < 2) return fin('ignorado: una sola palabra con «Solo cuando le dicen Uku»'); // un suelto («sí», «ya») en medio del ruido no cuenta
     prestarAtencion();
   }
-  if (callandoPorDueno()) return;      // con Fran enfrente (modo guardián) no se le contesta
+  if (callandoPorDueno()) return fin('ignorado: modo guardián con Fran enfrente');      // con Fran enfrente (modo guardián) no se le contesta
   mostrarOido(texto);
   st.ultimaActividad = performance.now(); st.interactuo = true; st.ultimaOida = performance.now();
   // Piedra, papel o tijera: «jugamos» empieza; durante el juego lo que digan es la jugada
   const jugada = (texto.toLowerCase().match(/\b(piedra|papel|tijeras?)\b/) || [])[1];
-  if (jugando) { if (jugada) jugando.voz = jugada.replace(/s$/, ''); return; }
-  if (/\b(gu[ií]ame|te gu[ií]o|est[aá]s perdido|pi[eé]rdete)\b/i.test(texto)) return guiarme(destinoEn(texto.toLowerCase()));
-  if (/\b(modo control|te controlo|te manejo|d[eé]jame manejarte)\b/i.test(texto)) return setControl(true);
-  if (/\b(vista de p[aá]jaro|desde arriba|modo vista)\b/i.test(texto)) return setPajaro(true);
-  if (/\b(modo espejo|im[ií]tame|c[oó]piame|haz lo que yo)\b/i.test(texto)) return setEspejo(true);
-  if (/\b(modo normal|vista normal|ya no (me imites|te controlo)|deja de imitar|su[eé]ltate|libre)\b/i.test(texto)) { setControl(false); setPajaro(false); setEspejo(false); return decir('Listo, sigo en lo mío.', 3000); }
-  if (/\b(jugamos|juguemos|jugar|piedra,? papel)/i.test(texto)) return jugar();
+  if (jugando) { if (jugada) jugando.voz = jugada.replace(/s$/, ''); return fin('piedra, papel o tijera: ' + (jugada ? 'jugada «' + jugada + '»' : 'no era una jugada')); }
+  if (/\b(gu[ií]ame|te gu[ií]o|est[aá]s perdido|pi[eé]rdete)\b/i.test(texto)) return fin('comando: juego «Guíame»', guiarme(destinoEn(texto.toLowerCase())));
+  if (/\b(modo control|te controlo|te manejo|d[eé]jame manejarte)\b/i.test(texto)) return fin('comando: modo control', setControl(true));
+  if (/\b(vista de p[aá]jaro|desde arriba|modo vista)\b/i.test(texto)) return fin('comando: vista de pájaro', setPajaro(true));
+  if (/\b(modo espejo|im[ií]tame|c[oó]piame|haz lo que yo)\b/i.test(texto)) return fin('comando: modo espejo', setEspejo(true));
+  if (/\b(modo normal|vista normal|ya no (me imites|te controlo)|deja de imitar|su[eé]ltate|libre)\b/i.test(texto)) { setControl(false); setPajaro(false); setEspejo(false); decir('Listo, sigo en lo mío.', 3000); return fin('comando: modo normal'); }
+  if (/\b(jugamos|juguemos|jugar|piedra,? papel)/i.test(texto)) return fin('comando: piedra, papel o tijera', jugar());
   if (st.visita) visitas.seguir(st.visita);
   // Palabras de juego dichas solas ("¡fiesta!", "globos") mueven el mundo; lo demás se conversa
   const juego = voz.comandoDe(texto);
   if (juego && !['saludo', 'gracias', 'chao', 'ok', 'quien'].includes(juego) && texto.split(/\s+/).length <= 3) {
     if (juego.startsWith('entorno:')) { escena.setEntorno(juego.slice(8)); escena.gesto('happy'); } else reaccionar(juego, { x: .5, y: .5 });
-    return;
+    return fin('palabra de juego (≤ 3 palabras): «' + juego + '», sin conversar');
   }
-  const p = st.persona, esDueno = !!(p && p.dueno && conDueno);
+  const p = st.persona, esDueno = escrito && chatDebug.comoFran() ? true : !!(p && p.dueno && conDueno); // en el chat, «Soy Fran»
   // Uku viene (si andaba paseando) y muestra que está pensando; el modelo escribe en el globo
   pensar();
   if (!escena.enCasa()) escena.venir();
@@ -1000,9 +1064,10 @@ async function oir(texto) {
     pendientes: esDueno ? tareas.recordatorios().filter(x => x.ms < hoyMs).map(x => x.texto + ' ' + tareas.formatoHora(x.ms)).concat(tareas.postits().map(n => n.texto)) : []
   });
   if (esDueno && atiende.turnosDeEstaConversacion() === 1) { memoria.anotarConversacion(); escena.setClaro(memoria.mundo()); }
+  chatDebug.respuesta(r, atiende.diagnostico ? atiende.diagnostico() : {}, { esDueno, quien: p ? (p.nombre || 'persona sin nombre') : 'nadie reconocido' });
   if (!r.intencion) {
     const c = voz.comandoDe(texto);
-    if (c) { if (c.startsWith('entorno:')) { escena.setEntorno(c.slice(8)); escena.gesto('happy'); } else reaccionar(c, { x: .5, y: .5 }); return; }
+    if (c) { if (c.startsWith('entorno:')) { escena.setEntorno(c.slice(8)); escena.gesto('happy'); } else reaccionar(c, { x: .5, y: .5 }); return fin('no entendió, pero había una palabra de juego: «' + c + '»'); }
   }
   const responder = () => {
     prestarAtencion(); // tras responder, sigue atento un rato sin que repitan «Uku»

@@ -329,6 +329,14 @@ Tres botones arriba (o sus teclas) cambian cómo se ve y se usa el claro:
   cara con quién es, los puntos clave de la cara y, debajo, los cuadros por segundo de la visión,
   las expresiones (pestañeo, sonrisa, boca, cejas), lo que entra al espejo (giro, cabeceo,
   inclinación) y lo que sale del control por manos.
+- **Chat de depurar** (también con `D`, o `?debug` en la dirección): a la izquierda, un chat para
+  escribirle a Uku. Lo escrito pasa por el mismo camino que la voz, sin los filtros de la voz. Por
+  cada frase dice qué pasó: si un filtro la ignoró y por qué (por ejemplo «Solo responde cuando le
+  dicen Uku»), si fue un comando o una palabra de juego, o qué intención entendió (por claves o por
+  el modelo de frases), el tono, la ruta (respuesta propia al toque, el modelo o el respaldo) y el
+  cerebro (nube, modelo, milisegundos, error o por qué no respondió). También aparecen las frases
+  que oyó por voz. «Soy Fran» hace que lo escrito cuente como de Fran aunque no haya cámara; sin
+  marcar, Uku contesta como a una visita. «Ver prompt» muestra lo último que se mandó al modelo.
 
 ## Un mundo chico
 
@@ -555,7 +563,7 @@ frase hasta haber dicho todas**, y la primera de la baraja nueva nunca es la
 | `F` | Pantalla completa |
 | `P` | Quién vino (visitas y personas) |
 | `H` / `?` | Ayuda en pantalla |
-| `D` | Depurar la cámara: esqueleto, manos con gesto y confianza, caras, expresiones, espejo y control |
+| `D` | Depurar: la cámara (esqueleto, manos, caras, expresiones, espejo y control) y el chat de texto con lo que entiende Uku |
 | `K` / `O` / `E` / `8` | Modo control (tercera persona) / vista de pájaro / modo espejo / decorar |
 | `C` | Mostrar u ocultar tu imagen en espejo |
 | `X` | Muestra u oculta los controles (también tocando el reloj). **Por defecto están ocultos**: quedan Uku, su globo, el reloj y el clima |

@@ -215,10 +215,16 @@ function anotar(usuario, uku) { historial.push({ role: 'user', content: usuario 
 let ultimaIntencion = null, ultimoTexto = '', adivinanza = null;
 // Las que se pueden repetir con «otro»
 const REPETIBLES = new Set(['chiste', 'dato', 'cuento', 'secreto', 'adivinanza', 'tip', 'piropo', 'canta', 'baila', 'comoEstas']);
+/* Qué entendió y por dónde respondió en el último turno (para el chat de depurar):
+   { intencion, por, confianza, tono, ruta, modelo: lo que pasó con mente (ver mente.diagnostico) } */
+let diag = {};
+export function diagnostico() { return Object.assign({}, diag); }
 export async function conversar(texto, opciones = {}) {
+  diag = { intencion: null, por: '', confianza: 0, tono: '', ruta: '', modelo: null };
   // Lo que Fran cuenta de su vida se anota apenas lo dice (reglas sencillas; el modelo afina al cerrar)
   if (opciones.esDueno) memoria.aprenderConReglas(texto, 'dueno');
   const r = await conversarSinAnotar(texto, opciones);
+  if (!diag.ruta) diag.ruta = r.intencion === 'libre' ? 'modelo' : diag.modelo ? 'respaldo: el modelo no respondió, Uku usó sus frases' : r.intencion ? 'al toque: respuesta propia de Uku (sin modelo)' : 'no entendió';
   if (r.intencion !== 'libre') anotar(texto, r.texto);
   if (r.texto) ultimoTexto = r.texto;
   if (REPETIBLES.has(r.intencion)) ultimaIntencion = r.intencion;
@@ -240,20 +246,21 @@ async function conversarSinAnotar(texto, ctx) {
   const d = { dueno };
   // Si Uku pidió el mensaje, lo que digan ahora es el mensaje
   if (esperando && Date.now() < esperando) {
-    esperando = 0;
+    esperando = 0; diag.ruta = 'Uku esperaba un mensaje: lo guardó';
     const m = limpiarRecado(texto);
     dejarMensaje(m, personaId);
     return { intencion: 'mensaje-guardado', gesto: 'nod', texto: charla('mensajeGuardado', { dueno, mensaje: m }) };
   }
   // Una adivinanza pendiente: lo que digan ahora es la respuesta
   if (adivinanza && Date.now() < adivinanza.hasta && !/adivinanza|acertijo/.test(norm(texto))) { // si pide otra, se olvida la pendiente
-    const t = norm(texto), A = adivinanza;
+    const t = norm(texto), A = adivinanza; diag.ruta = 'respuesta a la adivinanza pendiente';
     if (A.r.test(t)) { adivinanza = null; return { intencion: 'adivinanza-bien', gesto: 'happy', texto: charla('adivinanzaAcierta', d), efecto: 'trofeo' }; }
     if (/\b(me rindo|no se|no lo se|dime|cual es|la respuesta|rendirme|ni idea)\b/.test(t) || ++A.intentos >= 3) { adivinanza = null; return { intencion: 'adivinanza-rinde', gesto: 'nod', texto: charla('adivinanzaRinde', { respuesta: A.a }) }; }
     return { intencion: 'adivinanza-falla', gesto: 'nod', texto: charla('adivinanzaFalla', d) };
   }
   adivinanza = null;
   const q = await entender(texto, dueno);
+  Object.assign(diag, { intencion: q.intencion, por: q.por, confianza: Math.round((q.confianza || 0) * 100) / 100 });
   if (q.intencion === 'otro') {
     if (!ultimaIntencion) return { intencion: 'otro-nada', gesto: 'nod', texto: charla('otroNada', d) };
     q.intencion = ultimaIntencion;
@@ -264,7 +271,7 @@ async function conversarSinAnotar(texto, ctx) {
     esperando = Date.now() + 20000;
     return { intencion: 'mensaje-pedido', gesto: 'happy', texto: charla('pedirMensaje', d) };
   }
-  const tn = tono.leer(texto);
+  const tn = tono.leer(texto); diag.tono = tn.tono;
   // «Hola Uku, estoy estresado porque…» no es solo un saludo: con modelo, se conversa entero
   if (mente.lista() && (q.intencion === 'saludo' || q.intencion === 'chao' || q.intencion === 'gracias') && texto.split(/\s+/).length > 4) q.intencion = null;
   // Las acciones y los datos, al toque. La charla va al modelo si lo hay (así responde con memoria y con el tono)
@@ -273,6 +280,7 @@ async function conversarSinAnotar(texto, ctx) {
   if (mente.lista()) {
     const mensajes = [{ role: 'system', content: sistema(Object.assign({ texto, tono: tn }, ctx)) }, ...historial, { role: 'user', content: texto }];
     const t = await mente.responder(mensajes, ctx.alParcial).catch(err => { console.warn('Uku: la mente falló', err); return null; });
+    diag.modelo = mente.diagnostico ? mente.diagnostico() : {};
     if (t) {
       anotar(texto, t);
       // Si Uku pidió el mensaje, lo siguiente que digan se guarda

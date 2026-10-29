@@ -84,26 +84,39 @@ export function cargar() {
    crudo: para la memoria y el diario (memoria.js): no se corta en dos frases y, simulada, no responde. */
 let vistos = null; // lo último que se le pasó al modelo (para revisar el contexto desde la consola)
 export function ultimosMensajes() { return vistos; }
+/* Qué pasó en la última llamada (para el chat de depurar): por dónde fue (nube, local, simulada), con qué modelo,
+   cuánto tardó, el error o por qué no hubo respuesta (motivo). */
+let diag = {};
+export function diagnostico() { return Object.assign({}, diag); }
 export async function responder(mensajes, alParcial = () => {}, { crudo = false } = {}) {
   vistos = mensajes;
+  const t0 = performance.now();
+  diag = { via: null, modelo: '', ms: 0, error: '', motivo: '' };
+  try { const t = await responderAdentro(mensajes, alParcial, { crudo }); diag.ms = Math.round(performance.now() - t0); if (!t && !diag.motivo && !diag.error) diag.motivo = 'el modelo no devolvió texto'; return t; }
+  catch (e) { diag.ms = Math.round(performance.now() - t0); diag.error = String(e && e.message || e); throw e; }
+}
+async function responderAdentro(mensajes, alParcial, { crudo }) {
   if (SIMULADA && crudo) return null;
-  if (SIMULADA) { // eco palabra por palabra, con un respiro antes (para ver los puntos y el texto en vivo)
+  if (SIMULADA) { diag.via = 'simulada'; // eco palabra por palabra, con un respiro antes (para ver los puntos y el texto en vivo)
     const t = 'Te escuché: ' + mensajes[mensajes.length - 1].content;
     await new Promise(r => setTimeout(r, 600));
     const ps = t.split(' ');
     for (let i = 1; i <= ps.length; i++) { alParcial(ps.slice(0, i).join(' ')); await new Promise(r => setTimeout(r, 60)); }
     return t;
   }
-  if (ocupada) return null;
+  if (ocupada) { diag.motivo = 'ocupada: había otra respuesta en curso'; return null; }
+  if (!CEREBRO) diag.motivo = 'cerebro apagado (uku-cerebro-url = off)';
+  else if (!nube.lista) diag.motivo = 'el cerebro no está listo' + (nube.error ? ': ' + nube.error : '');
+  else if (!cuotaLibre()) diag.motivo = 'cuota del navegador agotada';
   if (CEREBRO && nube.lista && cuotaLibre()) {
-    ocupada = true;
-    try { anotarUso(); const t = await pedirNube(recortar(mensajes), alParcial); if (t) return t; }
-    catch (e) { console.warn('Uku: el cerebro en la nube falló', e); }
+    ocupada = true; diag.via = 'nube'; diag.modelo = nube.modelo;
+    try { anotarUso(); const t = await pedirNube(recortar(mensajes), alParcial); if (t) return t; diag.motivo = 'la nube respondió vacío'; }
+    catch (e) { console.warn('Uku: el cerebro en la nube falló', e); diag.error = String(e && e.message || e); }
     finally { ocupada = false; }
     if (!modelo) return null; // sin modelo local, Uku responde con sus frases
   }
   if (!modelo || !cuotaLibre()) return null;
-  ocupada = true;
+  ocupada = true; diag.via = 'local'; diag.modelo = nombre;
   try {
     const entrada = tok.apply_chat_template(mensajes, { add_generation_prompt: true, return_dict: true, enable_thinking: false });
     let texto = '';
