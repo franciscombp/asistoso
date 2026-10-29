@@ -45,7 +45,7 @@ function spring(cur, to, velKey, dt) {
 // Mundo: un planeta esférico de radio PLANET_R; su punto más alto (0, 0, 0) es el centro del claro de Uku.
 // Con 12 m el suelo se curva lo justo: desde cualquier cámara se ve el piso hasta ~2,5 m detrás de Uku, así nada
 // queda detrás del horizonte con la base escondida (antes, con 3 m, todo lo de atrás parecía flotar).
-const PLANET_R = 8, PLANET_C = new THREE.Vector3(0, -PLANET_R, 0), FOG_NEAR = 4;
+const PLANET_R = 5.5, PLANET_C = new THREE.Vector3(0, -PLANET_R, 0), FOG_NEAR = 4;
 let score = 50; // cuántos árboles tiene el bosque sin escenario (0–100)
 let target = null, loadAt = 0, ambLight = null, moodTint = new THREE.Color('#ffffff'); // mientras carga, el bosque crece hasta target; mood tiñe la luz
 // bloom: flores amarillas del campo (0–100); mood: ánimo que se queda (feliz, tranquilo, pensativo)
@@ -402,12 +402,14 @@ function tickCartel(o, t) {
 /* Escenario opcional: { lago: tamaño (.7–1.4), arboles: n, tortuga: true, banderas: n, cartel: true }.
    Cada cosa tiene su lugar fijo (a la vista de las cámaras y fuera del paseo de Uku) y su sitio propio en el bosque. */
 let esc = null;
-const LAGO_P = [1.5, .05], LAGO_R = .5;
+const LAGO_P = [1.25, -.05], LAGO_R = .5;
 /* Repartido por todo el claro (unos 4,4 m de ancho): a la izquierda el huerto con su cerca y la bandera; al frente a la
    izquierda la banca con el farol; la leña y el buzón junto a la casa; a la derecha el lago con la cascada detrás, el
    arroyo que sale al frente con su puente, la tortuga en la orilla; al fondo a la izquierda, a la entrada del bosque, el letrero; más hongos en la orilla derecha del lago. */
-const ESC_ZONA = { farol: [-.95, .12], banca: [-1.3, .35], cerca: [-1.6, -.55], huerto: [-1.95, -.2], buzon: [-.15, -.62], hongos: [-.6, -.05], lena: [-.9, -1.5], tortuga: [1.95, .5], bandera: [-2.05, .22], cascada: [1.75, -.7], puente: [1.05, .7], arroyo: [1.05, .7], heliconias: [[1.1, -1.35], [-1.9, .5], [2.15, -.05]], hojonas: [[-1.85, -.82], [1.55, .9]], cartel: [-1.6, -1.42], poste: [.95, -.35], farolitos: [[-.42, .86], [.36, -.25]], guayas: [[-1.95, -1.05], [2.15, -.75], [.55, -1.95]] };
-const PASEO = [[1.45, -1.4], [.95, -1.5], [-1.2, -1.45]]; // pasillos por detrás del lago y junto al letrero que los árboles no tapan
+/* Un claro chico y fácil de administrar (lo principal es la asistencia; el mundo acompaña): la casa, el lago con su
+   cascada y el puente, la banca con el farol, el letrero del bosque, el buzón, la leña y la tortuga. Nada más. */
+const ESC_ZONA = { farol: [-.8, .1], banca: [-1.15, .35], buzon: [-.15, -.62], lena: [-.85, -1.4], tortuga: [1.55, .45], cascada: [1.4, -.72], puente: [.95, .55], arroyo: [.95, .55], bandera: [-1.45, .05], heliconias: [], hojonas: [], cartel: [-1.2, -1.1], farolitos: [], guayas: [[-1.45, -.55], [1.0, -1.3]] };
+const PASEO = [[-.9, -.9]]; // junto al letrero, que los árboles no tapen
 /* ---------- Senderos ----------
    Corredores invisibles que unen los lugares del claro, saliendo de la plazuela entre los canteros: a la casa, al lago,
    a la banca y de ahí al huerto y, bordeando, hasta el letrero del bosque; a la cascada por detrás del lago, y al
@@ -416,12 +418,11 @@ const PASEO = [[1.45, -1.4], [.95, -1.5], [-1.2, -1.45]]; // pasillos por detrá
 const PLAZA = [0, .15];
 const SENDEROS = [
   [PLAZA, [-.25, -.25], [-.5, -.55]],                               // a la puerta de la casa
-  [PLAZA, [.5, -.05], [.9, .05]],                                   // a la orilla del lago
-  [[.5, -.05], [.8, -.5], [1.3, -.62], [1.35, -1.05]],               // por detrás del lago, a la cascada
-  [PLAZA, [-.3, .72], [-1.0, .7]],                                  // a la banca y el farol
-  [[-1.0, .7], [-1.7, .72], [-1.65, -.05]],                         // al huerto, la cerca y la bandera
-  [[-1.65, -.05], [-1.15, -.35], [-1.25, -1.1]],                    // entre el farol y la cerca, a la leña y el letrero del bosque
-  [PLAZA, [.3, .68], [.72, .62]]                                    // al puente sobre el arroyo
+  [PLAZA, [.45, -.05], [.68, -.05]],                                // a la orilla del lago
+  [[.45, -.05], [.7, -.45], [.92, -.62]],                           // por detrás del lago, a la cascada
+  [PLAZA, [-.3, .68], [-.85, .64]],                                 // a la banca y el farol
+  [[-.5, -.55], [-.9, -.9]],                                        // de la casa a la leña y el letrero del bosque
+  [PLAZA, [.2, .55], [.55, .68]]                                    // al puente sobre el arroyo
 ];
 const ANCHO_SENDERO = .24;
 function distSegmento(x, z, [ax, az], [bx, bz]) {
@@ -435,7 +436,7 @@ function distSendero(x, z) {
   return d;
 }
 // Los puntos de llegada de los senderos, con nombre (para «llévame a…» y para pasear)
-const DESTINOS = { plaza: PLAZA, casa: [-.5, -.55], lago: [.9, .05], cascada: [1.35, -1.05], banca: [-1.0, .7], huerto: [-1.65, -.05], letrero: [-1.25, -1.1], puente: [.72, .62] };
+const DESTINOS = { plaza: PLAZA, casa: [-.5, -.55], lago: [.68, -.05], cascada: [.92, -.62], banca: [-.85, .64], letrero: [-.9, -.9], puente: [.55, .68] };
 // Para revisar el diseño: qué cosa queda encima de un sendero (se calcula sin el atajo de «sendero siempre libre»)
 export function senderosChocan() {
   const malos = [];
@@ -458,7 +459,7 @@ function quienBloquea(x, z) {
 export function destinos() { return Object.assign({}, DESTINOS); }
 export function destino(nombre) { const d = DESTINOS[nombre]; return d ? { x: d[0], z: d[1] } : null; }
 const lagoEnForma = () => Math.max(.7, Math.min(1.4, esc && esc.lago || 1)) * LAGO_R;
-const escTrees = () => scatter(19, 40, 1.2, 2.6, (x, z) => (z < -1.25 || Math.abs(x) > 1.7) && TALL(x, z) && VISIBLE(x, z - .3) && awayBig(.6)(x, z) && distSendero(x, z) > .34 && Math.hypot(x - LAGO_P[0], z - LAGO_P[1]) > lagoEnForma() + .45 && Math.hypot(x - ESC_ZONA.cartel[0], z - ESC_ZONA.cartel[1]) > .6 && Math.hypot(x - ESC_ZONA.cascada[0], z - ESC_ZONA.cascada[1]) > .85 && Math.hypot(x - ESC_ZONA.huerto[0], z - ESC_ZONA.huerto[1]) > .45 && PASEO.every(([px, pz]) => Math.hypot(x - px, z - pz) > .45) && ESC_ZONA.guayas.every(([gx, gz]) => Math.hypot(x - gx, z - gz) > .55), .42);
+const escTrees = () => scatter(19, 22, 1.0, 2.0, (x, z) => (z < -1.0 || Math.abs(x) > 1.3) && TALL(x, z) && VISIBLE(x, z - .3) && awayBig(.5)(x, z) && distSendero(x, z) > .3 && Math.hypot(x - LAGO_P[0], z - LAGO_P[1]) > lagoEnForma() + .4 && Math.hypot(x - ESC_ZONA.cartel[0], z - ESC_ZONA.cartel[1]) > .5 && Math.hypot(x - ESC_ZONA.cascada[0], z - ESC_ZONA.cascada[1]) > .7 && PASEO.every(([px, pz]) => Math.hypot(x - px, z - pz) > .45) && ESC_ZONA.guayas.every(([gx, gz]) => Math.hypot(x - gx, z - gz) > .55), .42);
 // Lo que se ve en el claro
 function enClaro() {
   return { props: claro.casa ? ['casa'] : [], guayas: Math.max(0, Math.min(4, claro.guayacanes | 0)),
@@ -489,11 +490,8 @@ function escenario(want, pal, Z, id) {
     o.userData.tick = (m, t) => patos.forEach((d, i) => { const a = t * (.16 + i * .05) * (i ? -1 : 1) + i * 2.4, rr = LAGO_R * (.42 + i * .18); d.position.set(Math.cos(a) * rr, .03 + Math.sin(t * 2 + i) * .004, Math.sin(a) * rr); d.rotation.y = -a + (i ? Math.PI / 2 : -Math.PI / 2); });
     return o;
   };
-  put('farol', E.farol, 1.1); put('banca', E.banca, 1.3, .9); put('cerca', E.cerca, 1.4, face(...E.cerca) * .3); put('huerto', E.huerto, 1.25);
-  put('buzon', E.buzon, 1.1); put('hongos', E.hongos, 1.2);
-  put('lena', E.lena, 1.1);
-  // El poste indicador entre el lago y la cascada, y farolitos en las esquinas de los senderos
-  put('poste', E.poste, 1.2, .6); (E.farolitos || []).forEach(([x, z], i) => { want['SFAROL' + i] = () => Z(item('farolito', '', pal, { x, z, rot: i }, 1.1, { gs: 1.2 }), 'escenario'); });
+  put('farol', E.farol, 1.1); put('banca', E.banca, 1.3, .9);
+  put('buzon', E.buzon, 1.1); put('lena', E.lena, 1.1);
   // Más guayacanes en flor repartidos por el claro
   (E.guayas || []).forEach(([x, z], i) => { want['SG' + i] = () => Z(item('guaya', (i + 1) % 3, pal, { x, z, rot: i * 2.1 }, 1.05 + (i % 2) * .15, { sway: .015, gs: .7, crown: .95 }), 'escenario'); });
   if (esc.cartel) want['SCARTEL'] = () => {
@@ -578,16 +576,23 @@ const _dum = new THREE.Object3D();
    que hay puesto. Se calcula una vez. */
 /* Regado por todo el claro (hasta el borde del bosque, 3,4 m), con mucha separación y mucho espacio libre: la plazuela y
    los senderos quedan despejados, y nada se amontona cerca de la cámara. Lo lejano se apoya solo donde se ve el suelo. */
+// Un parche de suelo de otro tono: un casquete de la esfera (sigue la curva del planeta) centrado en (x, z), de radio r
+const _qc = new THREE.Quaternion();
+function casquete(x, z, r, color, estiro = 1) {
+  surf(x, z, _sp); _qc.setFromUnitVectors(_nrm, _sp);
+  const g = new THREE.SphereGeometry(PLANET_R + .004, 20, 8, 0, Math.PI * 2, 0, r / PLANET_R);
+  return pc(g, color, new THREE.Matrix4().compose(PLANET_C, _qc, _s4.set(1, 1, estiro)));
+}
 let DECO_ESC = null;
 function decoEsc() {
   if (DECO_ESC) return DECO_ESC;
-  const libre = (x, z) => distSendero(x, z) > .24 && Math.hypot(x - PLAZA[0], z - PLAZA[1]) > .6 && Math.hypot(x - LAGO_P[0], z - LAGO_P[1]) > lagoEnForma() + .18
-    && !quienBloquea(x, z) && VISIBLE(x, z) && z < 1.3 && z > -2.6;
+  const libre = (x, z) => distSendero(x, z) > .22 && Math.hypot(x - PLAZA[0], z - PLAZA[1]) > .55 && Math.hypot(x - LAGO_P[0], z - LAGO_P[1]) > lagoEnForma() + .18
+    && !quienBloquea(x, z) && VISIBLE(x, z) && z < 1.0 && z > -1.9;
   return DECO_ESC = {
-    tufts: scatter(5, 28, .5, 3.4, libre, .45), rocks: scatter(17, 6, 1.0, 3.3, libre, 1.1),
-    bushes: scatter(23, 5, 1.4, 3.3, (x, z) => libre(x, z) && Math.hypot(x, z) > 1.5, 1.2), daisies: scatter(43, 14, .6, 3.4, libre, .5),
-    silvestres: scatter(61, 10, .6, 3.4, libre, .6), helechitos: scatter(67, 5, 1.2, 3.3, (x, z) => libre(x, z) && Math.hypot(x, z) > 1.3, 1.0),
-    parches: scatter(73, 7, .9, 3.2, (x, z) => distSendero(x, z) > .3 && Math.hypot(x - LAGO_P[0], z - LAGO_P[1]) > lagoEnForma() + .5 && VISIBLE(x, z), 1.1)
+    tufts: scatter(5, 14, .5, 2.3, libre, .45), rocks: scatter(17, 3, .9, 2.2, libre, 1.0),
+    bushes: scatter(23, 3, 1.1, 2.2, (x, z) => libre(x, z) && Math.hypot(x, z) > 1.2, 1.0), daisies: scatter(43, 7, .6, 2.3, libre, .5),
+    silvestres: scatter(61, 5, .6, 2.3, libre, .6), helechitos: scatter(67, 2, 1.0, 2.2, (x, z) => libre(x, z) && Math.hypot(x, z) > 1.1, 1.0),
+    parches: scatter(73, 4, .8, 2.2, (x, z) => distSendero(x, z) > .3 && Math.hypot(x - LAGO_P[0], z - LAGO_P[1]) > lagoEnForma() + .5 && VISIBLE(x, z), 1.0)
   };
 }
 function buildGarden(pal) {
@@ -600,7 +605,7 @@ function buildGarden(pal) {
   D.bushes.filter(enLago).forEach(p => { const m = M(p, 1 + p.s * .5), c = pal.round[p.v % pal.round.length]; [[0, .1, 0, .13], [.1, .07, .04, .09], [-.09, .06, -.03, .08]].forEach(([x, y, z, r]) => parts.push(pc(new THREE.IcosahedronGeometry(r, 0), c, m.clone().multiply(TRS([x, y, z], [p.t, 0, 0]))))); });
   D.daisies.filter(enLago).forEach(p => { const m = M(p, .8 + p.s * .4); parts.push(pc(CYL(.003, .004, .05, 3), pal.grass, m.clone().multiply(TRS([0, .025, 0]))), pc(new THREE.SphereGeometry(.01, 5, 3), pal.dust, m.clone().multiply(TRS([0, .052, 0], 0, [1, .6, 1])))); });
   if (esc) planetaGeo(pal).forEach(g => parts.push(g));
-  (D.parches || []).forEach((p, i) => { const col = pal.bg === '#1f1f1f' ? ['#30333b', '#2f3238'][i % 2] : ['#c7ccd4', '#b0b7c2'][i % 2]; parts.push(pc(new THREE.CircleGeometry(.5 + p.s * .5, 18), col, M(p, 1).multiply(TRS([0, .004, 0], [-Math.PI / 2, 0, 0], [1, .7 + p.t * .5, 1])))); });
+  (D.parches || []).forEach((p, i) => { const col = pal.bg === '#1f1f1f' ? ['#30333b', '#2f3238'][i % 2] : ['#c7ccd4', '#b0b7c2'][i % 2]; parts.push(casquete(p.x, p.z, .4 + p.s * .4, col)); });
   (D.silvestres || []).forEach(p => { const m = M(p, .9 + p.s * .5); PARTS.silvestre(pal, p.v).forEach(g => parts.push(g.applyMatrix4(m))); });
   (D.helechitos || []).forEach(p => { const m = M(p, .8 + p.s * .6); PARTS.helechito(pal, p.v).forEach(g => parts.push(g.applyMatrix4(m))); });
   garden = new THREE.Mesh(kit(parts), LAMB); garden.visible = !focus; scene.add(garden);
@@ -613,13 +618,13 @@ function planetaGeo(pal) {
   if (PLANETA) return PLANETA;
   const r = rng(131), out = [], M = (x, z, rot, sc) => { placeAt(_dum, x, z, rot); return new THREE.Matrix4().compose(_dum.position, _dum.quaternion, _s4.setScalar(sc)); };
   // un punto al azar de la esfera, dado como coordenadas de arco (las que usa surf), fuera del claro
-  const punto = () => { const a = Math.acos(1 - 2 * r()) * .92 + .58, b = r() * 6.283, d = Math.min(a, 3.05) * PLANET_R; return { x: Math.sin(b) * d, z: Math.cos(b) * d, rot: r() * 6.28, s: r(), v: Math.floor(r() * 3) }; };
+  const punto = () => { const a = Math.acos(1 - 2 * r()) * .88 + .5, b = r() * 6.283, d = Math.min(a, 3.05) * PLANET_R; return { x: Math.sin(b) * d, z: Math.cos(b) * d, rot: r() * 6.28, s: r(), v: Math.floor(r() * 3) }; };
   const oscuro = pal.bg === '#1f1f1f';
-  for (let i = 0; i < 40; i++) { const p = punto(), col = oscuro ? ['#30333b', '#2a2d34'][i % 2] : ['#c7ccd4', '#aeb5c0'][i % 2]; out.push(pc(new THREE.CircleGeometry(1.2 + p.s * 1.6, 24), col, M(p.x, p.z, p.rot, 1).multiply(TRS([0, .004, 0], [-Math.PI / 2, 0, 0], [1, .6 + p.s * .6, 1])))); }
-  for (let i = 0; i < 44; i++) { const p = punto(); PARTS[p.v === 0 ? 'guaya' : 'nublado'](pal, p.v).forEach(g => out.push(g.applyMatrix4(M(p.x, p.z, p.rot, 1.1 + p.s * .5)))); }
-  for (let i = 0; i < 50; i++) { const p = punto(); PARTS.arbusto(pal).forEach(g => out.push(g.applyMatrix4(M(p.x, p.z, p.rot, 1 + p.s)))); }
-  for (let i = 0; i < 60; i++) { const p = punto(); PARTS.tufts(pal).forEach(g => out.push(g.applyMatrix4(M(p.x, p.z, p.rot, 1.2 + p.s)))); }
-  for (let i = 0; i < 16; i++) { const p = punto(); PARTS.piedra(pal).forEach(g => out.push(g.applyMatrix4(M(p.x, p.z, p.rot, 1.2 + p.s * 1.5)))); }
+  for (let i = 0; i < 24; i++) { const p = punto(), col = oscuro ? ['#30333b', '#2a2d34'][i % 2] : ['#c7ccd4', '#aeb5c0'][i % 2]; out.push(casquete(p.x, p.z, .7 + p.s * 1.1, col)); }
+  for (let i = 0; i < 26; i++) { const p = punto(); PARTS[p.v === 0 ? 'guaya' : 'nublado'](pal, p.v).forEach(g => out.push(g.applyMatrix4(M(p.x, p.z, p.rot, 1.1 + p.s * .5)))); }
+  for (let i = 0; i < 24; i++) { const p = punto(); PARTS.arbusto(pal).forEach(g => out.push(g.applyMatrix4(M(p.x, p.z, p.rot, 1 + p.s)))); }
+  for (let i = 0; i < 30; i++) { const p = punto(); PARTS.tufts(pal).forEach(g => out.push(g.applyMatrix4(M(p.x, p.z, p.rot, 1.2 + p.s)))); }
+  for (let i = 0; i < 8; i++) { const p = punto(); PARTS.piedra(pal).forEach(g => out.push(g.applyMatrix4(M(p.x, p.z, p.rot, 1.2 + p.s * 1.5)))); }
   return PLANETA = out;
 }
 /* ---------- Polvo de luz (motas blancas que flotan) ---------- */
@@ -816,7 +821,7 @@ function brain(dt) {
    (casa, guayacanes, letrero, farol, banca…). Con escenario el claro es más grande. */
 let ESC_TREES = null;
 function okWalk(x, z) {
-  const R = esc ? 2.4 : .75, zmin = esc ? -1.7 : -.5, zmax = esc ? .85 : .1;
+  const R = esc ? 1.8 : .75, zmin = esc ? -1.4 : -.5, zmax = esc ? .72 : .1;
   if (Math.hypot(x, z * .8) > R || z < zmin || z > zmax) return false;
   // Los senderos son corredores siempre libres (lo que hay puesto queda a los lados)
   if (esc && distSendero(x, z) < ANCHO_SENDERO / 2 + .04) return true;
@@ -849,8 +854,8 @@ function sitios() {
     }
   };
   add('lago', LAGO_P, lagoEnForma() + .22); add('lago2', LAGO_P, lagoEnForma() + .24, Math.PI * .95); add('lago3', LAGO_P, lagoEnForma() + .24, Math.PI * .62);
-  add('banca', E.banca, .42); if (L.length && L[L.length - 1].nombre === 'banca') L[L.length - 1].mira.banca = true; add('huerto', E.huerto, .42); add('farol', E.farol, .3); add('cartel', E.cartel, .45);
-  add('cascada', E.cascada, .55); add('puente', E.puente, .4); add('hongos', E.hongos, .3); add('buzon', E.buzon, .28); add('lena', E.lena, .32); add('tortuga', E.tortuga, .3); add('bandera', E.bandera, .25); add('cerca', E.cerca, .4);
+  add('banca', E.banca, .42); if (L.length && L[L.length - 1].nombre === 'banca') L[L.length - 1].mira.banca = true; add('farol', E.farol, .3); add('cartel', E.cartel, .45);
+  add('cascada', E.cascada, .55); add('puente', E.puente, .4); add('buzon', E.buzon, .28); add('lena', E.lena, .32); add('tortuga', E.tortuga, .3);
   const fs = enClaro();
   if (fs.props.length && ZONA.hogar[0]) add('casa', ZONA.hogar[0], .55); // la puerta de su casa
   // Los finales de los senderos (el letrero del bosque, la plazuela) también son lugares de paseo
@@ -872,7 +877,7 @@ function tramoLibre(x0, z0, x1, z1) {
 }
 function rejilla() {
   if (celdas) return celdas;
-  const R = esc ? 2.5 : .8, zmin = esc ? -1.8 : -.55, zmax = esc ? .9 : .15, W = Math.round(2 * R / PASO) + 1, H = Math.round((zmax - zmin) / PASO) + 1;
+  const R = esc ? 1.9 : .8, zmin = esc ? -1.5 : -.55, zmax = esc ? .8 : .15, W = Math.round(2 * R / PASO) + 1, H = Math.round((zmax - zmin) / PASO) + 1;
   const ok = new Uint8Array(W * H);
   for (let j = 0; j < H; j++) for (let i = 0; i < W; i++) ok[j * W + i] = okWalk(-R + i * PASO, zmin + j * PASO) ? 1 : 0;
   return celdas = { R, zmin, W, H, ok, cx: (x) => Math.max(0, Math.min(W - 1, Math.round((x + R) / PASO))), cz: (z) => Math.max(0, Math.min(H - 1, Math.round((z - zmin) / PASO))) };
@@ -922,9 +927,9 @@ function next() {
       }
     }
   }
-  const R = esc ? 2.3 : .6;
+  const R = esc ? 1.7 : .6;
   for (let i = 0; i < 60; i++) {
-    const x = (Math.random() - .5) * 2 * R, z = (esc ? -1.65 : -.45) + Math.random() * (esc ? 2.4 : .55);
+    const x = (Math.random() - .5) * 2 * R, z = (esc ? -1.35 : -.45) + Math.random() * (esc ? 2.0 : .55);
     if (okWalk(x, z) && Math.hypot(x - pos.x, z - pos.z) > .3 && Math.hypot(x - pos.x, z - pos.z) < 1.5 && irANuevo(x, z)) return;
   }
   idleFor = 2;
@@ -1456,7 +1461,7 @@ export function cambiarDecoracion(id, k) { const d = decoracion.find(o => o.id =
 export function quitarDecoracion(id) { decoracion = decoracion.filter(o => o.id !== id); guardarDecoracion(); }
 export function quitarTodaDecoracion() { decoracion = []; guardarDecoracion(); }
 // ¿Se puede poner algo ahí? Fuera de los corredores, del lago, de lo que hay puesto y dentro del claro
-export function sitioLibre(x, z) { return !!esc && distSendero(x, z) > .14 && Math.hypot(x - LAGO_P[0], z - LAGO_P[1]) > lagoEnForma() + .14 && !quienBloquea(x, z) && Math.hypot(x, z * .8) < 3.3 && VISIBLE(x, z); }
+export function sitioLibre(x, z) { return !!esc && distSendero(x, z) > .14 && Math.hypot(x - LAGO_P[0], z - LAGO_P[1]) > lagoEnForma() + .14 && !quienBloquea(x, z) && Math.hypot(x, z * .8) < 2.2 && VISIBLE(x, z); }
 // El punto del claro (x, z) bajo un punto de la pantalla (px del contenedor), o null si no toca el suelo
 const _rayS = new THREE.Raycaster(), _ndcS = new THREE.Vector2(), _esf = new THREE.Sphere(), _hit = new THREE.Vector3();
 export function puntoDeSuelo(cx, cy) {

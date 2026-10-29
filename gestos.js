@@ -32,7 +32,7 @@ const REGLAS = {
 const base = (f) => { const l = f.split('+'); return l.every(x => x === l[0]) ? l[0] : null; };
 // Cuánto se sostiene cada gesto antes de disparar (ms): el puño y el índice
 // aparecen de paso al mover la mano, así que piden un poco más
-const SOSTENER = { jardin: 650, tip: 450, corazon: 300, dedo: 400, rock: 400, shaka: 450, poquito: 500, tres: 750, cuatro: 800, choca: 700 };
+const SOSTENER = { jardin: 650, tip: 450, corazon: 300, dedo: 400, rock: 400, shaka: 450, poquito: 500, tres: 750, cuatro: 800, choca: 500 };
 const SOSTENER_BASE = 300;
 const ESPERA = 1200; // entre dos eventos de gesto
 
@@ -46,6 +46,8 @@ const estirado = (p, t, j) => razon(p, t, j) > 1.2;
 const doblado = (p, t, j) => razon(p, t, j) < .95;
 const pulgarFuera = (p) => d2(p[4], p[17]) > (d2(p[0], p[9]) || 1e-3) * 1.05;
 const pulgarDentro = (p) => d2(p[4], p[17]) < (d2(p[0], p[9]) || 1e-3) * .85;
+// ✋ palma abierta de verdad: los cuatro dedos estirados y el pulgar separado, con los dedos hacia arriba
+export function palmaAbierta(p) { return estirado(p, 8, 6) && estirado(p, 12, 10) && estirado(p, 16, 14) && estirado(p, 20, 18) && pulgarFuera(p) && p[12].y < p[0].y - (d2(p[0], p[9]) || .05) * .4; }
 export function formaDeMano(p) {
   const i = estirado(p, 8, 6), m = estirado(p, 12, 10), a = estirado(p, 16, 14), k = estirado(p, 20, 18);
   const ic = doblado(p, 8, 6), mc = doblado(p, 12, 10), ac = doblado(p, 16, 14), kc = doblado(p, 20, 18);
@@ -110,16 +112,17 @@ export function crearGestos(emitir) {
   function manosEstables(r) {
     // Etiqueta de cada mano: los gestos del modelo, más 👌 que el modelo no trae
     const manos = r.manos.filter(m => m.puntos && m.puntos.length === 21);
-    // Quieta: la palma no se movió más de un 3 % de la imagen en los últimos 0,7 s
-    if (manos.length === 1) { trayecto.push({ t: r.t, x: manos[0].puntos[9].x, y: manos[0].puntos[9].y }); } else trayecto = [];
-    trayecto = trayecto.filter(q => r.t - q.t < 900);
-    const quieta = trayecto.length > 4 && r.t - trayecto[0].t > 700 &&
-      Math.max(...trayecto.map(q => q.x)) - Math.min(...trayecto.map(q => q.x)) < .03 && Math.max(...trayecto.map(q => q.y)) - Math.min(...trayecto.map(q => q.y)) < .03;
+    // Quieta: la palma no se movió más de un 5 % de la imagen (ni más de un tercio de la mano) en los últimos 0,6 s
+    if (manos.length === 1) { trayecto.push({ t: r.t, x: manos[0].puntos[9].x, y: manos[0].puntos[9].y, tam: d2(manos[0].puntos[0], manos[0].puntos[9]) }); } else trayecto = [];
+    trayecto = trayecto.filter(q => r.t - q.t < 800);
+    const tol = trayecto.length ? Math.min(.05, Math.max(.02, trayecto[trayecto.length - 1].tam * .35)) : .03;
+    const quieta = trayecto.length > 4 && r.t - trayecto[0].t > 600 &&
+      Math.max(...trayecto.map(q => q.x)) - Math.min(...trayecto.map(q => q.x)) < tol && Math.max(...trayecto.map(q => q.y)) - Math.min(...trayecto.map(q => q.y)) < tol;
     let etiquetas = manos.map(m => {
       const forma = formaDeMano(m.puntos);                      // lo que se ve en la mano pesa más que la etiqueta del modelo
       if (forma && (forma !== 'Tres' && forma !== 'Cuatro' || quieta)) return forma;
       if ((m.gesto === 'None' || m.gesto === 'Open_Palm') && esOK(m.puntos)) return 'OK';
-      if (m.gesto === 'Open_Palm' && quieta && manos.length === 1) return 'Choca';
+      if (quieta && manos.length === 1 && palmaAbierta(m.puntos)) return 'Choca'; // ✋ choca esos cinco: la palma abierta y quieta
       return m.score > .55 ? m.gesto : 'None';
     });
     let f;
@@ -176,7 +179,7 @@ export function crearGestos(emitir) {
     const prom = (a, b) => ((f[a] || 0) + (f[b] || 0)) / 2;
     const parpadeo = prom('eyeBlinkLeft', 'eyeBlinkRight'), boca = f.jawOpen || 0;
     const ev = (tipo) => emitir(Object.assign({ tipo, manos: 0 }, pos));
-    if (sostiene('lengua', (f.tongueOut || 0) > .45, r.t, 350, 8000)) ev('lengua');
+    if (sostiene('lengua', (f.tongueOut || 0) > .28 && boca > .12, r.t, 300, 8000)) ev('lengua');
     else if (sostiene('beso', (f.mouthPucker || 0) > .55 && boca < .3, r.t, 450, 8000)) ev('beso');
     else if (sostiene('bostezo', boca > .6 && parpadeo > .35, r.t, 700, 15000)) ev('bostezo');
     else if (sostiene('sorpresa', boca > .5 && (f.browInnerUp || 0) > .45 && parpadeo < .3, r.t, 400, 10000)) ev('sorpresa');
@@ -207,13 +210,13 @@ export function crearGestos(emitir) {
     // Una mano levantada (la otra abajo), sin estar saludando
     const arriba = (a) => ve(a) && p[a].y < p[0].y - .06;
     const una = (arriba(15) !== arriba(16)) && ve(11) && (arriba(15) ? p[16].y > hombros : p[15].y > hombros);
-    if (sostiene('mano', una && r.t - ultimoSaludo > 3000, r.t, 900, 12000)) emitir({ tipo: 'mano', manos: 1, x: 1 - p[arriba(15) ? 15 : 16].x, y: p[arriba(15) ? 15 : 16].y });
+    if (sostiene('mano', una && r.t - ultimoSaludo > 3000 && !r.manos.length, r.t, 1500, 20000)) emitir({ tipo: 'mano', manos: 1, x: 1 - p[arriba(15) ? 15 : 16].x, y: p[arriba(15) ? 15 : 16].y });
   }
 
-  // 👋: una mano abierta (3 o más dedos estirados, sin depender de la etiqueta
-  // del modelo, que parpadea con el movimiento) cuyas puntas de los dedos van y
-  // vienen de lado a lado: 2 cambios de dirección en 1,6 s, cada vaivén de al
-  // menos un tercio del tamaño de la mano. Un cuadro sin mano no corta el saludo.
+  // 👋: una mano abierta (3 o más dedos estirados, sin depender de la etiqueta del modelo, que parpadea con el
+  // movimiento), con los dedos hacia arriba, cuya palma va y viene de lado a lado: 3 cambios de dirección en 1,6 s,
+  // cada vaivén de más de media mano y un recorrido total de más de una mano. Así una mano quieta o que solo se
+  // mueve un poco (el temblor del modelo) no es un saludo. Un cuadro sin mano no corta el saludo.
   function abierta(p) { return [[8, 6], [12, 10], [16, 14], [20, 18]].filter(([t, j]) => d2(p[0], p[t]) > d2(p[0], p[j]) * 1.1).length >= 3; }
   function saludo(r) {
     const m = r.manos.filter(h => h.puntos && h.puntos.length === 21 && (h.gesto === 'Open_Palm' || abierta(h.puntos)))
@@ -221,17 +224,19 @@ export function crearGestos(emitir) {
     if (!m) { if (r.t - manoVista > 450) ola = []; return; }
     manoVista = r.t;
     const p = m.puntos, tam = d2(p[0], p[9]) || .05;
-    ola.push({ t: r.t, x: (p[8].x + p[12].x + p[16].x) / 3 });
+    if (p[12].y > p[0].y - tam * .2) { ola = []; return; } // de lado o boca abajo no es un saludo
+    ola.push({ t: r.t, x: p[9].x });
     ola = ola.filter(q => r.t - q.t < 1600);
+    const recorrido = Math.max(...ola.map(q => q.x)) - Math.min(...ola.map(q => q.x));
     let giros = 0, dir = 0, ext = ola[0].x;
-    const umbral = tam * .33;
+    const umbral = tam * .55;
     for (let i = 1; i < ola.length; i++) {
       const dx = ola[i].x - ext;
       if (!dir) { if (Math.abs(dx) > umbral) { dir = Math.sign(dx); ext = ola[i].x; } continue; }
       if (Math.sign(dx) === dir || !dx) { if (dir * dx > 0) ext = ola[i].x; }   // sigue hacia el mismo lado
       else if (Math.abs(dx) > umbral) { giros++; dir = -dir; ext = ola[i].x; } // dio la vuelta
     }
-    if (giros >= 2 && r.t - ultimoSaludo > 3500) {
+    if (giros >= 3 && recorrido > tam * 1.1 && r.t - ultimoSaludo > 3500) {
       ultimoSaludo = r.t; ola = [];
       emitir({ tipo: 'saludo', manos: 1, x: 1 - p[9].x, y: p[9].y });
     }

@@ -27,7 +27,7 @@ let vestuario = {}; // lo que Uku se pone según el clima real (assets/clima.js 
    escenario: el lago con sus patos, 24 árboles del bosque nublado, la tortuga de Galápagos en la orilla y el
    cartel de días sin accidentes (más la banca, el farol, el huerto, la cascada, el puente…). */
 const MUNDO = { casa: true, flores: true, guayacanes: 2, mariposas: 5,
-  escenario: { lago: 1.15, arboles: 24, tortuga: true, cartel: true } };
+  escenario: { lago: 1.0, arboles: 14, tortuga: true, cartel: true } };
 const FLORES = { normal: 45, jardin: 100 };
 // Cuánto dura cada gesto de bosque3d (s), para no encimar reacciones
 const DURA = { wave: 2.7, happy: 2.4, nod: 3.4, talk: 2.2, worried: 3.8, read: 16 };

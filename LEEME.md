@@ -81,7 +81,7 @@ Theodore por unos túneles mientras lo insulta con gracia y se mete en la conver
 - **Picardía con cariño**: Uku puede molestar un poquito, quejarse, negarse con humor o pedir algo a
   cambio; nunca hiere y lo deja apenas algo es serio.
 - **Guíame** (tecla `7` o decir «guíame» / «te guío», o «guíame al lago»): Uku se pierde lejos y tú lo
-  llevas a un destino (su casa, el lago, la banca, el huerto, el letrero, la cascada o el puente) con la voz («izquierda», «derecha», «arriba», «sigue», «para») o señalando con la
+  llevas a un destino (su casa, el lago, la banca, el letrero, la cascada o el puente) con la voz («izquierda», «derecha», «arriba», «sigue», «para») o señalando con la
   mano (a un lado de la cámara lo lleva para allá; arriba, al fondo). Comenta el camino, se queja si
   lo dejas parado, avisa si choca con algo, celebra al llegar y a los dos minutos se rinde. «Ya no»
   lo termina.
@@ -289,12 +289,20 @@ Tres botones arriba (o sus teclas) cambian cómo se ve y se usa el claro:
   las expresiones (pestañeo, sonrisa, boca, cejas), lo que entra al espejo (giro, cabeceo,
   inclinación) y lo que sale del control por manos.
 
+## Un mundo chico
+
+Lo principal es la asistencia; el mundo acompaña, así que es **chico y fácil de administrar**: un
+planeta de 5,5 m de radio con un claro de unos 3,5 m de ancho y solo lo útil: la casa de Uku, el
+lago con su cascada y el puente, la banca con el farol, el letrero del bosque, el buzón, la leña y
+la tortuga. Lo demás lo pones tú con Decorar. Al alejar en la vista de pájaro se ve el planeta
+entero (una esfera con parches, árboles y arbustos repartidos) con el claro encima.
+
 ## Senderos: por dónde se navega
 
 El claro tiene **corredores** (`assets/bosque3d.js › SENDEROS`) que salen de la plazuela entre
 los canteros y unen todos los lugares: la puerta de la casa, la orilla del lago, la cascada (por
-detrás del lago), la banca con el farol, el huerto con la cerca y la bandera, el letrero a la
-entrada del bosque (pasando entre el farol y la cerca, junto a la leña) y el puente sobre el arroyo.
+detrás del lago), la banca con el farol, el letrero del bosque (desde la casa, junto a la leña) y
+el puente sobre el arroyo.
 
 - Son **corredores siempre libres**: nada se pone encima (la tortuga, las hojas grandes y las
   heliconias se corrieron a los lados) y los árboles del bosque los esquivan. `senderosChocan()`
@@ -312,7 +320,7 @@ entrada del bosque (pasando entre el farol y la cerca, junto a la leña) y el pu
 - **Uku pasea por ellos** (su planificador los usa porque son celdas libres) y por ahí se lo
   guía en «Guíame». El claro es más ancho (2,4 m a los lados, hasta 0,85 m al frente).
 - Cada sendero termina en un **destino con nombre** (`destinos()`: plaza, casa, lago, cascada,
-  banca, huerto, letrero, puente). En «Guíame» Uku elige uno al azar y lo dice; «llévame al lago»
+  banca, letrero, puente). En «Guíame» Uku elige uno al azar y lo dice; «llévame al lago»
   o «mejor a la banca» lo cambia a mitad de camino. Arranca en el rincón más lejano al destino.
 
 ## El claro, más amplio
@@ -537,6 +545,14 @@ frase hasta haber dicho todas**, y la primera de la baraja nueva nunca es la
 | Cabeza arriba y abajo · de lado a lado | «¡Un sí!» · «¿Es un no? Entendido» |
 | ❌ Brazos cruzados · una mano levantada | Accidente: el cartel vuelve a cero · «Mano arriba: tiene la palabra» |
 
+- **Menos falsos positivos** (`gestos.js`): el 👋 pide que la palma (no las puntas) vaya y venga
+  tres veces en 1,6 s, cada vaivén de más de media mano y un recorrido de más de una mano, con los
+  dedos hacia arriba: una mano quieta o que solo se mueve un poco ya no es un saludo. El ✋ choca
+  esos cinco se decide por la forma (cuatro dedos estirados, pulgar fuera, dedos arriba), no por
+  la etiqueta del modelo, con una tolerancia de quietud de un tercio de la mano. La 😝 lengua
+  dispara con menos (el modelo da valores bajos) si la boca está algo abierta. La mano levantada
+  del cuerpo pide 1,5 s y no vale si hay una mano detectada. Probado con manos sintéticas
+  (quieta con temblor → choca, no saludo; saludando → saludo; moviéndose despacio → nada).
 - **Identificación más estable**: un gesto que aparece y desaparece en menos de 120 ms
   (ruido del modelo) ya no cambia nada, y los gestos de la forma de la mano
   (🖕 🤘 🤙 🤏 3 y 4 dedos) se calculan de los 21 puntos, no de la etiqueta del modelo.

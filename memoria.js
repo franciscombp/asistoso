@@ -168,7 +168,7 @@ export function mundo() {
   return {
     brotes: r.conversaciones === 0, flores: r.conversaciones > 0, casa: r.dias >= 2,
     guayacanes: Math.min(4, Math.floor(r.dias / 2)), mariposas: 2 + Math.min(4, Math.floor(r.hechos / 4)),
-    escenario: { lago: .8 + Math.min(.6, nivel * .06), arboles: Math.min(24, 10 + nivel * 2), tortuga: r.dias >= 7, banderas: Math.min(2, metas), cartel: true },
+    escenario: { lago: .8 + Math.min(.3, nivel * .03), arboles: Math.min(14, 6 + nivel), tortuga: r.dias >= 7, banderas: Math.min(2, metas), cartel: true },
     nivel
   };
 }

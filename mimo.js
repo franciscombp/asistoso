@@ -734,7 +734,7 @@ async function empezar({ conCamara = true } = {}) {
    camino, se queja si lo dejas plantado y celebra al llegar. Tecla 7 o decir «guíame» / «te guío». */
 let guiando = null;
 const GUIA_DIR = { izquierda: [-1, 0], derecha: [1, 0], arriba: [0, -1], fondo: [0, -1], atras: [0, -1], atrás: [0, -1], abajo: [0, 1], adelante: [0, 1], sigue: null, para: 'para', alto: 'para', quieto: 'para', espera: 'para' };
-const GUIA_DESTINOS = { casa: 'mi casa', lago: 'el lago', banca: 'la banca', huerto: 'el huerto', letrero: 'el letrero del bosque', cascada: 'la cascada', puente: 'el puente' };
+const GUIA_DESTINOS = { casa: 'mi casa', lago: 'el lago', banca: 'la banca', letrero: 'el letrero del bosque', cascada: 'la cascada', puente: 'el puente' };
 const GUIA_FRASES = {
   inicio: ['¡Ay! Me fui a mirar las mariposas y ya no sé por dónde queda {a}. ¿Me guías? Dime izquierda, derecha, arriba o sigue, o señala con la mano. Mejor por los senderos.', '¡Me perdí! Esto me pasa por distraerme. Llévame a {a}: izquierda, derecha, arriba… o apunta con la mano. Los senderos ayudan.'],
   cambio: ['Ah, ¿mejor a {a}? Bueno, vamos.', 'Cambio de plan: a {a}. Guíame.'],
