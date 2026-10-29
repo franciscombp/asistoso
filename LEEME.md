@@ -337,6 +337,18 @@ Tres botones arriba (o sus teclas) cambian cómo se ve y se usa el claro:
   cerebro (nube, modelo, milisegundos, error o por qué no respondió). También aparecen las frases
   que oyó por voz. «Soy Fran» hace que lo escrito cuente como de Fran aunque no haya cámara; sin
   marcar, Uku contesta como a una visita. «Ver prompt» muestra lo último que se mandó al modelo.
+  Guarda **todo el historial** en este navegador (sobrevive al recargar; «Borrar» lo limpia): lo
+  oído (🎙️), lo escrito (⌨️), **todo lo que dijo Uku**, con 🔊 si fue en voz o 💬 si fue solo en el
+  globo, también lo que dijo por su cuenta, y lo que **se calló** (🤐) y por qué. La hora de cada
+  línea aparece al pasar el mouse.
+- **Turnos de habla** (`mimo.js › decir`): Uku no se sobrepone a quien habla ni a sí mismo.
+  - **Lo que dice por su cuenta** se calla si alguien está hablando, si él sigue con otra frase,
+    si hay una respuesta en camino o si oyó a alguien hace menos de 8 s. Son los saludos de la
+    cámara, las frases de las reacciones, las pistas, invitaciones, pensamientos y temas. La
+    reacción se ve igual; solo la frase no se dice, y tampoco se encola.
+  - **Las respuestas** esperan a que la persona termine de hablar.
+  - **Respuestas viejas**: si llega otra frase mientras Uku piensa, responde solo a la última.
+  - **El globo** sube para no quedar encima del subtítulo de lo que se oyó.
 
 ## Un mundo chico
 
