@@ -1,24 +1,27 @@
 /* =====================================================================
    Uku · visión (MediaPipe Tasks Vision, en el navegador)
-   Tres modelos sobre el video de la webcam, sin enviar nada a un servidor:
-   - GestureRecognizer: manos (21 puntos) y gesto de cada una
+   Tres modelos sobre el video de la webcam, sin enviar nada a un servidor,
+   los completos (más precisos que los «lite»):
+   - HandLandmarker (full): manos (21 puntos). El gesto de cada una
      (Thumb_Up, Thumb_Down, Victory, Open_Palm, Closed_Fist, Pointing_Up,
-     ILoveYou, None).
-   - PoseLandmarker (lite): cuerpo en 3D (hombros, codos, muñecas…).
+     ILoveYou, None) se decide por la geometría de los puntos
+     (gestos.js › etiquetaBasica), no por un clasificador que parpadea.
+   - PoseLandmarker (full): cuerpo en 3D (hombros, codos, muñecas…).
    - FaceLandmarker: giro de la cabeza (matriz) y expresiones (pestañeo,
      sonrisa).
    Las librerías y los modelos se cargan de su CDN; para un equipo sin
    internet se pueden servir copias locales con ?mp=…&modelos=… (LEEME.md).
    ===================================================================== */
 import * as descargas from './descargas.js?v=__BUILD__';
+import { etiquetaBasica } from './gestos.js?v=__BUILD__';
 const Q = new URLSearchParams(location.search);
 export const RUTAS = {
   mp: Q.get('mp') || 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14',
   modelos: Q.get('modelos') || 'https://storage.googleapis.com/mediapipe-models'
 };
 const MODELOS = {
-  gestos: 'gesture_recognizer/gesture_recognizer/float16/1/gesture_recognizer.task',
-  pose: 'pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task',
+  manos: 'hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task',
+  pose: 'pose_landmarker/pose_landmarker_full/float16/1/pose_landmarker_full.task',
   cara: 'face_landmarker/face_landmarker/float16/1/face_landmarker.task'
 };
 // Con copias locales, los modelos van sueltos en la carpeta (sin la ruta del CDN)
@@ -45,7 +48,7 @@ export async function iniciarVision({ alAvance = () => {} } = {}) {
     }
   }
   alAvance('Aprendiendo a ver tus manos…');
-  const gestos = await crear(mp.GestureRecognizer, 'gestos', { numHands: 2, minHandDetectionConfidence: .5, minHandPresenceConfidence: .5, minTrackingConfidence: .5 });
+  const manos = await crear(mp.HandLandmarker, 'manos', { numHands: 2, minHandDetectionConfidence: .6, minHandPresenceConfidence: .6, minTrackingConfidence: .6 });
   alAvance('Aprendiendo a ver cómo te mueves…');
   const pose = await crear(mp.PoseLandmarker, 'pose', { numPoses: 1, minPoseDetectionConfidence: .5, minTrackingConfidence: .5 });
   alAvance('Aprendiendo a ver tu cara…');
@@ -59,7 +62,7 @@ export async function iniciarVision({ alAvance = () => {} } = {}) {
     const t = performance.now();
     if (video.readyState < 2 || t <= ultimo) return null;
     ultimo = t;
-    const g = gestos.recognizeForVideo(video, t);
+    const g = manos.detectForVideo(video, t);
     const p = pose.detectForVideo(video, t);
     if (turno++ % 2 === 0 || !prevCara) prevCara = cara.detectForVideo(video, t);
     return normalizar(g, p, prevCara, t);
@@ -74,9 +77,10 @@ export async function iniciarVision({ alAvance = () => {} } = {}) {
 export function normalizar(g, p, c, t) {
   const manos = [];
   (g.landmarks || []).forEach((pts, i) => {
+    // Con el GestureRecognizer venía una etiqueta; con el HandLandmarker la sacamos de la forma de la mano
     const ges = g.gestures && g.gestures[i] && g.gestures[i][0];
     const lado = g.handedness && g.handedness[i] && g.handedness[i][0];
-    manos.push({ lado: lado ? lado.categoryName : null, gesto: ges ? ges.categoryName : 'None', score: ges ? ges.score : 0, puntos: pts });
+    manos.push({ lado: lado ? lado.categoryName : null, gesto: ges ? ges.categoryName : etiquetaBasica(pts), score: ges ? ges.score : 1, puntos: pts });
   });
   const pose = p && p.landmarks && p.landmarks[0] ? { puntos: p.landmarks[0], mundo: p.worldLandmarks && p.worldLandmarks[0] } : null;
   // Hasta cuatro caras a la vez (para reconocer a cada persona que se acerque); `cara` es la más grande

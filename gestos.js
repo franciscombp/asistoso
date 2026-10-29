@@ -33,8 +33,8 @@ const base = (f) => { const l = f.split('+'); return l.every(x => x === l[0]) ? 
 // Cuánto se sostiene cada gesto antes de disparar (ms): el puño y el índice
 // aparecen de paso al mover la mano, así que piden un poco más
 const SOSTENER = { jardin: 650, tip: 450, corazon: 300, dedo: 400, rock: 400, shaka: 450, poquito: 500, tres: 750, cuatro: 800, choca: 500 };
-const SOSTENER_BASE = 300;
-const ESPERA = 1200; // entre dos eventos de gesto
+const SOSTENER_BASE = 400;
+const ESPERA = 2000; // entre dos eventos de gesto
 
 const d2 = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
 
@@ -48,6 +48,21 @@ const pulgarFuera = (p) => d2(p[4], p[17]) > (d2(p[0], p[9]) || 1e-3) * 1.05;
 const pulgarDentro = (p) => d2(p[4], p[17]) < (d2(p[0], p[9]) || 1e-3) * .85;
 // ✋ palma abierta de verdad: los cuatro dedos estirados y el pulgar separado, con los dedos hacia arriba
 export function palmaAbierta(p) { return estirado(p, 8, 6) && estirado(p, 12, 10) && estirado(p, 16, 14) && estirado(p, 20, 18) && pulgarFuera(p) && p[12].y < p[0].y - (d2(p[0], p[9]) || .05) * .4; }
+/* Los siete gestos básicos, por la geometría de los 21 puntos (antes los daba el clasificador del modelo, que parpadea):
+   Open_Palm, Closed_Fist, Victory, Pointing_Up, Thumb_Up, Thumb_Down, ILoveYou; o 'None'. */
+export function etiquetaBasica(p) {
+  const i = estirado(p, 8, 6), m = estirado(p, 12, 10), a = estirado(p, 16, 14), k = estirado(p, 20, 18);
+  const ic = doblado(p, 8, 6), mc = doblado(p, 12, 10), ac = doblado(p, 16, 14), kc = doblado(p, 20, 18);
+  const tam = d2(p[0], p[9]) || 1e-3, cerrada = ic && mc && ac && kc, pulgar = d2(p[4], p[0]) > tam * .95 && pulgarFuera(p);
+  if (cerrada && pulgar && p[4].y < p[0].y - tam * .5 && p[4].y < p[2].y) return 'Thumb_Up';
+  if (cerrada && pulgar && p[4].y > p[0].y + tam * .3) return 'Thumb_Down';
+  if (cerrada) return 'Closed_Fist';
+  if (i && m && ac && kc) return 'Victory';
+  if (i && mc && ac && kc && p[8].y < p[0].y - tam * .8) return 'Pointing_Up';
+  if (i && k && mc && ac && pulgarFuera(p)) return 'ILoveYou';
+  if (palmaAbierta(p)) return 'Open_Palm';
+  return 'None';
+}
 export function formaDeMano(p) {
   const i = estirado(p, 8, 6), m = estirado(p, 12, 10), a = estirado(p, 16, 14), k = estirado(p, 20, 18);
   const ic = doblado(p, 8, 6), mc = doblado(p, 12, 10), ac = doblado(p, 16, 14), kc = doblado(p, 20, 18);

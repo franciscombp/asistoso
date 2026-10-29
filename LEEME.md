@@ -174,7 +174,7 @@ muestra el contexto que recibió el modelo.
 ### Cómo va la descarga
 
 La tarjeta **La IA de Uku** (arriba a la izquierda; tecla `A`) muestra cada
-modelo mientras baja: **Visión** (MediaPipe, ~17 MB) y **Caras** (face-api, ~7 MB), con MB y % y
+modelo mientras baja: **Visión** (MediaPipe completo, ~27 MB) y **Caras** (face-api, ~7 MB), con MB y % y
 dónde corre (tarjeta gráfica o CPU). Si algo falla lo dice ("Revisa
 la conexión con huggingface.co"). Cuando todo está listo se esconde sola; la
 segunda vez sale de la caché casi al instante.
@@ -545,6 +545,17 @@ frase hasta haber dicho todas**, y la primera de la baraja nueva nunca es la
 | Cabeza arriba y abajo · de lado a lado | «¡Un sí!» · «¿Es un no? Entendido» |
 | ❌ Brazos cruzados · una mano levantada | Accidente: el cartel vuelve a cero · «Mano arriba: tiene la palabra» |
 
+- **Modelos completos de MediaPipe** (`vision.js`): manos con `hand_landmarker` **full** (los 21
+  puntos más estables) y cuerpo con `pose_landmarker_full`. Los siete gestos básicos (pulgar
+  arriba/abajo, V, índice, puño, palma, 🤟) ya no los da un clasificador que parpadea: se deciden
+  por la geometría de los puntos (`gestos.js › etiquetaBasica`), igual que los demás. Pesan unos
+  10 MB más la primera vez; luego quedan en caché.
+- **Un gesto a la vez** (`mimo.js › árbitro de reacciones`): Uku hacía caso a todo y las reacciones
+  se pisaban. Ahora, mientras reacciona o habla (3,5 s desde la última reacción, o mientras suena
+  la voz o el globo está pensando o escribiendo) no toma gestos nuevos; las caras y la cabeza
+  (sonrisa, bostezo, sí/no…) solo si lleva 8 s sin reaccionar y nadie le habló en 7 s; cada gesto
+  se sostiene 0,4 s y entre dos gestos pasan 2 s. En modo control y en espejo las manos no son
+  gestos; en «Guíame» y en piedra-papel-tijera solo cuenta la jugada.
 - **Menos falsos positivos** (`gestos.js`): el 👋 pide que la palma (no las puntas) vaya y venga
   tres veces en 1,6 s, cada vaivén de más de media mano y un recorrido de más de una mano, con los
   dedos hacia arriba: una mano quieta o que solo se mueve un poco ya no es un saludo. El ✋ choca
@@ -574,7 +585,7 @@ frase hasta haber dicho todas**, y la primera de la baraja nueva nunca es la
 | `index.html`, `mimo.css` | Pantalla, globo, pistas de gestos, paneles. Variables de color y radio en `:root`. |
 | `mimo.js` | Orquesta: cámara, bucle de visión, reacciones, frases, personas, teclado, modos (control, vista, espejo), depurar. |
 | `escena.js` | Adapta el mundo de Uku (`assets/bosque3d.js`) a la pantalla grande: el claro de Fran, Uku con sus gestos, paseo y mariposas; cielo y entornos detrás del lienzo; cámaras, control y espejo. |
-| `vision.js` | MediaPipe Tasks Vision: manos con gesto, cuerpo (pose lite) y cara (puntos clave y expresiones). |
+| `vision.js` | MediaPipe Tasks Vision, modelos completos: manos (21 puntos; el gesto por geometría), cuerpo (pose full) y cara (puntos clave y expresiones). |
 | `gestos.js` | De los puntos a eventos: gestos sostenidos, de una o dos manos, 👌, 🫶, 👋 y 🙌. |
 | `efectos.js` | Reacciones en 2D: la tabla de emojis y el respaldo si no hay WebGL (lo normal es `efectos3d.js`). |
 | `caras.js` | face-api: huella y foto de cada cara; identifica (o crea un visitante sin nombre), renombra, junta y marca al dueño. |
@@ -599,7 +610,7 @@ frase hasta haber dicho todas**, y la primera de la baraja nueva nunca es la
 | `assets/clima.js` | Clima del lugar (Open-Meteo) y cómo se viste Uku. |
 
 - **Sin imitación:** se probó que Uku copiara cabeza y brazos, pero la cabeza quedaba mirando hacia arriba; se quitó. Uku queda en su animación de reposo y responde con gestos.
-- **La visión corre en el navegador** (MediaPipe y face-api desde su CDN, ~24 MB la primera vez;
+- **La visión corre en el navegador** (MediaPipe y face-api desde su CDN, ~34 MB la primera vez;
   luego en caché). La conversación va a Groq por el Worker: no se descarga ningún modelo de lenguaje.
 
 ### Sin internet

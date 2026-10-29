@@ -209,6 +209,8 @@ function reaccionar(tipo, pos = {}, { yaVino = false } = {}) {
       return;
     }
   }
+  // Mientras dura esta reacción no entra otra (el árbitro de arriba)
+  ultimaReaccion = performance.now(); reaccionHasta = ultimaReaccion + 3500;
   // El cartel de días sin accidentes: Uku lo cambia y la frase cuenta cómo quedó
   const datos = { dias: cartel.dias(), record: cartel.record() };
   if (r.accion === 'cartelMas') { cartel.mas(); datos.dias = cartel.dias(); datos.record = cartel.record(); }
@@ -472,13 +474,21 @@ function dibujarMarcas(r) {
 }
 
 /* ---------- Bucle de visión ---------- */
+/* ---------- Árbitro de reacciones: Uku atiende un gesto a la vez ----------
+   Antes hacía caso a todo y las reacciones se pisaban (un globo tapaba al otro, un gesto cortaba al anterior). Ahora:
+   - mientras reacciona o habla (unos 3,5 s desde la última reacción, o mientras suena la voz) no toma gestos nuevos;
+   - las caras y la cabeza (sonrisa, bostezo, sí/no…) solo si lleva 8 s sin reaccionar a nada y nadie le habló en 7 s;
+   - en modo control y en espejo las manos no son gestos; en el juego solo cuenta la jugada. */
+let reaccionHasta = 0, ultimaReaccion = -1e9;
+const ocupado = () => performance.now() < reaccionHasta || voz.estaHablando() || ui.globo.classList.contains('is-pensando') || ui.globo.classList.contains('is-escribiendo');
 const gestos = crearGestos((e) => {
   st.eventos.push(e.tipo); if (st.eventos.length > 40) st.eventos.shift(); // historial (depuración y pruebas)
   if (e.tipo === 'llega') return llega();
   if (e.tipo === 'se_va') return seVa();
   if (callandoPorDueno()) return;                                                      // Fran enfrente en modo guardián: Uku sigue en lo suyo
-  if (jugando) return;                                                                 // en el juego solo cuenta la jugada
-  if (!e.manos && performance.now() - st.ultimaOida < 7000) return;                    // las caras no interrumpen una conversación
+  if (jugando || guiando || modoControl || modoEspejo) return;                         // en el juego solo cuenta la jugada; manejándolo o imitando, las manos no son gestos
+  if (ocupado()) return;                                                               // una reacción a la vez
+  if (!e.manos && (performance.now() - st.ultimaOida < 7000 || performance.now() - ultimaReaccion < 8000)) return; // las caras no interrumpen
   reaccionar(e.tipo, e);
 });
 function procesar(r) {
