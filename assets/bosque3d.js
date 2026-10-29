@@ -641,6 +641,14 @@ function planetaGeo(pal) {
 }
 /* ---------- Polvo de luz (motas blancas que flotan) ---------- */
 let dust = null;
+// El polvo de luz sí es suave: un punto difuso (lo único con brillo en el dibujo plano, junto al desenfoque de sueño)
+function polvoTexture() {
+  const c = document.createElement('canvas'); c.width = c.height = 64;
+  const g = c.getContext('2d'), r = g.createRadialGradient(32, 32, 0, 32, 32, 32);
+  r.addColorStop(0, 'rgba(255,255,255,1)'); r.addColorStop(.35, 'rgba(255,255,255,.75)'); r.addColorStop(1, 'rgba(255,255,255,0)');
+  g.fillStyle = r; g.fillRect(0, 0, 64, 64);
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t;
+}
 function dotTexture() {
   const c = document.createElement('canvas'); c.width = c.height = 64;
   // un disco liso de borde nítido (vectorial), no un brillo difuso
@@ -655,7 +663,7 @@ function buildDust() {
     speed[i] = .03 + r() * .07;
   }
   const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
-  dust = new THREE.Points(g, new THREE.PointsMaterial({ map: dotTexture(), size: .045, transparent: true, opacity: .9, depthWrite: false, color: palette().dust, fog: false }));
+  dust = new THREE.Points(g, new THREE.PointsMaterial({ map: polvoTexture(), size: .045, transparent: true, opacity: .9, depthWrite: false, color: palette().dust, fog: false }));
   dust.userData.speed = speed;
   scene.add(dust);
 }

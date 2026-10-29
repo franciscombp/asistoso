@@ -182,9 +182,24 @@ kbd { display: inline-block; min-width: 26px; padding: 2px 6px; border-radius: 6
 /* Entornos oscuros: logo blanco y textos claros sobre el cielo */
 
 /* Sueño: los bordes se desenfocan y se funden con el color del cielo (--sueno lo pone la escena) */
-/* Dibujo vectorial plano: sin desenfoque de lente ni velos difusos (las capas quedan, sin efecto, por si se
-   quieren volver a probar) */
-.mimo-sueno, .mimo-brillo { display: none; }
+.mimo-sueno {
+  position: fixed; inset: 0; z-index: 1; pointer-events: none;
+  /* El foco es Uku (--ux, --uy los pone mimo.js cada cuadro): alrededor, el mundo se desenfoca y se funde con el cielo */
+  background: radial-gradient(ellipse 52vw 58vh at var(--ux, 40%) var(--uy, 56%), transparent 40%, color-mix(in srgb, var(--sueno, #f6f6f5) 55%, transparent) 100%);
+  -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px);
+  -webkit-mask-image: radial-gradient(ellipse 40vw 46vh at var(--ux, 40%) var(--uy, 56%), transparent 30%, #000 92%);
+  mask-image: radial-gradient(ellipse 40vw 46vh at var(--ux, 40%) var(--uy, 56%), transparent 30%, #000 92%);
+  transition: background .8s ease;
+}
+/* Una segunda capa, más borrosa, solo en el borde: la profundidad de campo de una lente abierta */
+.mimo-sueno::after {
+  content: ''; position: absolute; inset: 0;
+  -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px);
+  -webkit-mask-image: radial-gradient(ellipse 62vw 68vh at var(--ux, 40%) var(--uy, 56%), transparent 55%, #000 100%);
+  mask-image: radial-gradient(ellipse 62vw 68vh at var(--ux, 40%) var(--uy, 56%), transparent 55%, #000 100%);
+}
+/* El brillo cálido queda apagado (dibujo vectorial plano); el desenfoque de sueño de arriba sí se mantiene */
+.mimo-brillo { display: none; }
 /* Rayos de luz entre los árboles: abanico plano que se mece muy despacio */
 .mimo-rayos {
   position: fixed; inset: -10%; z-index: 1; pointer-events: none; opacity: .2;

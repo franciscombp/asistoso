@@ -258,10 +258,10 @@ plano (`assets/bosque3d.js › toon`):
   oscurece; en 0 todo queda de un solo tono.
 - **La luz sigue a la cámara**, desde arriba a la izquierda: la sombra cae siempre del mismo lado,
   como en una ilustración.
-- **Sin difuminados**: los puntos de polvo, la bruma de la cascada, el bokeh, los fuegos y la
-  sombra de Uku son discos de borde nítido; los rayos de luz son un abanico plano que termina en un
-  arco; el sol de las reacciones son círculos planos con rayos. El desenfoque de lente y el brillo
-  cálido se apagaron (las capas siguen en `mimo.css`, sin efecto).
+- **Sin difuminados**, salvo el sueño: la bruma de la cascada, el bokeh, los fuegos y la sombra de
+  Uku son discos de borde nítido; los rayos de luz son un abanico plano que termina en un arco; el
+  sol de las reacciones son círculos planos con rayos. El brillo cálido se apagó. Se mantienen el
+  **desenfoque claro de sueño** alrededor de Uku y el **polvo de luz** suave que brilla.
 - Las reacciones usan el mismo material (`bosque3d › materialPlano`).
 
 ## Aspecto de Uku: suéter azul, bufanda y lentes amarillos, cara que habla
@@ -477,6 +477,8 @@ siguiente toque. La tecla `F` la alterna en cualquier momento.
 
 Todo el claro parece un sueño idílico (`sueno.js` y `mimo.css`):
 
+- **Desenfoque que sigue a Uku**: él se ve nítido y, alrededor, el mundo se desenfoca en dos
+  capas (como una lente abierta) y se funde con el cielo claro.
 - **Polvo de luz**: unas 300 motas doradas flotan despacio entre los árboles (pequeñas y nítidas,
   y otras grandes y suaves) y respiran con la luz.
 - **Bokeh**: discos grandes, planos y translúcidos muy cerca de la cámara, que se mueven con ella.

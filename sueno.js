@@ -7,7 +7,9 @@
      se mueven con la cámara. Todo de borde nítido, como un dibujo
      vectorial (nada borroso).
    - Bruma: la niebla de la escena se acerca y todo lo lejano se aclara.
-   Los rayos de luz son de mimo.css (.mimo-rayos), planos y de borde nítido.
+   El desenfoque claro de los bordes que sigue a Uku (.mimo-sueno) y los
+   rayos de luz, planos y de borde nítido (.mimo-rayos), son de mimo.css.
+   El polvo es suave y brilla; el bokeh, discos planos.
    ?sueno=0 lo apaga.
    ===================================================================== */
 const r = (a, b) => a + Math.random() * (b - a);
@@ -26,17 +28,26 @@ export function crearSueno(b3d) {
     const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t;
   };
 
+  // El polvo de luz es suave (un punto difuso que brilla), como antes
+  const suave = () => {
+    const c = document.createElement('canvas'); c.width = c.height = 128;
+    const g = c.getContext('2d'), d = g.createRadialGradient(64, 64, 0, 64, 64, 64);
+    d.addColorStop(0, 'rgba(255,255,255,1)'); d.addColorStop(.35, 'rgba(255,255,255,.7)'); d.addColorStop(1, 'rgba(255,255,255,0)');
+    g.fillStyle = d; g.fillRect(0, 0, 128, 128);
+    const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t;
+  };
+
   /* ---------- Polvo de luz ---------- */
   function motas(n, tam, color, opacidad, mezcla) {
     const pos = new Float32Array(n * 3), fase = new Float32Array(n), vel = new Float32Array(n);
     for (let i = 0; i < n; i++) { pos[i * 3] = r(-2.6, 2.6); pos[i * 3 + 1] = r(0, 2.4); pos[i * 3 + 2] = r(-2.8, 2.4); fase[i] = r(0, 6.28); vel[i] = r(.025, .085); }
     const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
-    const m = new THREE.PointsMaterial({ map: disco(false), color, size: tam, transparent: true, opacity: opacidad, depthWrite: false, blending: mezcla, fog: false });
+    const m = new THREE.PointsMaterial({ map: suave(), color, size: tam, transparent: true, opacity: opacidad, depthWrite: false, blending: mezcla, fog: false });
     const o = new THREE.Points(g, m); o.frustumCulled = false; grupo.add(o);
     return { o, m, g, pos, fase, vel, n, base: opacidad };
   }
   // Pequeñas y doradas (se ven sobre el día y brillan de noche) y unas pocas grandes y suaves
-  const polvo = [motas(240, .06, '#ffc93a', .95, THREE.NormalBlending), motas(60, .16, '#fff1b0', .38, THREE.NormalBlending)];
+  const polvo = [motas(240, .06, '#ffc93a', .95, THREE.NormalBlending), motas(60, .16, '#fff1b0', .38, THREE.AdditiveBlending)];
 
   /* ---------- Bokeh: discos borrosos cerca de la lente ---------- */
   const bokeh = [];
