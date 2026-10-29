@@ -270,6 +270,12 @@ Tres botones arriba (o sus teclas) cambian cómo se ve y se usa el claro:
   el dedo (en dos ejes), se acerca o aleja con la **rueda** o el **pellizco**, y **Uku sigue en sus
   cosas** mientras tanto (pasea, lee, mira mariposas). El botón **📍** vuelve a él: la cámara lo sigue
   hasta que vuelvas a arrastrar. En la vista normal la rueda también acerca y aleja.
+- **🌼 Decorar** (tecla `8`): como en Tolan, **las cosas las pones tú, de a una**. En la vista de
+  pájaro, tocas el suelo y aparece lo elegido (florcitas, mata, piedra, arbusto, helecho, guayacán,
+  hongos, farolito o banca) con un aro punteado encima; ◀ ▶ cambia qué es, ↻ lo gira, 🗑 lo quita y
+  ✓ lo deja. Tocar algo ya puesto lo elige. Solo en sitios libres (fuera de los corredores, el lago
+  y lo que hay). Se guarda en este equipo (`mimo_decoracion`). `bosque3d.js › DECORABLES`,
+  `ponerDecoracion`, `puntoDeSuelo`, `pantallaDe`.
 - **🪞 Espejo** (tecla `E`, o «imítame»): Uku **te imita como un Memoji**: gira, cabecea e inclina la
   cabeza como tú, pestañea cuando pestañeas, pone ojos contentos cuando sonríes, y mueve los brazos
   como los tuyos (en espejo: tu izquierda es su derecha). La postura que tengas al encenderlo es el
@@ -295,10 +301,11 @@ entrada del bosque (pasando entre el farol y la cerca, junto a la leña) y el pu
   revisa el diseño y dice qué cosa queda sobre un sendero.
 - **No se dibujan** (un bosque no tiene caminos de tierra): son corredores invisibles. La única pista
   son los **farolitos** en las esquinas y el **poste indicador** entre el lago y la cascada.
-- Con escenario el claro se **puebla** (`decoEsc()`), regado por todo el claro hasta el borde del
-  bosque y con mucho espacio libre: unas 150 matas, 70 margaritas, 50 florcitas silvestres, 22
-  helechitos, 18 arbustos y 14 piedras, bien separados, sin pisar los corredores, la plazuela, el
-  lago ni lo que hay puesto.
+- **Casi vacío, como el planeta de Tolan**: el relleno automático es mínimo (`decoEsc()`: unas 28
+  matas, 14 margaritas, 10 florcitas, 6 piedras, 5 arbustos, 5 helechitos y 7 parches de suelo de
+  otro tono, muy separados y regados hasta el borde del bosque). Lo demás lo pone Fran con
+  **Decorar**. El planeta es chico (8 m de radio, 16 veces la altura de Uku): se nota redondo, y al
+  alejar del todo en la vista de pájaro se ve entero, como un planetita con el claro encima.
 - **Uku pasea por ellos** (su planificador los usa porque son celdas libres) y por ahí se lo
   guía en «Guíame». El claro es más ancho (2,4 m a los lados, hasta 0,85 m al frente).
 - Cada sendero termina en un **destino con nombre** (`destinos()`: plaza, casa, lago, cascada,
@@ -498,7 +505,7 @@ frase hasta haber dicho todas**, y la primera de la baraja nueva nunca es la
 | `P` | Quién vino (visitas y personas) |
 | `H` / `?` | Ayuda en pantalla |
 | `D` | Depurar la cámara: esqueleto, manos con gesto y confianza, caras, expresiones, espejo y control |
-| `K` / `O` / `E` | Modo control (tercera persona) / vista de pájaro / modo espejo |
+| `K` / `O` / `E` / `8` | Modo control (tercera persona) / vista de pájaro / modo espejo / decorar |
 | `C` | Mostrar u ocultar tu imagen en espejo |
 | `X` | Muestra u oculta los controles (también tocando el reloj). **Por defecto están ocultos**: quedan Uku, su globo, el reloj y el clima |
 | `M` / `V` | Voz de Uku / oído (micrófono) |

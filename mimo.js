@@ -510,7 +510,9 @@ function setPajaro(on) {
   vistaPajaro = on;
   if (on && modoControl) setControl(false);
   if (on && modoEspejo) setEspejo(false);
+  if (!on && decorando) setDecorar(false);
   escena.setCamara(on ? 'pajaro' : 'libre');
+  document.body.classList.toggle('vista-pajaro', on); // sin el desenfoque del sueño: se ve el claro entero
   if (on) estado('Vista de pájaro: arrastra para moverte, rueda o pellizco para el zoom', '');
   pintarModos();
 }
@@ -521,6 +523,62 @@ function setEspejo(on) {
   else escena.espejo(null);
   st.ultimaActividad = performance.now(); pintarModos();
 }
+/* ---------- Decorar (como en Tolan): pones las cosas tú, de a una ----------
+   En la vista de pájaro, tocar el suelo pone lo elegido ahí (si el sitio está libre); tocar algo ya puesto lo elige. Con
+   ◀ ▶ se cambia qué es, ↻ lo gira, 🗑 lo quita y ✓ lo deja. Un aro punteado marca lo elegido. Se guarda en este equipo
+   (bosque3d › mimo_decoracion). */
+let decorando = null; // { k, actual }
+const dec = { barra: $('#decorar-barra'), aro: $('#decorar-aro'), que: $('#decorar-que'), btn: $('#btn-decorar') };
+const B3 = () => escena.mundo();
+function setDecorar(on) {
+  if (!!decorando === on) return;
+  if (on) { if (!vistaPajaro) setPajaro(true); decorando = { k: 'flor', actual: null }; decir('Toca el suelo y pongo lo que elijas. Si no te gusta, lo giro o lo quito.', 5000, { hablar: false }); }
+  else decorando = null;
+  document.body.classList.toggle('decorando', !!decorando);
+  dec.barra.hidden = !decorando; dec.btn.setAttribute('aria-pressed', String(!!decorando));
+  pintarDecorar();
+}
+function pintarDecorar() {
+  if (!decorando) { dec.aro.hidden = true; return; }
+  const D = B3().DECORABLES, k = decorando.actual ? (B3().decoracionLista().find(d => d.id === decorando.actual) || {}).k || decorando.k : decorando.k;
+  dec.que.textContent = D[k] ? D[k].nombre : k;
+  dec.barra.querySelector('[data-d="girar"]').disabled = dec.barra.querySelector('[data-d="quitar"]').disabled = !decorando.actual;
+}
+// El aro sigue a lo elegido (la cámara se mueve)
+setInterval(() => {
+  if (!decorando || !decorando.actual) { dec.aro.hidden = true; return; }
+  const d = B3().decoracionLista().find(x => x.id === decorando.actual);
+  const p = d && B3().pantallaDe(d.x, d.z, .05);
+  if (!p) { dec.aro.hidden = true; return; }
+  dec.aro.hidden = false; dec.aro.style.left = p.x + 'px'; dec.aro.style.top = p.y + 'px';
+}, 60);
+// Toque en el suelo (sin arrastrar): poner o elegir
+let toque = null;
+ui.escena.addEventListener('pointerdown', (e) => { toque = { x: e.clientX, y: e.clientY, t: performance.now() }; });
+ui.escena.addEventListener('pointerup', (e) => {
+  if (!decorando || !toque || Math.hypot(e.clientX - toque.x, e.clientY - toque.y) > 8 || performance.now() - toque.t > 600) return;
+  const b = B3(), p = b.puntoDeSuelo(e.clientX, e.clientY);
+  if (!p) return;
+  const cerca = b.decoracionLista().map(d => ({ d, dist: Math.hypot(d.x - p.x, d.z - p.z) })).filter(x => x.dist < .25).sort((a, c) => a.dist - c.dist)[0];
+  if (cerca) { decorando.actual = cerca.d.id; decorando.k = cerca.d.k; pintarDecorar(); return; }
+  if (!b.sitioLibre(p.x, p.z)) { estado('Ahí no cabe: prueba en un sitio libre', 'error'); return; }
+  const nuevo = b.ponerDecoracion(decorando.k, p.x, p.z, Math.random() * 6.28);
+  if (nuevo) { decorando.actual = nuevo.id; efectos.lanzar('ok', { x: e.clientX / innerWidth, y: e.clientY / innerHeight }); st.ultimaActividad = performance.now(); }
+  pintarDecorar();
+});
+dec.barra.addEventListener('click', (e) => {
+  const btn = e.target.closest('[data-d]'); if (!btn || !decorando) return;
+  const b = B3(), ks = Object.keys(b.DECORABLES), i = ks.indexOf(decorando.k);
+  if (btn.dataset.d === 'antes' || btn.dataset.d === 'despues') {
+    decorando.k = ks[(i + (btn.dataset.d === 'antes' ? -1 : 1) + ks.length) % ks.length];
+    if (decorando.actual) b.cambiarDecoracion(decorando.actual, decorando.k); // lo elegido cambia de cosa
+  }
+  if (btn.dataset.d === 'girar' && decorando.actual) b.girarDecoracion(decorando.actual);
+  if (btn.dataset.d === 'quitar' && decorando.actual) { b.quitarDecoracion(decorando.actual); decorando.actual = null; }
+  if (btn.dataset.d === 'listo') { decorando.actual = null; }
+  pintarDecorar();
+});
+dec.btn.addEventListener('click', () => setDecorar(!decorando));
 btnModo.control.addEventListener('click', () => setControl(!modoControl));
 btnModo.pajaro.addEventListener('click', () => setPajaro(!vistaPajaro));
 btnModo.espejo.addEventListener('click', () => setEspejo(!modoEspejo));
@@ -990,6 +1048,7 @@ addEventListener('keydown', (e) => {
   if (k === 'k') return setControl(!modoControl);
   if (k === 'o') return setPajaro(!vistaPajaro);
   if (k === 'e') return setEspejo(!modoEspejo);
+  if (k === '8') return setDecorar(!decorando);
   if (k === 'x') return alternarHud(); // muestra u oculta los controles (quedan el globo, el reloj y el clima)
   if (k === 'm') { voz.setVoz(!voz.vozActiva()); estado(voz.vozActiva() ? 'Voz encendida' : 'Voz apagada'); return; }
   if (k === 'v') return activarOido(!oido.escuchando());
@@ -1051,4 +1110,4 @@ escena.iniciar(ui.escena).then(async () => {
 document.addEventListener('mimo:aprendio', () => { if (document.body.classList.contains('lista')) { efectos.lanzar('jardin', { x: .62, y: .55 }); escena.setClaro(memoria.mundo()); } });
 
 // Para pruebas y para operar desde la consola
-window.Mimo = { alternarHud, tiempo, ambienteReal, seguirCaras, hayDueno, hayVisita, cartel, setModo, get modo() { return modo; }, callandoPorDueno, despierto, jugar, fx, REACCION, mente, escena, reaccionar, procesar, decir, efectos, caras, visitas, atiende, panel, st, gestos, oir, oido, descargas, modoDueno, memoria, abrirTema, cerrarConversacionConFran, guiarme, get guiando() { return !!guiando; }, setControl, setPajaro, setEspejo, imitar, get espejo() { return espejoUltimo; } };
+window.Mimo = { alternarHud, tiempo, ambienteReal, seguirCaras, hayDueno, hayVisita, cartel, setModo, get modo() { return modo; }, callandoPorDueno, despierto, jugar, fx, REACCION, mente, escena, reaccionar, procesar, decir, efectos, caras, visitas, atiende, panel, st, gestos, oir, oido, descargas, modoDueno, memoria, abrirTema, cerrarConversacionConFran, guiarme, get guiando() { return !!guiando; }, setControl, setPajaro, setEspejo, setDecorar, imitar, get espejo() { return espejoUltimo; } };

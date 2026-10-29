@@ -42,6 +42,7 @@
       <button type="button" id="btn-espejo" class="mp-btn" aria-pressed="false" title="Modo espejo: Uku imita tu cabeza, tus ojos y tus brazos (E)">🪞 <span>Espejo</span></button>
       <button type="button" id="btn-pajaro" class="mp-btn" aria-pressed="false" title="Vista de pájaro: arrastra para moverte, rueda o pellizco para el zoom (O)">🗺️ <span>Vista</span></button>
       <button type="button" id="btn-ubicar" class="mp-btn mp-btn--icono" aria-label="Volver a Uku" title="Volver a Uku (la cámara lo sigue)">📍</button>
+      <button type="button" id="btn-decorar" class="mp-btn" aria-pressed="false" title="Decorar: toca el suelo para poner algo, gíralo o quítalo (8)">🌼 <span>Decorar</span></button>
       <button type="button" id="btn-visitas" class="mp-btn mimo-visitas" aria-label="Quién vino" title="Quién vino (P)">👤 <span>Quién vino</span> <b class="mimo-visitas__n"></b></button>
       <button type="button" id="btn-ayuda" class="mp-btn mp-btn--icono" aria-label="Ayuda y atajos" title="Ayuda (H)">?</button>
     </div>
@@ -55,6 +56,18 @@
       <p class="mimo-tarjeta__nota">Se descarga una vez y queda en la caché del navegador. Todo corre en este equipo.</p>
     </section>
   </aside>
+
+  <!-- Decorar: el aro sobre lo que estás poniendo y la barra para elegir, girar, quitar y confirmar -->
+  <div id="decorar-aro" class="mimo-aro" hidden aria-hidden="true"></div>
+  <div id="decorar-barra" class="mimo-decorar" hidden role="toolbar" aria-label="Decorar">
+    <button type="button" class="mp-btn mp-btn--icono" data-d="antes" aria-label="Otra cosa (anterior)">◀</button>
+    <b id="decorar-que">florcitas</b>
+    <button type="button" class="mp-btn mp-btn--icono" data-d="despues" aria-label="Otra cosa (siguiente)">▶</button>
+    <button type="button" class="mp-btn mp-btn--icono" data-d="girar" aria-label="Girar" title="Girar">↻</button>
+    <button type="button" class="mp-btn mp-btn--icono mp-btn--peligro" data-d="quitar" aria-label="Quitar" title="Quitar">🗑</button>
+    <button type="button" class="mp-btn mp-btn--primario" data-d="listo" title="Listo">✓</button>
+    <span class="mimo-decorar__nota">Toca el suelo para poner · toca algo puesto para elegirlo</span>
+  </div>
 
   <!-- Tu imagen en espejo (para que sepas que Uku te ve) -->
   <div id="camara" class="mimo-camara">
@@ -126,7 +139,7 @@
         <h3>Tareas por voz</h3>
         <p>Empieza con «Uku…»: «Uku, recuérdame en 10 minutos tomar agua», «Uku, pon un post-it que diga comprar pan», «Uku, qué recordatorios tengo», «Uku, borra los post-its».</p>
         <h3>Cámara y control</h3>
-        <p><b>🎮 Control</b> (tecla <kbd>K</kbd>): la cámara se pone detrás de Uku y lo manejas tú: con la mano frente a la cámara (arriba = adelante, abajo = atrás, a un lado = gira) o con las flechas. Suelta y sigue en lo suyo. <b>🗺️ Vista</b> (tecla <kbd>O</kbd>): vista de pájaro; arrastra con el mouse o el dedo para moverte por el claro y usa la rueda o el pellizco para acercar o alejar; Uku sigue en sus cosas. <b>📍</b> vuelve a él. <b>🪞 Espejo</b> (tecla <kbd>E</kbd>): Uku imita tu cabeza, tus ojos y tus brazos, como un Memoji.</p>
+        <p><b>🎮 Control</b> (tecla <kbd>K</kbd>): la cámara se pone detrás de Uku y lo manejas tú: con la mano frente a la cámara (arriba = adelante, abajo = atrás, a un lado = gira) o con las flechas. Suelta y sigue en lo suyo. <b>🗺️ Vista</b> (tecla <kbd>O</kbd>): vista de pájaro; arrastra con el mouse o el dedo para moverte por el claro y usa la rueda o el pellizco para acercar o alejar; Uku sigue en sus cosas. <b>📍</b> vuelve a él. <b>🌼 Decorar</b> (tecla <kbd>8</kbd>): como en Tolan, pones tú las cosas de a una: toca el suelo y aparece lo elegido (florcitas, mata, piedra, arbusto, helecho, guayacán, hongos, farolito, banca); con ◀ ▶ cambias qué, ↻ lo gira, 🗑 lo quita y ✓ lo deja. Se guarda en este equipo. <b>🪞 Espejo</b> (tecla <kbd>E</kbd>): Uku imita tu cabeza, tus ojos y tus brazos, como un Memoji.</p>
         <h3>Más gestos</h3>
         <ul>
           <li>🖕 El dedo del medio: Uku responde con humor (¡no tiene dedos!).</li>

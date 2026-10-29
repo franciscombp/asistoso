@@ -45,7 +45,7 @@ function spring(cur, to, velKey, dt) {
 // Mundo: un planeta esférico de radio PLANET_R; su punto más alto (0, 0, 0) es el centro del claro de Uku.
 // Con 12 m el suelo se curva lo justo: desde cualquier cámara se ve el piso hasta ~2,5 m detrás de Uku, así nada
 // queda detrás del horizonte con la base escondida (antes, con 3 m, todo lo de atrás parecía flotar).
-const PLANET_R = 12, PLANET_C = new THREE.Vector3(0, -PLANET_R, 0), FOG_NEAR = 4;
+const PLANET_R = 8, PLANET_C = new THREE.Vector3(0, -PLANET_R, 0), FOG_NEAR = 4;
 let score = 50; // cuántos árboles tiene el bosque sin escenario (0–100)
 let target = null, loadAt = 0, ambLight = null, moodTint = new THREE.Color('#ffffff'); // mientras carga, el bosque crece hasta target; mood tiñe la luz
 // bloom: flores amarillas del campo (0–100); mood: ánimo que se queda (feliz, tranquilo, pensativo)
@@ -406,7 +406,7 @@ const LAGO_P = [1.5, .05], LAGO_R = .5;
 /* Repartido por todo el claro (unos 4,4 m de ancho): a la izquierda el huerto con su cerca y la bandera; al frente a la
    izquierda la banca con el farol; la leña y el buzón junto a la casa; a la derecha el lago con la cascada detrás, el
    arroyo que sale al frente con su puente, la tortuga en la orilla; al fondo a la izquierda, a la entrada del bosque, el letrero; más hongos en la orilla derecha del lago. */
-const ESC_ZONA = { farol: [-.95, .12], banca: [-1.3, .35], cerca: [-1.6, -.55], huerto: [-1.95, -.2], buzon: [-.15, -.62], hongos: [-.6, -.05], hongos2: [2.2, -.35], lena: [-.9, -1.5], tortuga: [1.95, .5], bandera: [-2.05, .22], cascada: [1.75, -.7], puente: [1.05, .7], arroyo: [1.05, .7], heliconias: [[-1.6, .35], [1.1, -1.35], [-1.9, .5], [-1.45, -.95], [2.15, -.05]], hojonas: [[-.3, .95], [-1.85, -.82], [1.55, .9], [-.25, -1.52]], cartel: [-1.6, -1.42], poste: [.95, -.35], farolitos: [[-.42, .86], [.42, .84], [.36, -.25], [-1.35, -.55]], guayas: [[-1.95, -1.05], [2.15, -.75], [-2.15, -.4], [.55, -1.95], [2.3, -1.45]] };
+const ESC_ZONA = { farol: [-.95, .12], banca: [-1.3, .35], cerca: [-1.6, -.55], huerto: [-1.95, -.2], buzon: [-.15, -.62], hongos: [-.6, -.05], lena: [-.9, -1.5], tortuga: [1.95, .5], bandera: [-2.05, .22], cascada: [1.75, -.7], puente: [1.05, .7], arroyo: [1.05, .7], heliconias: [[1.1, -1.35], [-1.9, .5], [2.15, -.05]], hojonas: [[-1.85, -.82], [1.55, .9]], cartel: [-1.6, -1.42], poste: [.95, -.35], farolitos: [[-.42, .86], [.36, -.25]], guayas: [[-1.95, -1.05], [2.15, -.75], [.55, -1.95]] };
 const PASEO = [[1.45, -1.4], [.95, -1.5], [-1.2, -1.45]]; // pasillos por detrás del lago y junto al letrero que los árboles no tapan
 /* ---------- Senderos ----------
    Corredores invisibles que unen los lugares del claro, saliendo de la plazuela entre los canteros: a la casa, al lago,
@@ -448,7 +448,7 @@ function quienBloquea(x, z) {
   if (!ZONA.canteros.every(([bx, bz]) => Math.hypot(x - bx, z - bz) > BED_R + .08)) return 'cantero';
   for (let i = 0; i < ZONA.hogar.length && i < 1; i++) if (Math.hypot(x - ZONA.hogar[i][0], z - ZONA.hogar[i][1]) <= .38) return 'casa';
   for (let i = 0; i < ZONA.guayacanes.length; i++) if (Math.hypot(x - ZONA.guayacanes[i][0], z - ZONA.guayacanes[i][1]) <= .28) return 'guayacan' + i;
-  const RADIO = { cascada: .42, puente: .3, arroyo: .3, farol: .18, banca: .3, cerca: .3, huerto: .3, cartel: .32, lena: .18, tortuga: .18, hongos: .16, hongos2: .16, buzon: .14, bandera: .1 };
+  const RADIO = { cascada: .42, puente: .3, arroyo: .3, farol: .18, banca: .3, cerca: .3, huerto: .3, cartel: .32, lena: .18, tortuga: .18, hongos: .16, buzon: .14, bandera: .1, poste: .14 };
   for (const k in ESC_ZONA) { const v = ESC_ZONA[k]; if (!Array.isArray(v[0]) && Math.hypot(x - v[0], z - v[1]) < (RADIO[k] || .22)) return k; }
   if (!(ESC_ZONA.hojonas || []).every(([hx, hz]) => Math.hypot(x - hx, z - hz) > .16)) return 'hojona';
   if (!ESC_ZONA.guayas.every(([gx, gz]) => Math.hypot(x - gx, z - gz) > .32)) return 'guaya';
@@ -458,7 +458,7 @@ function quienBloquea(x, z) {
 export function destinos() { return Object.assign({}, DESTINOS); }
 export function destino(nombre) { const d = DESTINOS[nombre]; return d ? { x: d[0], z: d[1] } : null; }
 const lagoEnForma = () => Math.max(.7, Math.min(1.4, esc && esc.lago || 1)) * LAGO_R;
-const escTrees = () => scatter(19, 40, 1.2, 2.6, (x, z) => (z < -1.25 || Math.abs(x) > 1.7) && TALL(x, z) && awayBig(.6)(x, z) && distSendero(x, z) > .34 && Math.hypot(x - LAGO_P[0], z - LAGO_P[1]) > lagoEnForma() + .45 && Math.hypot(x - ESC_ZONA.cartel[0], z - ESC_ZONA.cartel[1]) > .6 && Math.hypot(x - ESC_ZONA.cascada[0], z - ESC_ZONA.cascada[1]) > .85 && Math.hypot(x - ESC_ZONA.huerto[0], z - ESC_ZONA.huerto[1]) > .45 && PASEO.every(([px, pz]) => Math.hypot(x - px, z - pz) > .45) && ESC_ZONA.guayas.every(([gx, gz]) => Math.hypot(x - gx, z - gz) > .55), .42);
+const escTrees = () => scatter(19, 40, 1.2, 2.6, (x, z) => (z < -1.25 || Math.abs(x) > 1.7) && TALL(x, z) && VISIBLE(x, z - .3) && awayBig(.6)(x, z) && distSendero(x, z) > .34 && Math.hypot(x - LAGO_P[0], z - LAGO_P[1]) > lagoEnForma() + .45 && Math.hypot(x - ESC_ZONA.cartel[0], z - ESC_ZONA.cartel[1]) > .6 && Math.hypot(x - ESC_ZONA.cascada[0], z - ESC_ZONA.cascada[1]) > .85 && Math.hypot(x - ESC_ZONA.huerto[0], z - ESC_ZONA.huerto[1]) > .45 && PASEO.every(([px, pz]) => Math.hypot(x - px, z - pz) > .45) && ESC_ZONA.guayas.every(([gx, gz]) => Math.hypot(x - gx, z - gz) > .55), .42);
 // Lo que se ve en el claro
 function enClaro() {
   return { props: claro.casa ? ['casa'] : [], guayas: Math.max(0, Math.min(4, claro.guayacanes | 0)),
@@ -490,7 +490,7 @@ function escenario(want, pal, Z, id) {
     return o;
   };
   put('farol', E.farol, 1.1); put('banca', E.banca, 1.3, .9); put('cerca', E.cerca, 1.4, face(...E.cerca) * .3); put('huerto', E.huerto, 1.25);
-  put('buzon', E.buzon, 1.1); put('hongos', E.hongos, 1.2); want['Shongos2'] = () => Z(item('hongos', '', pal, { x: E.hongos2[0], z: E.hongos2[1], rot: 1 }, 1.4, { gs: 1.1 }), 'escenario');
+  put('buzon', E.buzon, 1.1); put('hongos', E.hongos, 1.2);
   put('lena', E.lena, 1.1);
   // El poste indicador entre el lago y la cascada, y farolitos en las esquinas de los senderos
   put('poste', E.poste, 1.2, .6); (E.farolitos || []).forEach(([x, z], i) => { want['SFAROL' + i] = () => Z(item('farolito', '', pal, { x, z, rot: i }, 1.1, { gs: 1.2 }), 'escenario'); });
@@ -555,6 +555,8 @@ function buildForest(full) {
   FLOWERS.slice(0, Math.round(f.flores / 100 * FLOWERS.length)).forEach((p, i) => { want['F' + i] = () => Z(item('flor', p.v, pal, { x: p.x, z: p.z, rot: Math.atan2(-p.x, 3.2 - p.z) + (p.t - .5) * .8 }, .95 + p.s * .45, { sway: .1, top: .12 }), 'canteros'); });
   if (f.brotes) SPROUTS.concat(FLOWERS.slice(0, 20)).forEach((p, i) => { want['B' + i] = () => Z(item('brote', p.v, pal, p, .9 + p.s * .5, { sway: .08, top: .06 + p.v * .012 }), 'canteros'); });
   planted.forEach(p => { want[p.key] = () => item('brote', 1, pal, p, 1.15, { sway: .08, top: .07, gs: .32 }); });
+  // Lo que Fran puso a mano (decorar): cada cosa con su sitio y su giro
+  decoracion.forEach(d => { const D = DECORABLES[d.k]; if (D) want['D' + d.id] = () => Z(item(D.kind, D.v == null ? '' : D.v, pal, { x: d.x, z: d.z, rot: d.rot || 0 }, D.base, { sway: D.sway || 0, gs: 1.2 }), 'decoracion'); });
   const have = {};
   forest.children.forEach(o => { have[o.userData.key] = o; });
   Object.keys(have).forEach(k => { const u = have[k].userData; u.dir = want[k] ? 1 : -1; if (u.dir < 0) u.delay = 0; });
@@ -582,9 +584,10 @@ function decoEsc() {
   const libre = (x, z) => distSendero(x, z) > .24 && Math.hypot(x - PLAZA[0], z - PLAZA[1]) > .6 && Math.hypot(x - LAGO_P[0], z - LAGO_P[1]) > lagoEnForma() + .18
     && !quienBloquea(x, z) && VISIBLE(x, z) && z < 1.3 && z > -2.6;
   return DECO_ESC = {
-    tufts: scatter(5, 150, .4, 3.4, libre, .22), rocks: scatter(17, 14, .9, 3.3, libre, .6),
-    bushes: scatter(23, 18, 1.2, 3.3, (x, z) => libre(x, z) && Math.hypot(x, z) > 1.3, .7), daisies: scatter(43, 70, .5, 3.4, libre, .2),
-    silvestres: scatter(61, 50, .5, 3.4, libre, .28), helechitos: scatter(67, 22, 1.0, 3.3, (x, z) => libre(x, z) && Math.hypot(x, z) > 1.1, .5)
+    tufts: scatter(5, 28, .5, 3.4, libre, .45), rocks: scatter(17, 6, 1.0, 3.3, libre, 1.1),
+    bushes: scatter(23, 5, 1.4, 3.3, (x, z) => libre(x, z) && Math.hypot(x, z) > 1.5, 1.2), daisies: scatter(43, 14, .6, 3.4, libre, .5),
+    silvestres: scatter(61, 10, .6, 3.4, libre, .6), helechitos: scatter(67, 5, 1.2, 3.3, (x, z) => libre(x, z) && Math.hypot(x, z) > 1.3, 1.0),
+    parches: scatter(73, 7, .9, 3.2, (x, z) => distSendero(x, z) > .3 && Math.hypot(x - LAGO_P[0], z - LAGO_P[1]) > lagoEnForma() + .5 && VISIBLE(x, z), 1.1)
   };
 }
 function buildGarden(pal) {
@@ -596,6 +599,7 @@ function buildGarden(pal) {
   D.rocks.filter(enLago).forEach(p => parts.push(pc(new THREE.DodecahedronGeometry(.06, 0), pal.rock, M(p, .7 + p.s).multiply(TRS([0, .015, 0], [p.t, 0, 0], [1, .55, .8])))));
   D.bushes.filter(enLago).forEach(p => { const m = M(p, 1 + p.s * .5), c = pal.round[p.v % pal.round.length]; [[0, .1, 0, .13], [.1, .07, .04, .09], [-.09, .06, -.03, .08]].forEach(([x, y, z, r]) => parts.push(pc(new THREE.IcosahedronGeometry(r, 0), c, m.clone().multiply(TRS([x, y, z], [p.t, 0, 0]))))); });
   D.daisies.filter(enLago).forEach(p => { const m = M(p, .8 + p.s * .4); parts.push(pc(CYL(.003, .004, .05, 3), pal.grass, m.clone().multiply(TRS([0, .025, 0]))), pc(new THREE.SphereGeometry(.01, 5, 3), pal.dust, m.clone().multiply(TRS([0, .052, 0], 0, [1, .6, 1])))); });
+  (D.parches || []).forEach((p, i) => { const col = pal.bg === '#1f1f1f' ? ['#30333b', '#2f3238'][i % 2] : ['#c7ccd4', '#b0b7c2'][i % 2]; parts.push(pc(new THREE.CircleGeometry(.5 + p.s * .5, 18), col, M(p, 1).multiply(TRS([0, .004, 0], [-Math.PI / 2, 0, 0], [1, .7 + p.t * .5, 1])))); });
   (D.silvestres || []).forEach(p => { const m = M(p, .9 + p.s * .5); PARTS.silvestre(pal, p.v).forEach(g => parts.push(g.applyMatrix4(m))); });
   (D.helechitos || []).forEach(p => { const m = M(p, .8 + p.s * .6); PARTS.helechito(pal, p.v).forEach(g => parts.push(g.applyMatrix4(m))); });
   garden = new THREE.Mesh(kit(parts), LAMB); garden.visible = !focus; scene.add(garden);
@@ -806,7 +810,7 @@ function okWalk(x, z) {
   for (let i = 0; i < ng && i < ZONA.guayacanes.length; i++) if (Math.hypot(x - ZONA.guayacanes[i][0], z - ZONA.guayacanes[i][1]) <= (esc ? .28 : .38)) return false;
   if (esc) {
     if (Math.hypot(x - LAGO_P[0], z - LAGO_P[1]) < lagoEnForma() + .12) return false;
-    const RADIO = { cascada: .42, puente: .3, arroyo: .3, farol: .18, banca: .3, cerca: .3, huerto: .3, cartel: .32, lena: .18, tortuga: .18, hongos: .16, hongos2: .16, buzon: .14, bandera: .1, poste: .14 };
+    const RADIO = { cascada: .42, puente: .3, arroyo: .3, farol: .18, banca: .3, cerca: .3, huerto: .3, cartel: .32, lena: .18, tortuga: .18, hongos: .16, buzon: .14, bandera: .1, poste: .14 };
     for (const k in ESC_ZONA) { const v = ESC_ZONA[k]; if (!Array.isArray(v[0]) && Math.hypot(x - v[0], z - v[1]) < (RADIO[k] || .22)) return false; }
     if (!(ESC_ZONA.hojonas || []).every(([hx, hz]) => Math.hypot(x - hx, z - hz) > .16)) return false;
     if (!(ESC_ZONA.farolitos || []).every(([hx, hz]) => Math.hypot(x - hx, z - hz) > .1)) return false;
@@ -828,7 +832,7 @@ function sitios() {
   };
   add('lago', LAGO_P, lagoEnForma() + .22); add('lago2', LAGO_P, lagoEnForma() + .24, Math.PI * .95); add('lago3', LAGO_P, lagoEnForma() + .24, Math.PI * .62);
   add('banca', E.banca, .42); if (L.length && L[L.length - 1].nombre === 'banca') L[L.length - 1].mira.banca = true; add('huerto', E.huerto, .42); add('farol', E.farol, .3); add('cartel', E.cartel, .45);
-  add('cascada', E.cascada, .55); add('puente', E.puente, .4); add('hongos', E.hongos, .3); add('hongos2', E.hongos2, .3); add('buzon', E.buzon, .28); add('lena', E.lena, .32); add('tortuga', E.tortuga, .3); add('bandera', E.bandera, .25); add('cerca', E.cerca, .4);
+  add('cascada', E.cascada, .55); add('puente', E.puente, .4); add('hongos', E.hongos, .3); add('buzon', E.buzon, .28); add('lena', E.lena, .32); add('tortuga', E.tortuga, .3); add('bandera', E.bandera, .25); add('cerca', E.cerca, .4);
   const fs = enClaro();
   if (fs.props.length && ZONA.hogar[0]) add('casa', ZONA.hogar[0], .55); // la puerta de su casa
   // Los finales de los senderos (el letrero del bosque, la plazuela) también son lugares de paseo
@@ -1345,9 +1349,13 @@ function frame(now) {
   if (camAmt.pajaro > .001) {
     if (pajaro.seguir) { pajaro.x = lerp(pajaro.x, pos.x, Math.min(1, dt * 2)); pajaro.z = lerp(pajaro.z, pos.z, Math.min(1, dt * 2)); }
     const py = groundY(pajaro.x, pajaro.z), z = pajaro.zoom;
-    _tp.set(pajaro.x, py + 2.3 * z, pajaro.z + 1.6 * z); _tl.set(pajaro.x, py, pajaro.z);
+    // Cuanto más lejos, más desde arriba (de cerca se ve en perspectiva; de lejos, el planeta entero centrado)
+    const atras = 1.6 * z / (1 + Math.max(0, z - 1) * .6);
+    _tp.set(pajaro.x, py + 2.3 * z, pajaro.z + atras); _tl.set(pajaro.x, py - Math.max(0, z - 1) * .35, pajaro.z);
     _cp.lerp(_tp, camAmt.pajaro); _cl.lerp(_tl, camAmt.pajaro);
   }
+  // Desde lejos la niebla se abre: así, alejando del todo, se ve el claro entero y el planeta redondo (como en Tolan)
+  if (scene.fog) { const lejos = camAmt.pajaro * Math.max(0, pajaro.zoom - 1) * 4; scene.fog.near = FOG_NEAR + lejos; scene.fog.far = 9.5 + lejos * 2.5; }
   camera.position.copy(_cp);
   camera.up.set(0, 1, 0);
   camera.lookAt(_cl);
@@ -1402,6 +1410,55 @@ function espejoPaso(dt) {
   lado('Left', espejo.brazos.L); lado('Right', espejo.brazos.R);
 }
 
+/* ---------- Decorar (como en Tolan): Fran pone cosas de a una, donde toca, y las gira o las quita ----------
+   Las cosas que se pueden poner (clave → pieza), lo puesto (localStorage mimo_decoracion) y lo que hace falta para
+   la interfaz: el punto del suelo bajo un toque y dónde cae en pantalla un punto del claro. */
+export const DECORABLES = {
+  flor: { kind: 'silvestre', v: 0, base: 1.1, nombre: 'florcitas' }, mata: { kind: 'tufts', base: 1, nombre: 'mata' },
+  piedra: { kind: 'piedra', base: 1, nombre: 'piedra' }, arbusto: { kind: 'arbusto', base: 1.1, nombre: 'arbusto' },
+  helecho: { kind: 'helechito', v: 1, base: 1.2, nombre: 'helecho' }, guaya: { kind: 'guaya', v: 1, base: 1.0, sway: .015, nombre: 'guayacán' },
+  hongos: { kind: 'hongos', base: 1.2, nombre: 'hongos' }, farolito: { kind: 'farolito', base: 1.1, nombre: 'farolito' }, banca: { kind: 'banca', base: 1.3, nombre: 'banca' }
+};
+Object.assign(PARTS, {
+  tufts: pal => [-.35, 0, .35].map((a, i) => pc(new THREE.ConeGeometry(.012, .07 + (i % 2) * .03, 3), pal.grass, [a * .04, .04 + (i % 2) * .015, 0], [0, 0, a])),
+  piedra: pal => [pc(new THREE.DodecahedronGeometry(.08, 0), pal.rock, [0, .03, 0], [.3, .5, 0], [1.2, .6, .9]), pc(new THREE.DodecahedronGeometry(.045, 0), pal.rock, [.1, .02, .05], [.1, .9, 0], [1, .6, 1])],
+  arbusto: pal => [[0, .12, 0, .16], [.12, .08, .05, .11], [-.11, .07, -.04, .1]].map(([x, y, z, r], i) => pc(new THREE.IcosahedronGeometry(r, 0), pal.round[i % pal.round.length], [x, y, z], [.2 * i, 0, 0]))
+});
+const KD = 'mimo_decoracion';
+let decoracion = (() => { try { return JSON.parse(localStorage.getItem(KD) || '[]'); } catch (e) { return []; } })();
+function guardarDecoracion() { try { localStorage.setItem(KD, JSON.stringify(decoracion)); } catch (e) {} if (renderer) buildForest(); }
+export function decoracionLista() { return decoracion.slice(); }
+export function ponerDecoracion(k, x, z, rot = 0) { if (!DECORABLES[k]) return null; const d = { id: Date.now().toString(36) + Math.random().toString(36).slice(2, 5), k, x: +x, z: +z, rot: +rot }; decoracion.push(d); guardarDecoracion(); return d; }
+export function moverDecoracion(id, x, z) { const d = decoracion.find(o => o.id === id); if (d) { d.x = +x; d.z = +z; guardarDecoracion(); } }
+export function girarDecoracion(id, paso = Math.PI / 4) { const d = decoracion.find(o => o.id === id); if (d) { d.rot = (d.rot || 0) + paso; guardarDecoracion(); } }
+export function cambiarDecoracion(id, k) { const d = decoracion.find(o => o.id === id); if (d && DECORABLES[k]) { d.k = k; guardarDecoracion(); } }
+export function quitarDecoracion(id) { decoracion = decoracion.filter(o => o.id !== id); guardarDecoracion(); }
+export function quitarTodaDecoracion() { decoracion = []; guardarDecoracion(); }
+// ¿Se puede poner algo ahí? Fuera de los corredores, del lago, de lo que hay puesto y dentro del claro
+export function sitioLibre(x, z) { return !!esc && distSendero(x, z) > .14 && Math.hypot(x - LAGO_P[0], z - LAGO_P[1]) > lagoEnForma() + .14 && !quienBloquea(x, z) && Math.hypot(x, z * .8) < 3.3 && VISIBLE(x, z); }
+// El punto del claro (x, z) bajo un punto de la pantalla (px del contenedor), o null si no toca el suelo
+const _rayS = new THREE.Raycaster(), _ndcS = new THREE.Vector2(), _esf = new THREE.Sphere(), _hit = new THREE.Vector3();
+export function puntoDeSuelo(cx, cy) {
+  if (!host || !camera) return null;
+  const r = renderer.domElement.getBoundingClientRect();
+  _ndcS.set((cx - r.left) / r.width * 2 - 1, -(cy - r.top) / r.height * 2 + 1);
+  _rayS.setFromCamera(_ndcS, camera);
+  _esf.set(PLANET_C, PLANET_R);
+  if (!_rayS.ray.intersectSphere(_esf, _hit)) return null;
+  // de la esfera a las coordenadas del claro (las que usa surf): la distancia sobre la superficie en cada eje
+  const n = _hit.clone().sub(PLANET_C).divideScalar(PLANET_R), h = Math.hypot(n.x, n.z), a = Math.acos(clamp(n.y, -1, 1)), d = a * PLANET_R;
+  if (h < 1e-6) return { x: 0, z: 0 };
+  return { x: n.x / h * d, z: n.z / h * d };
+}
+// Dónde cae en pantalla (px del contenedor) un punto del claro
+const _pp = new THREE.Vector3();
+export function pantallaDe(x, z, alto = 0) {
+  if (!host || !camera) return null;
+  surf(x, z, _sp); _pp.copy(PLANET_C).addScaledVector(_sp, PLANET_R + alto).project(camera);
+  if (_pp.z > 1) return null;
+  return { x: (_pp.x + 1) / 2 * host.clientWidth, y: (1 - _pp.y) / 2 * host.clientHeight };
+}
+
 /* ---------- Cámaras: libre (la de siempre), tercera (detrás de Uku, para manejarlo) y pájaro (el claro desde
    arriba: se arrastra con el mouse o el dedo, hace zoom con la rueda o el pellizco, y Uku sigue en lo suyo) ---------- */
 let camModo = 'libre', terceraYaw = 0;
@@ -1413,7 +1470,8 @@ export function vistaSigueAUku() { return camModo !== 'pajaro' || pajaro.seguir;
 export function centrarEnUku() { pajaro.seguir = true; }
 // Mover la vista de pájaro (en metros del claro) y hacer zoom (factor); en la vista libre el zoom es el de siempre
 export function moverVista(dx, dz) { pajaro.seguir = false; pajaro.x = clamp(pajaro.x + dx, -2.8, 2.8); pajaro.z = clamp(pajaro.z + dz, -2.4, 1.4); }
-export function zoomVista(f) { if (camModo === 'pajaro') pajaro.zoom = clamp(pajaro.zoom * f, .4, 2.4); else setZoom(zoomTo * f); }
+export function zoomVista(f) { if (camModo === 'pajaro') pajaro.zoom = clamp(pajaro.zoom * f, .4, 7.5); else setZoom(zoomTo * f); }
+export function zoomPajaro() { return pajaro.zoom; }
 
 // El mundo es una ilustración plana; Uku va encima con su propia luz suave (como un muñeco de verdad),
 // sin borrar la profundidad: lo que está delante de él lo sigue tapando
@@ -1458,7 +1516,7 @@ function init() {
   ambLight = new THREE.AmbientLight('#ffffff', Math.PI); scene.add(ambLight);
   LAMB = new THREE.MeshLambertMaterial({ vertexColors: true });
   smokeM = new THREE.MeshBasicMaterial({ color: pal.dust, transparent: true, opacity: .85 });
-  ground = new THREE.Mesh(new THREE.SphereGeometry(PLANET_R, 160, 48, 0, Math.PI * 2, 0, .9), new THREE.MeshLambertMaterial({ color: pal.ground }));
+  ground = new THREE.Mesh(new THREE.SphereGeometry(PLANET_R, 160, 48, 0, Math.PI * 2, 0, .55), new THREE.MeshLambertMaterial({ color: pal.ground }));
   ground.position.copy(PLANET_C); scene.add(ground);
   // Uku tiene su escena con su luz: un cielo claro, un rebote del suelo y un sol suave arriba a la izquierda
   bearScene = new THREE.Scene();
