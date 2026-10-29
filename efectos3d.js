@@ -1,8 +1,11 @@
 /* =====================================================================
    Uku · efectos en el mundo 3D
    Los globos, los corazones, el confeti, los fuegos, las flores, el sol y
-   los emojis de las reacciones ya no son una capa 2D pegada a la pantalla:
-   son objetos de la escena (three.js, la misma de Uku y su claro). Viven en
+   todas las reacciones son objetos 3D del mundo de Uku (three.js, la misma
+   escena de su claro): piezas modeladas con el estilo del claro (colores
+   planos, volumen, un borde azul marino), no imágenes ni emojis. Estrellas,
+   notas, gotas, copos, tarro de miel, abeja, flores, tazas, trofeos,
+   pasteles, regalos, rayos, lunas, zetas… Viven en
    el espacio: tienen profundidad, pasan delante o detrás de Uku y de los
    árboles, se alejan con la niebla y se mueven con la cámara.
    Misma interfaz que efectos.js: lanzar(tipo, { x, y }) con x, y en 0–1 de la
@@ -91,6 +94,80 @@ export function crearEfectos3d(b3d) {
     return agregar(Object.assign({ o, tipo: 'malla', size: size * K, vira: false, bambolea: true }, extra));
   }
 
+  /* ---------- Piezas 3D de las reacciones ----------
+     Cada pieza es un grupo de mallas de ~1 de alto, centrado, con su borde azul marino detrás (como los corazones y los
+     globos). Las siluetas planas (estrella, rayo, zeta, signos, nota) se extruyen con bisel para que tengan volumen. Las
+     geometrías se hacen una vez y se comparten. */
+  const C = { amarillo: '#ffdd00', oro: '#f2c94c', miel: '#f2b632', marino: MARINO, azul: '#2c4f9e', celeste: '#9fb8e6', crema: '#efe9df', blanco: '#ffffff',
+    gris: '#aeb6c7', piedra: '#9aa2b2', rosa: '#f29bb0', rojo: '#e2574c', verde: '#9fbf7a', hoja: '#7fa86a', cafe: '#8a6a4a', cafeOsc: '#5b4632' };
+  const GEOS = {};
+  const geoDe = (k, f) => GEOS[k] || (GEOS[k] = f());
+  const extruir = (shape, depth = .16) => { const g = new THREE.ExtrudeGeometry(shape, { depth, bevelEnabled: true, bevelThickness: .04, bevelSize: .035, bevelSegments: 2, curveSegments: 12 }); g.center(); return g; };
+  const forma = (pts) => { const sh = new THREE.Shape(); sh.moveTo(pts[0][0], pts[0][1]); pts.slice(1).forEach(([x, y]) => sh.lineTo(x, y)); sh.closePath(); return sh; };
+  // Una malla con su borde detrás (borde = false para piezas chicas o translúcidas)
+  function m(geo, color, pos, rot, esc, borde = true, extra) {
+    const g = new THREE.Group(), c = new THREE.Mesh(geo, basico(color, extra));
+    g.add(c);
+    if (borde) { const b = new THREE.Mesh(geo, contorno); b.scale.setScalar(1.1); g.add(b); }
+    if (pos) g.position.set(...pos);
+    if (rot) g.rotation.set(...rot);
+    if (esc) { if (typeof esc === 'number') g.scale.setScalar(esc); else g.scale.set(...esc); }
+    return g;
+  }
+  const ESTRELLA = () => geoDe('estrella', () => { const pts = []; for (let i = 0; i < 10; i++) { const a = Math.PI / 2 + i * Math.PI / 5, rr = i % 2 ? .22 : .5; pts.push([Math.cos(a) * rr, Math.sin(a) * rr]); } return extruir(forma(pts), .14); });
+  const RAYO = () => geoDe('rayo', () => extruir(forma([[.08, .5], [-.22, -.02], [-.02, -.02], [-.1, -.5], [.24, .08], [.03, .08], [.16, .5]]), .12));
+  const ZETA = () => geoDe('zeta', () => extruir(forma([[-.3, .4], [.3, .4], [.3, .28], [-.1, -.28], [.3, -.28], [.3, -.4], [-.3, -.4], [-.3, -.28], [.1, .28], [-.3, .28]]), .12));
+  const CHECK = () => geoDe('check', () => extruir(forma([[-.42, .02], [-.28, .16], [-.1, -.04], [.3, .4], [.44, .26], [-.1, -.32]]), .14));
+  const CRUZ = () => geoDe('cruz', () => { const g = extruir(forma([[-.1, .4], [.1, .4], [.1, .1], [.4, .1], [.4, -.1], [.1, -.1], [.1, -.4], [-.1, -.4], [-.1, -.1], [-.4, -.1], [-.4, .1], [-.1, .1]]), .14); g.rotateZ(Math.PI / 4); return g; });
+  const GOTA = () => geoDe('gota', () => { const sh = new THREE.Shape(); sh.moveTo(0, .5); sh.bezierCurveTo(.12, .3, .34, .05, .34, -.14); sh.absarc(0, -.14, .34, 0, Math.PI, true); sh.bezierCurveTo(-.34, .05, -.12, .3, 0, .5); return extruir(sh, .2); });
+  const NOTA = () => geoDe('nota', () => { const sh = new THREE.Shape(); sh.absellipse(-.12, -.32, .17, .13, 0, Math.PI * 2, false, -.4); return extruir(sh, .12); });
+  const LUNA = () => geoDe('luna', () => new THREE.TorusGeometry(.32, .13, 10, 24, Math.PI * 1.25));
+  const SPH = (n) => geoDe('sph' + n, () => new THREE.SphereGeometry(.5, n, Math.max(6, n - 4)));
+  const CIL = (rt, rb, h, n = 18) => geoDe(`cil${rt}_${rb}_${h}_${n}`, () => new THREE.CylinderGeometry(rt, rb, h, n));
+  const CAJA = (x, y, z) => geoDe(`caja${x}_${y}_${z}`, () => new THREE.BoxGeometry(x, y, z));
+  const TORO = (r1, r2, arc = Math.PI * 2) => geoDe(`toro${r1}_${r2}_${arc}`, () => new THREE.TorusGeometry(r1, r2, 8, 20, arc));
+  const PIEZAS = {
+    estrella: () => m(ESTRELLA(), pick([C.amarillo, C.oro, C.amarillo])),
+    chispa: () => m(geoDe('chispa', () => new THREE.OctahedronGeometry(.32)), pick([C.amarillo, C.blanco, C.oro]), null, null, [.7, 1.2, .7], false),
+    corazonP: () => { const g = new THREE.Group(), cc = new THREE.Mesh(CORAZON, basico(pick(AMARILLOS))), b = new THREE.Mesh(CORAZON, contorno); b.scale.setScalar(1.12); g.add(b, cc); g.scale.setScalar(.9); return g; },
+    rayo: () => m(RAYO(), C.amarillo),
+    zeta: () => m(ZETA(), pick([C.celeste, C.blanco])),
+    check: () => m(CHECK(), C.verde),
+    cruz: () => m(CRUZ(), C.rojo),
+    gota: () => m(GOTA(), C.celeste),
+    luna: () => m(LUNA(), C.amarillo, null, [0, 0, -.6]),
+    nota: () => { const g = new THREE.Group(); g.add(m(NOTA(), C.marino, null, null, null, false), m(CAJA(.06, .62, .06), C.marino, [.03, 0, 0], null, null, false), m(CAJA(.24, .07, .06), C.marino, [.14, .28, 0], [0, 0, -.35], null, false)); return g; },
+    exclama: () => { const g = new THREE.Group(); g.add(m(CAJA(.16, .56, .16), C.rojo, [0, .12, 0]), m(SPH(10), C.rojo, [0, -.36, 0], null, .2)); return g; },
+    pregunta: () => { const g = new THREE.Group(); g.add(m(TORO(.2, .07, Math.PI * 1.4), C.azul, [0, .2, 0], [0, 0, -.6]), m(CAJA(.12, .2, .12), C.azul, [.02, -.1, 0]), m(SPH(10), C.azul, [.02, -.36, 0], null, .17)); return g; },
+    copo: () => { const g = new THREE.Group(); for (let i = 0; i < 3; i++) g.add(m(CAJA(.9, .08, .08), C.blanco, null, [0, 0, i * Math.PI / 3], null, false)); for (let i = 0; i < 6; i++) { const a = i * Math.PI / 3; g.add(m(SPH(8), C.celeste, [Math.cos(a) * .45, Math.sin(a) * .45, 0], null, .14, false)); } return g; },
+    burbuja: () => m(SPH(14), C.celeste, null, null, .7, false, { transparent: true, opacity: .55 }),
+    nube: () => { const g = new THREE.Group(); [[-.25, -.05, .32], [.05, .08, .4], [.32, -.06, .3], [0, -.16, .3]].forEach(([x, y, rr]) => g.add(m(SPH(12), C.gris, [x, y, 0], null, rr * 2, false))); return g; },
+    flor: () => { const c = pick([C.amarillo, C.oro, C.rosa, C.blanco]), g = new THREE.Group(); for (let i = 0; i < 5; i++) { const a = i / 5 * Math.PI * 2; g.add(m(SPH(10), c, [Math.cos(a) * .24, Math.sin(a) * .24, 0], null, [.34, .34, .14], false)); } g.add(m(SPH(10), C.miel, [0, 0, .04], null, [.26, .26, .2], false)); return g; },
+    hoja: () => m(SPH(10), pick([C.verde, C.hoja]), null, [0, 0, .6], [.4, .8, .12], false),
+    brote: () => { const g = new THREE.Group(); g.add(m(CIL(.03, .03, .4, 6), C.hoja, [0, -.15, 0], null, null, false), m(SPH(10), C.verde, [-.13, .08, 0], [0, 0, .7], [.32, .16, .12], false), m(SPH(10), C.verde, [.13, .1, 0], [0, 0, -.7], [.32, .16, .12], false)); return g; },
+    miel: () => { const g = new THREE.Group(); g.add(m(CIL(.3, .32, .55), C.miel, [0, -.08, 0]), m(CIL(.33, .33, .12), C.azul, [0, .26, 0]), m(CIL(.31, .31, .2, 18), C.crema, [0, -.06, .02], null, [1, 1, 1.02], false), m(SPH(10), C.miel, [.12, .34, .1], null, [.18, .1, .18], false)); return g; },
+    abeja: () => { const g = new THREE.Group(); g.add(m(SPH(14), C.amarillo, null, null, [.62, .46, .46])); [-.1, .1].forEach(x => g.add(m(CIL(.235, .235, .07, 16), C.marino, [x, 0, 0], [0, 0, Math.PI / 2], null, false))); [-.08, .1].forEach((x, i) => g.add(m(SPH(10), C.blanco, [x, .26, 0], [0, 0, i ? -.5 : .5], [.18, .3, .06], false, { transparent: true, opacity: .85 }))); g.add(m(SPH(8), C.marino, [.28, .05, .12], null, .07, false)); return g; },
+    taza: () => { const g = new THREE.Group(); g.add(m(CIL(.3, .24, .42), C.crema, [0, -.08, 0]), m(TORO(.13, .045), C.crema, [.32, -.06, 0], null, null, false), m(CIL(.27, .27, .03), C.cafeOsc, [0, .13, 0], null, null, false)); [-.08, .08].forEach((x, i) => g.add(m(TORO(.07, .02, Math.PI), C.blanco, [x, .3 + i * .06, 0], [0, 0, i ? Math.PI : 0], null, false))); return g; },
+    trofeo: () => { const g = new THREE.Group(); g.add(m(CIL(.3, .14, .4), C.oro, [0, .14, 0]), m(CIL(.05, .05, .2), C.oro, [0, -.16, 0]), m(CAJA(.36, .1, .22), C.cafe, [0, -.3, 0]), m(TORO(.12, .035, Math.PI), C.oro, [-.3, .18, 0], [0, 0, Math.PI / 2], null, false), m(TORO(.12, .035, Math.PI), C.oro, [.3, .18, 0], [0, 0, -Math.PI / 2], null, false)); return g; },
+    pastel: () => { const g = new THREE.Group(); g.add(m(CIL(.4, .4, .26), C.crema, [0, -.2, 0]), m(CIL(.3, .3, .2), C.rosa, [0, .02, 0]), m(CIL(.03, .03, .2, 8), C.azul, [0, .22, 0], null, null, false), m(geoDe('llama', () => new THREE.ConeGeometry(.05, .12, 8)), C.amarillo, [0, .38, 0], null, null, false)); return g; },
+    regalo: () => { const g = new THREE.Group(); g.add(m(CAJA(.56, .46, .56), pick([C.azul, C.rosa, C.amarillo]), [0, -.06, 0]), m(CAJA(.1, .48, .58), C.crema, [0, -.06, 0], null, null, false), m(CAJA(.58, .48, .1), C.crema, [0, -.06, 0], null, null, false), m(TORO(.1, .04), C.crema, [-.08, .24, 0], [0, .6, .4], null, false), m(TORO(.1, .04), C.crema, [.08, .24, 0], [0, -.6, -.4], null, false)); return g; },
+    guitarra: () => { const g = new THREE.Group(); g.add(m(SPH(14), C.rojo, [0, -.22, 0], null, [.52, .46, .16]), m(SPH(14), C.rojo, [0, .02, 0], null, [.38, .34, .14]), m(CAJA(.08, .5, .06), C.cafeOsc, [0, .34, 0], null, null, false), m(CIL(.07, .07, .03, 12), C.cafeOsc, [0, -.18, .08], [Math.PI / 2, 0, 0], null, false)); g.rotation.z = -.5; return g; },
+    coco: () => { const g = new THREE.Group(); g.add(m(SPH(12), C.cafe, null, null, .6)); [[-.08, .12], [.08, .12], [0, -.02]].forEach(([x, y]) => g.add(m(SPH(6), C.cafeOsc, [x, y, .28], null, .07, false))); return g; },
+    ola: () => m(TORO(.3, .1, Math.PI), C.celeste, null, [0, 0, .2]),
+    manzana: () => { const g = new THREE.Group(); g.add(m(SPH(14), C.rojo, [0, -.04, 0], null, [.6, .56, .56]), m(CIL(.025, .025, .14, 6), C.cafeOsc, [0, .3, 0], null, null, false), m(SPH(8), C.verde, [.1, .32, 0], [0, 0, -.6], [.16, .08, .06], false)); return g; },
+    piedra: () => m(geoDe('piedra', () => new THREE.DodecahedronGeometry(.42, 0)), C.piedra, null, [.3, .5, 0], [1.1, .8, .9]),
+    papel: () => { const g = new THREE.Group(); g.add(m(CAJA(.62, .8, .03), C.blanco, null, [0, 0, .12])); [-.18, -.04, .1, .24].forEach(y => g.add(m(CAJA(.42, .025, .035), C.gris, [0, y, .02], [0, 0, .12], null, false))); return g; },
+    tijera: () => { const g = new THREE.Group(); g.add(m(CAJA(.08, .62, .05), C.gris, [0, .12, 0], [0, 0, .32], null, false), m(CAJA(.08, .62, .05), C.gris, [0, .12, .02], [0, 0, -.32], null, false), m(TORO(.11, .04), C.rojo, [-.14, -.28, 0], null, null, false), m(TORO(.11, .04), C.rojo, [.14, -.28, 0], null, null, false)); return g; },
+    trebol: () => { const g = new THREE.Group(); for (let i = 0; i < 4; i++) { const h = new THREE.Mesh(CORAZON, basico(C.verde)); h.scale.setScalar(.5); h.rotation.z = i * Math.PI / 2; h.position.set(Math.sin(i * Math.PI / 2) * .2, -Math.cos(i * Math.PI / 2) * .2, 0); g.add(h); } return g; },
+    globoP: () => { const g = new THREE.Group(); g.add(m(SPH(16), pick(GLOBOS), null, null, [.6, .72, .6]), m(geoDe('nudo', () => new THREE.ConeGeometry(.05, .1, 6)), MARINO, [0, -.4, 0], [Math.PI, 0, 0], null, false)); return g; }
+  };
+  // pieza(nombre, tamaño, posición, extra): una pieza del mundo que vive como las demás (sube, cae o explota y gira)
+  function pieza(nombre, size, pos, extra) {
+    const o = (PIEZAS[nombre] || PIEZAS.estrella)();
+    o.position.copy(pos);
+    return agregar(Object.assign({ o, tipo: 'malla', size: size * K, vira: true, vuelta: r(1, 2.2) }, extra));
+  }
+
   /* ---------- Emisores ---------- */
   const EMISORES = {
     // Un corazón grande que late donde está la mano y una lluvia de corazones que sube
@@ -126,7 +203,7 @@ export function crearEfectos3d(b3d) {
     },
     // Flores que saltan de la mano y caen girando: crece un jardín
     jardin(sx, sy, d) {
-      for (let i = 0; i < 18; i++) sprite(pick(['🌼', '🌻', '🌷', '🌱']), r(.2, .34), punto(sx + r(-.03, .03), sy, d - r(.3, 1)), { vida: 2.4, v: new THREE.Vector3(r(-.7, .7), r(1.6, 2.8), r(-.2, .2)), g: -3.2 });
+      for (let i = 0; i < 18; i++) pieza(pick(['flor', 'flor', 'hoja', 'brote']), r(.2, .34), punto(sx + r(-.03, .03), sy, d - r(.3, 1)), { vida: 2.4, v: new THREE.Vector3(r(-.7, .7), r(1.6, 2.8), r(-.2, .2)), g: -3.2 });
     },
     // Sol: un resplandor con rayos allá al fondo, que sube y se apaga
     sol(sx, sy, d) {
@@ -135,19 +212,39 @@ export function crearEfectos3d(b3d) {
       agregar({ o, tipo: 'especial', vida: 2.6, update: (p) => { m.opacity = Math.sin(Math.min(1, p.t / p.vida) * Math.PI) * .95; m.rotation = p.t * .25; o.scale.setScalar(7 + p.t * .6); } });
     }
   };
-  // Los de emojis (efectos.js › EMOJIS), más los que antes eran ráfagas
-  const TABLA = Object.assign({
-    like: { e: ['👍'], modo: 'sube', n: 9 }, nomegusta: { e: ['👎'], modo: 'explota', n: 6 }, ok: { e: ['👌'], modo: 'sube', n: 7 }
-  }, EMOJIS);
+  /* Cada reacción: qué piezas 3D salen (la primera es la grande que «salta» primero), cómo se mueven (sube, cae, explota)
+     y cuántas. Las mismas claves que EMOJIS de efectos.js (que queda solo para la capa 2D, sin WebGL). */
+  const TABLA3D = {
+    like: { p: ['estrella', 'chispa'], modo: 'sube', n: 9 }, nomegusta: { p: ['nube', 'gota'], modo: 'explota', n: 6 }, ok: { p: ['check', 'chispa'], modo: 'sube', n: 7 },
+    miel: { p: ['miel', 'abeja', 'gota'], modo: 'cae', n: 16 }, hambre: { p: ['manzana', 'miel', 'taza'], modo: 'cae', n: 14 },
+    beso: { p: ['corazonP', 'corazonP', 'chispa'], modo: 'sube', n: 12 }, risa: { p: ['burbuja', 'chispa', 'estrella'], modo: 'sube', n: 14 },
+    estrellas: { p: ['estrella', 'chispa'], modo: 'explota', n: 22 }, aplausos: { p: ['chispa', 'estrella'], modo: 'explota', n: 16 },
+    rock: { p: ['guitarra', 'rayo', 'nota'], modo: 'explota', n: 14 }, censura: { p: ['nube', 'cruz'], modo: 'cae', n: 14 },
+    surf: { p: ['ola', 'coco', 'gota'], modo: 'cae', n: 14 }, rezo: { p: ['estrella', 'chispa', 'luna'], modo: 'sube', n: 12 },
+    lengua: { p: ['chispa', 'estrella', 'burbuja'], modo: 'explota', n: 9 }, guino: { p: ['estrella', 'chispa'], modo: 'sube', n: 8 },
+    bostezo: { p: ['zeta', 'zeta', 'luna'], modo: 'sube', n: 9 }, sorpresa: { p: ['exclama', 'pregunta', 'chispa'], modo: 'explota', n: 10 },
+    cruzados: { p: ['cruz', 'exclama'], modo: 'explota', n: 8 }, mano: { p: ['pregunta', 'chispa'], modo: 'sube', n: 6 },
+    poquito: { p: ['miel', 'gota'], modo: 'sube', n: 9 }, tres: { p: ['estrella', 'chispa'], modo: 'explota', n: 8 }, cuatro: { p: ['trebol', 'chispa'], modo: 'explota', n: 8 },
+    choca: { p: ['estrella', 'chispa', 'rayo'], modo: 'explota', n: 12 }, musica: { p: ['nota', 'nota', 'estrella'], modo: 'sube', n: 14 },
+    nieve: { p: ['copo', 'copo', 'burbuja'], modo: 'cae', n: 26 }, cumple: { p: ['pastel', 'regalo', 'globoP', 'estrella'], modo: 'cae', n: 18 },
+    cafe: { p: ['taza', 'chispa'], modo: 'sube', n: 9 }, sueno: { p: ['zeta', 'luna', 'estrella'], modo: 'sube', n: 12 },
+    sonrisa: { p: ['flor', 'corazonP', 'estrella'], modo: 'sube', n: 10 }, enojo: { p: ['nube', 'rayo'], modo: 'explota', n: 8 },
+    abrazo: { p: ['corazonP', 'corazonP', 'estrella'], modo: 'sube', n: 12 }, si: { p: ['check', 'chispa'], modo: 'sube', n: 6 }, no: { p: ['cruz', 'nube'], modo: 'explota', n: 6 },
+    piedra: { p: ['piedra'], modo: 'explota', n: 1, grande: true }, papel: { p: ['papel'], modo: 'explota', n: 1, grande: true }, tijera: { p: ['tijera'], modo: 'explota', n: 1, grande: true },
+    trofeo: { p: ['trofeo', 'estrella', 'chispa'], modo: 'explota', n: 14 }
+  };
+  // Lo que no tenga pieza todavía sale como antes (emoji), para no perder ninguna reacción
+  const TABLA = Object.assign({}, EMOJIS, TABLA3D);
   function emojis(cfg, sx, sy, d) {
-    if (cfg.grande) { sprite(cfg.e[0], .95, punto(sx, sy - .03, d - .9), { vida: 2, pop: true, v: new THREE.Vector3(0, .15, 0) }); return; }
+    const sale = cfg.p ? pieza : sprite, lista = cfg.p || cfg.e;
+    if (cfg.grande) { sale(lista[0], .95, punto(sx, sy - .03, d - .9), { vida: 2, pop: true, v: new THREE.Vector3(0, .15, 0) }); return; }
     for (let i = 0; i < cfg.n; i++) {
-      const e = pick(cfg.e), size = r(.2, .4);
-      if (cfg.modo === 'cae') sprite(e, size, punto(r(.02, .98), -.1, d + r(-1.3, .8)), { vida: 6.5, v: new THREE.Vector3(r(-.12, .12), -r(.5, 1.1), 0) });
-      else if (cfg.modo === 'sube') sprite(e, size, punto(sx + r(-.05, .05), sy + r(-.02, .03), d - r(.2, 1)), { vida: r(1.8, 2.8), v: new THREE.Vector3(r(-.5, .5), r(.9, 1.8), r(-.2, .2)), g: -.35 });
-      else { const a = r(0, 6.283), v = r(.8, 2.2); sprite(e, size, punto(sx, sy, d - r(.2, .9)), { vida: r(1.5, 2.4), v: new THREE.Vector3(Math.cos(a) * v, Math.sin(a) * v + .5, r(-.3, .3)), g: -1.5 }); }
+      const e = pick(lista), size = r(.2, .38);
+      if (cfg.modo === 'cae') sale(e, size, punto(r(.02, .98), -.1, d + r(-1.3, .8)), { vida: 6.5, v: new THREE.Vector3(r(-.12, .12), -r(.5, 1.1), 0) });
+      else if (cfg.modo === 'sube') sale(e, size, punto(sx + r(-.05, .05), sy + r(-.02, .03), d - r(.2, 1)), { vida: r(1.8, 2.8), v: new THREE.Vector3(r(-.5, .5), r(.9, 1.8), r(-.2, .2)), g: -.35 });
+      else { const a = r(0, 6.283), v = r(.8, 2.2); sale(e, size, punto(sx, sy, d - r(.2, .9)), { vida: r(1.5, 2.4), v: new THREE.Vector3(Math.cos(a) * v, Math.sin(a) * v + .5, r(-.3, .3)), g: -1.5 }); }
     }
-    sprite(cfg.e[0], .75, punto(sx, sy - .04, d - .9), { vida: 1.5, pop: true, v: new THREE.Vector3(0, .2, 0) }); // uno grande que «salta» primero
+    sale(lista[0], .7, punto(sx, sy - .04, d - .9), { vida: 1.5, pop: true, v: new THREE.Vector3(0, .2, 0) }); // uno grande que «salta» primero
   }
 
   function lanzar(tipo, o = {}) {
@@ -181,5 +278,5 @@ export function crearEfectos3d(b3d) {
   }
   b3d.enCuadro(paso);
 
-  return { lanzar, get activos() { return P.length; }, limpiar() { P.slice().forEach(quitar); P.length = 0; } };
+  return { lanzar, get activos() { return P.length; }, limpiar() { P.slice().forEach(quitar); P.length = 0; }, tipos: () => Object.keys(Object.assign({}, EMISORES, TABLA)), piezas: () => Object.keys(PIEZAS) };
 }

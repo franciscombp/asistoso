@@ -217,12 +217,17 @@ cambiar, «DÍAS SIN ACCIDENTES» y el récord. **Uku lo cambia**:
 
 ## Efectos en el mundo 3D
 
-Los globos, corazones, confeti, fuegos artificiales, monedas, el sol y todos los emojis de las
-reacciones **son objetos de la escena 3D** (`efectos3d.js`, three.js), no una capa pegada a la
-pantalla: tienen profundidad, pasan delante o detrás de Uku y de los árboles, se desvanecen con
-la niebla y se mueven con la cámara. Los globos son esferas con su nudo e hilo, los corazones
-tienen volumen y giran, y el confeti es una nube de piezas que cae girando. (La capa 2D de
-`efectos.js` queda solo como respaldo si no hay WebGL.)
+Los globos, corazones, confeti, fuegos artificiales, monedas, el sol y **todas las reacciones son
+objetos 3D del mundo de Uku** (`efectos3d.js`, three.js), no imágenes ni emojis pegados a la
+pantalla: tienen volumen, pasan delante o detrás de Uku y de los árboles, se desvanecen con la
+niebla y se mueven con la cámara. Cada pieza (`PIEZAS`) está hecha con geometría simple, la
+paleta del mundo y el mismo borde azul marino que Uku: estrellas, chispas, corazones, rayos,
+zetas de sueño, check y cruz, gotas, lunas, notas musicales, signos ¡ y ?, copos, burbujas,
+nubes, flores, hojas, brotes, tarro de miel, abejas, taza, trofeo, pastel, regalo, guitarra,
+coco, ola, manzana, piedra, papel, tijera, trébol y globo. `TABLA3D` dice qué piezas suelta cada
+reacción (👍 estrellas que suben, 🍯 miel y abejas, 🎸 guitarra y notas, 🎂 pastel y regalo…). El
+emoji queda solo como respaldo para una reacción sin piezas, y la capa 2D de `efectos.js` solo
+si no hay WebGL.
 
 ## El modelo de Uku (v2)
 
@@ -599,7 +604,7 @@ frase hasta haber dicho todas**, y la primera de la baraja nueva nunca es la
 | `atiende.js` | Estado de Fran, entender, responder y mensajes. El prompt (ficha, estilo, tono, memoria, situación). |
 | `memoria.js` | Hechos que Uku sabe de Fran, diario, relación y el claro que crece. |
 | `tono.js` | Lee el tono de cada frase y dice cómo responder. |
-| `efectos3d.js` | Efectos en el mundo 3D (globos, corazones, confeti, fuegos, monedas, sol, emojis). |
+| `efectos3d.js` | Efectos y reacciones en el mundo 3D: globos, confeti, fuegos y las piezas 3D de cada reacción (`PIEZAS`, `TABLA3D`). |
 | `sueno.js` | Atmósfera de sueño: polvo de luz, bokeh y bruma (el desenfoque, el brillo y los rayos son CSS). |
 | `tiempo.js` | Reloj, clima del lugar y entorno según la hora. |
 | `cartel.js` | Cartel «X días sin accidentes»: días, récord y qué lo cambia. |
