@@ -409,10 +409,10 @@ const LAGO_P = [1.5, .05], LAGO_R = .5;
 const ESC_ZONA = { farol: [-.95, .12], banca: [-1.3, .35], cerca: [-1.6, -.55], huerto: [-1.95, -.2], buzon: [-.15, -.62], hongos: [-.6, -.05], hongos2: [2.2, -.35], lena: [-.9, -1.5], tortuga: [1.95, .5], bandera: [-2.05, .22], cascada: [1.75, -.7], puente: [1.05, .7], arroyo: [1.05, .7], heliconias: [[-1.6, .35], [1.1, -1.35], [-1.9, .5], [-1.45, -.95], [2.15, -.05]], hojonas: [[-.3, .95], [-1.85, -.82], [1.55, .9], [-.25, -1.52]], cartel: [-1.6, -1.42], poste: [.95, -.35], farolitos: [[-.42, .86], [.42, .84], [.36, -.25], [-1.35, -.55]], guayas: [[-1.95, -1.05], [2.15, -.75], [-2.15, -.4], [.55, -1.95], [2.3, -1.45]] };
 const PASEO = [[1.45, -1.4], [.95, -1.5], [-1.2, -1.45]]; // pasillos por detrás del lago y junto al letrero que los árboles no tapan
 /* ---------- Senderos ----------
-   Caminos de tierra que unen los lugares del claro, saliendo de la plazuela entre los canteros: a la casa, al lago,
+   Corredores invisibles que unen los lugares del claro, saliendo de la plazuela entre los canteros: a la casa, al lago,
    a la banca y de ahí al huerto y, bordeando, hasta el letrero del bosque; a la cascada por detrás del lago, y al
-   puente. Son corredores siempre libres (nada se pone encima, los árboles los esquivan) por donde Uku pasea y por
-   donde se lo puede guiar. Se dibujan como franjas de tierra clara con piedritas al borde. */
+   puente. Siempre están libres (nada se pone encima, los árboles los esquivan): por ahí pasea Uku y por ahí se lo
+   guía. No se dibujan (un bosque no tiene caminos de tierra); los farolitos en las esquinas son la única pista. */
 const PLAZA = [0, .15];
 const SENDEROS = [
   [PLAZA, [-.25, -.25], [-.5, -.55]],                               // a la puerta de la casa
@@ -574,15 +574,17 @@ const _dum = new THREE.Object3D();
 /* Con escenario el claro se llena: más matas, piedras, arbustos y margaritas, y además florcitas silvestres y helechitos,
    repartidos por todo el claro (más densos cerca de los senderos y lejos del centro) sin pisar los senderos, el lago ni lo
    que hay puesto. Se calcula una vez. */
+/* Regado por todo el claro (hasta el borde del bosque, 3,4 m), con mucha separación y mucho espacio libre: la plazuela y
+   los senderos quedan despejados, y nada se amontona cerca de la cámara. Lo lejano se apoya solo donde se ve el suelo. */
 let DECO_ESC = null;
 function decoEsc() {
   if (DECO_ESC) return DECO_ESC;
-  const libre = (x, z) => distSendero(x, z) > .15 && Math.hypot(x - LAGO_P[0], z - LAGO_P[1]) > lagoEnForma() + .14 && !quienBloquea(x, z) && Math.hypot(x, z * .8) < 2.5 && z < .95 && z > -1.75;
-  const esp = (gap) => (x, z) => libre(x, z);
+  const libre = (x, z) => distSendero(x, z) > .24 && Math.hypot(x - PLAZA[0], z - PLAZA[1]) > .6 && Math.hypot(x - LAGO_P[0], z - LAGO_P[1]) > lagoEnForma() + .18
+    && !quienBloquea(x, z) && VISIBLE(x, z) && z < 1.3 && z > -2.6;
   return DECO_ESC = {
-    tufts: scatter(5, 200, .25, 2.7, esp(), .11), rocks: scatter(17, 16, .6, 2.6, esp(), .4),
-    bushes: scatter(23, 22, .9, 2.6, (x, z) => libre(x, z) && Math.hypot(x, z) > 1.0, .38), daisies: scatter(43, 90, .3, 2.6, esp(), .1),
-    silvestres: scatter(61, 70, .3, 2.6, esp(), .13), helechitos: scatter(67, 30, .8, 2.6, (x, z) => libre(x, z) && Math.hypot(x, z) > .9, .3)
+    tufts: scatter(5, 150, .4, 3.4, libre, .22), rocks: scatter(17, 14, .9, 3.3, libre, .6),
+    bushes: scatter(23, 18, 1.2, 3.3, (x, z) => libre(x, z) && Math.hypot(x, z) > 1.3, .7), daisies: scatter(43, 70, .5, 3.4, libre, .2),
+    silvestres: scatter(61, 50, .5, 3.4, libre, .28), helechitos: scatter(67, 22, 1.0, 3.3, (x, z) => libre(x, z) && Math.hypot(x, z) > 1.1, .5)
   };
 }
 function buildGarden(pal) {
@@ -596,39 +598,8 @@ function buildGarden(pal) {
   D.daisies.filter(enLago).forEach(p => { const m = M(p, .8 + p.s * .4); parts.push(pc(CYL(.003, .004, .05, 3), pal.grass, m.clone().multiply(TRS([0, .025, 0]))), pc(new THREE.SphereGeometry(.01, 5, 3), pal.dust, m.clone().multiply(TRS([0, .052, 0], 0, [1, .6, 1])))); });
   (D.silvestres || []).forEach(p => { const m = M(p, .9 + p.s * .5); PARTS.silvestre(pal, p.v).forEach(g => parts.push(g.applyMatrix4(m))); });
   (D.helechitos || []).forEach(p => { const m = M(p, .8 + p.s * .6); PARTS.helechito(pal, p.v).forEach(g => parts.push(g.applyMatrix4(m))); });
-  if (esc) parts.push(...senderosGeo(pal));
   garden = new THREE.Mesh(kit(parts), LAMB); garden.visible = !focus; scene.add(garden);
 }
-// Los senderos: una cinta de tierra clara apoyada en el planeta (vértices sobre la esfera, un pelito por encima del
-// suelo), con piedritas a los lados cada tanto
-const SENDA_COLOR = { claro: '#d9c7a1', oscuro: '#41403c' };
-function senderosGeo(pal) {
-  const out = [], color = pal.bg === '#1f1f1f' ? SENDA_COLOR.oscuro : SENDA_COLOR.claro, w = ANCHO_SENDERO / 2, r = rng(91);
-  const punto = (x, z, alto) => { surf(x, z, _sp); return _sp.clone().multiplyScalar(PLANET_R + alto).add(PLANET_C); };
-  for (const s of SENDEROS) {
-    // Puntos cada 4 cm a lo largo de la polilínea, con su dirección
-    const pts = [];
-    for (let i = 1; i < s.length; i++) {
-      const [ax, az] = s[i - 1], [bx, bz] = s[i], n = Math.max(1, Math.ceil(Math.hypot(bx - ax, bz - az) / .04));
-      for (let k = (i === 1 ? 0 : 1); k <= n; k++) { const t = k / n; pts.push({ x: ax + (bx - ax) * t, z: az + (bz - az) * t, dx: bx - ax, dz: bz - az }); }
-    }
-    const pos = [];
-    const lados = pts.map(p => { const l = Math.hypot(p.dx, p.dz) || 1, nx = -p.dz / l, nz = p.dx / l; const ond = 1 + Math.sin(p.x * 9 + p.z * 7) * .12; return [punto(p.x + nx * w * ond, p.z + nz * w * ond, .006), punto(p.x - nx * w * ond, p.z - nz * w * ond, .006)]; });
-    // Los triángulos van en el sentido que mira hacia arriba (hacia afuera del planeta): se comprueba con la normal
-    for (let i = 1; i < lados.length; i++) {
-      const [a0, b0] = lados[i - 1], [a1, b1] = lados[i];
-      const n = new THREE.Vector3().subVectors(b0, a0).cross(new THREE.Vector3().subVectors(a1, a0)), up = a0.clone().sub(PLANET_C);
-      const tri = n.dot(up) > 0 ? [a0, b0, a1, b0, b1, a1] : [a0, a1, b0, b0, a1, b1];
-      tri.forEach(v => pos.push(v.x, v.y, v.z));
-    }
-    const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.computeVertexNormals();
-    out.push(pc(g, color));
-    // piedritas al borde, alternando lados
-    for (let i = 6; i < pts.length; i += 9) { const p = pts[i], l = Math.hypot(p.dx, p.dz) || 1, sg = (i / 9) % 2 ? 1 : -1, nx = -p.dz / l * sg, nz = p.dx / l * sg; placeAt(_dum, p.x + nx * (w + .03), p.z + nz * (w + .03), r() * 6); out.push(pc(new THREE.DodecahedronGeometry(.016 + r() * .012, 0), pal.rock, new THREE.Matrix4().compose(_dum.position, _dum.quaternion, _s4.set(1, .6, 1)))); }
-  }
-  return out;
-}
-
 /* ---------- Polvo de luz (motas blancas que flotan) ---------- */
 let dust = null;
 function dotTexture() {

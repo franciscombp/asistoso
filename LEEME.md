@@ -285,7 +285,7 @@ Tres botones arriba (o sus teclas) cambian cómo se ve y se usa el claro:
 
 ## Senderos: por dónde se navega
 
-El claro tiene **caminos de tierra** (`assets/bosque3d.js › SENDEROS`) que salen de la plazuela entre
+El claro tiene **corredores** (`assets/bosque3d.js › SENDEROS`) que salen de la plazuela entre
 los canteros y unen todos los lugares: la puerta de la casa, la orilla del lago, la cascada (por
 detrás del lago), la banca con el farol, el huerto con la cerca y la bandera, el letrero a la
 entrada del bosque (pasando entre el farol y la cerca, junto a la leña) y el puente sobre el arroyo.
@@ -293,11 +293,12 @@ entrada del bosque (pasando entre el farol y la cerca, junto a la leña) y el pu
 - Son **corredores siempre libres**: nada se pone encima (la tortuga, las hojas grandes y las
   heliconias se corrieron a los lados) y los árboles del bosque los esquivan. `senderosChocan()`
   revisa el diseño y dice qué cosa queda sobre un sendero.
-- Se dibujan como una cinta de tierra clara apoyada en el planeta, con piedritas al borde, con
-  **farolitos** en las esquinas y un **poste indicador** entre el lago y la cascada.
-- Con escenario el claro se **llena** (`decoEsc()`): unas 200 matas, 90 margaritas, 70 florcitas
-  silvestres, 30 helechitos, 22 arbustos y 16 piedras repartidos por todo el claro sin pisar los
-  senderos, el lago ni lo que hay puesto.
+- **No se dibujan** (un bosque no tiene caminos de tierra): son corredores invisibles. La única pista
+  son los **farolitos** en las esquinas y el **poste indicador** entre el lago y la cascada.
+- Con escenario el claro se **puebla** (`decoEsc()`), regado por todo el claro hasta el borde del
+  bosque y con mucho espacio libre: unas 150 matas, 70 margaritas, 50 florcitas silvestres, 22
+  helechitos, 18 arbustos y 14 piedras, bien separados, sin pisar los corredores, la plazuela, el
+  lago ni lo que hay puesto.
 - **Uku pasea por ellos** (su planificador los usa porque son celdas libres) y por ahí se lo
   guía en «Guíame». El claro es más ancho (2,4 m a los lados, hasta 0,85 m al frente).
 - Cada sendero termina en un **destino con nombre** (`destinos()`: plaza, casa, lago, cascada,
