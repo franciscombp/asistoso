@@ -85,7 +85,7 @@ function decir(texto, ms = 4200, { hablar = true } = {}) {
   ui.globo.classList.add('is-visible');
   clearTimeout(globoTimer);
   globoTimer = setTimeout(() => ui.globo.classList.remove('is-visible'), ms);
-  if (hablar) voz.hablar(texto);
+  if (hablar && voz.vozActiva()) voz.hablar(texto); else voz.mover(texto); // sin voz, mueve la boca al ritmo del globo
 }
 // Mientras escuchas o Uku piensa: el globo con tres puntos (desde cuándo, para no contestar de golpe)
 let pensandoDesde = 0;
@@ -1107,6 +1107,7 @@ setInterval(() => { if (document.body.classList.contains('lista')) ambienteReal(
 document.addEventListener('mimo:cartel', (e) => escena.setCartel(e.detail));
 escena.iniciar(ui.escena).then(async () => {
   if (new URLSearchParams(location.search).get('sueno') !== '0') { try { crearSueno(escena.mundo()); } catch (e) { console.warn('Uku: sin atmósfera de sueño', e); } }
+  if (escena.mundo().setBoca) escena.mundo().setBoca(voz.boca); // la boca de Uku sigue su voz
   try { efectos3d = crearEfectos3d(escena.mundo()); ui.efectos.style.display = 'none'; } catch (e) { console.warn('Uku: efectos 3D no disponibles, uso la capa 2D', e); }
   // El clima de verdad: Uku se viste para el lugar y el entorno sigue la hora (con lluvia, llueve)
   tiempo.iniciarClima($('#reloj-c'), (c) => { escena.setClima(c.look); ambienteReal(); }).then(() => ambienteReal());

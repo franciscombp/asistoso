@@ -1023,7 +1023,9 @@ function lookAround(dt) {
 }
 /* Ojos y boca: piezas de la cara (rig.face). Pestañea cada pocos segundos (a veces dos seguidas), pone ojos
    contentos ^ ^ al alegrarse o cuando una mariposa se le posa, y mueve la boca al hablar. */
-let eyeKind = 'open', blinkT = 2.5, happyFor = 0, mouthCur = 0;
+let eyeKind = 'open', blinkT = 2.5, happyFor = 0, mouthCur = 0, mouthRed = 0, bocaFn = null;
+// Quién mueve la boca mientras habla (voz.js › boca): () => { a: 0–1 abierta, r: 0–1 redonda } o null si está callado
+export function setBoca(fn) { bocaFn = typeof fn === 'function' ? fn : null; }
 function eyes(dt, t) {
   if (!rig || !rig.face) return;
   let k = 'open';
@@ -1036,10 +1038,14 @@ function eyes(dt, t) {
   }
   if (espejo.on && espejo.cara) { const c = espejo.cara; k = c.blink > .5 ? 'shut' : c.blink > .3 ? 'half' : c.smile > .45 ? 'happy' : 'open'; } // en espejo, los ojos son los tuyos
   if (k !== eyeKind) { eyeKind = k; rig.face.eyes(k); }
-  // Boca: al hablar se abre y cierra como sílabas; contento, sonríe con la boca abierta
-  const talking = gesture === 'talk' && gestureT < 2, m = RM ? 0 : talking ? Math.max(0, Math.sin(t * 13) * .6 + Math.sin(t * 7.3) * .4) : gesture === 'happy' && gestureT < 2 ? .7 : 0;
-  mouthCur = lerp(mouthCur, m, Math.min(1, dt * 14));
-  rig.face.mouth(mouthCur);
+  // Boca: mientras suena la voz, sigue sus sílabas (voz.js › boca: cuánto abre y si la vocal es redonda); sin voz, al
+  // hablar se abre y cierra como sílabas; contento, sonríe con la boca abierta
+  const v = bocaFn && !RM ? bocaFn() : null;
+  const talking = gesture === 'talk' && gestureT < 2;
+  const m = v ? v.a : RM ? 0 : talking ? Math.max(0, Math.sin(t * 13) * .6 + Math.sin(t * 7.3) * .4) * .8 : gesture === 'happy' && gestureT < 2 ? .55 : 0;
+  mouthCur = lerp(mouthCur, m, Math.min(1, dt * 22));
+  mouthRed = lerp(mouthRed, v ? v.r : 0, Math.min(1, dt * 16));
+  rig.face.mouth(mouthCur, mouthRed);
 }
 
 function holdObject(kind) {
@@ -1158,7 +1164,7 @@ function shades() {
   const { W, top, front } = HEAD; g.scale.setScalar(6.8 * W); g.position.set(0, top - .89 * W, front - .12 * W);
   return g;
 }
-// Guayabera: el suéter amarillo se repinta en lino claro (en el oso de siempre, su textura; en el de respaldo, los
+// Guayabera: el suéter se repinta en lino claro (en el clásico, su textura; en el de respaldo, los
 // colores de sus vértices) y la bufanda se guarda
 const LINO = [231, 220, 194];
 let guayaMap = null, ropaMaps = null;
@@ -1197,13 +1203,19 @@ function guayaTex(baseMap) {
   ['flipY', 'colorSpace', 'wrapS', 'wrapT', 'anisotropy'].forEach(k => { guayaMap[k] = baseMap[k]; });
   return guayaMap;
 }
+// En v2 la guayabera viene horneada (tools/uku-hornea.py: lino con sus pliegues y la misma luz que el suéter)
+function linoTex(base) {
+  guayaMap = new THREE.TextureLoader().load(new URL('./oso/tex/uku_ropa_lino.png', import.meta.url).href);
+  ['flipY', 'colorSpace', 'wrapS', 'wrapT', 'anisotropy', 'magFilter', 'minFilter'].forEach(k => { guayaMap[k] = base[k]; });
+  return guayaMap;
+}
 function guayabera(on) {
   if (!rig) return;
   const buf = rig.skinned.find(m => m.name === 'bufanda'); if (buf) buf.visible = !on; // con calor, sin bufanda
   // El oso de siempre: las piezas con la textura de la ropa
   if (!ropaMaps) { ropaMaps = []; rig.root.traverse(o => { if (o.isMesh && o.material.map && /ropa/.test(o.material.map.name || '')) ropaMaps.push([o, o.material.map]); }); }
   if (ropaMaps.length) {
-    ropaMaps.forEach(([o, m]) => { const t = on ? (guayaMap || guayaTex(m)) : m; if (o.material.map !== t) { o.material.map = t; o.material.needsUpdate = true; } });
+    ropaMaps.forEach(([o, m]) => { const t = on ? (guayaMap || (OSO === 'v2' ? linoTex(m) : guayaTex(m))) : m; if (o.material.map !== t) { o.material.map = t; o.material.needsUpdate = true; } });
     return;
   }
   const ropa = rig.skinned.find(m => m.name === 'ropa');
@@ -1575,6 +1587,7 @@ function init() {
         src.dispose && src.dispose();
       }
     });
+    if (rig.face.instalar) rig.face.instalar(); // ojos, nariz y boca, sobre el material nuevo de la cabeza
     stage.add(bear);
     if (target != null) { score = target; target = null; buildForest(); }
     // Lo que se sostiene, se pone o se atacha usa estos huesos

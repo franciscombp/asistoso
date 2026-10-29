@@ -2,8 +2,10 @@
    Uku · efectos en el mundo 3D
    Los globos, los corazones, el confeti, los fuegos, las flores, el sol y
    todas las reacciones son objetos 3D del mundo de Uku (three.js, la misma
-   escena de su claro): piezas modeladas con el estilo del claro (colores
-   planos, volumen, un borde azul marino), no imágenes ni emojis. Estrellas,
+   escena de su claro), no imágenes ni emojis. Estilo sobrio, como el juego de
+   «Her»: sin contornos, volumen suave (un matcap claro con un borde de luz),
+   una paleta corta (azul, amarillo, crema, blanco), pocas piezas que entran y
+   se desvanecen con calma y un aro de luz donde estaba el gesto. Estrellas,
    notas, gotas, copos, tarro de miel, abeja, flores, tazas, trofeos,
    pasteles, regalos, rayos, lunas, zetas… Viven en
    el espacio: tienen profundidad, pasan delante o detrás de Uku y de los
@@ -14,9 +16,9 @@
 import { EMOJIS } from './efectos.js?v=__BUILD__';
 
 const RM = matchMedia('(prefers-reduced-motion: reduce)').matches;
-const AMARILLOS = ['#ffdd00', '#ffc400', '#ffd200', '#ffe14d']; // los corazones, siempre amarillos
-const GLOBOS = ['#ffdd00', '#ffc400', '#ffd200', '#2c4f9e', '#5f78a8', '#ffdd00'];
-const CONFETI = ['#ffdd00', '#ffd200', '#f7d96b', '#c9d3e6', '#2c4f9e', '#ffffff'];
+const AMARILLOS = ['#f6c84a', '#f2bd2c', '#f8d470']; // los corazones, siempre amarillos
+const GLOBOS = ['#f6c84a', '#f2bd2c', '#2c4f9e', '#7f97c8', '#efe9df'];
+const CONFETI = ['#f6c84a', '#f8d470', '#c9d3e6', '#2c4f9e', '#ffffff'];
 const MARINO = '#0f265c';
 const K = .42; // Uku mide ~.5 en este mundo: los tamaños de abajo son «de pantalla» y se escalan a esa medida
 const r = (a, b) => a + Math.random() * (b - a);
@@ -39,12 +41,22 @@ export function crearEfectos3d(b3d) {
   }
 
   /* ---------- Materiales y formas que se comparten ---------- */
-  const MATS = {};
-  const basico = (c, o) => MATS[c + JSON.stringify(o || '')] || (MATS[c + JSON.stringify(o || '')] = new THREE.MeshBasicMaterial(Object.assign({ color: c }, o)));
-  const contorno = new THREE.MeshBasicMaterial({ color: MARINO, side: THREE.BackSide, transparent: true, opacity: .4 });
-  const hilo = new THREE.MeshBasicMaterial({ color: MARINO, transparent: true, opacity: .45 });
   const texturas = {};
   function lienzo(w, h, pintar) { const c = document.createElement('canvas'); c.width = w; c.height = h; pintar(c.getContext('2d'), w, h); const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t; }
+  // Matcap: la «luz» de las piezas, sin depender de las luces de la escena. Claro arriba a la izquierda, un poco más
+  // oscuro abajo y un borde de luz blanca (el brillo suave de las figuras de «Her»)
+  const MATCAP = lienzo(256, 256, (g, w) => {
+    const c = w / 2;
+    let d = g.createRadialGradient(c * .72, c * .62, c * .05, c, c, c);
+    d.addColorStop(0, '#ffffff'); d.addColorStop(.55, '#f3f4f7'); d.addColorStop(1, '#d2d6df');
+    g.fillStyle = d; g.beginPath(); g.arc(c, c, c, 0, 7); g.fill();
+    d = g.createRadialGradient(c, c, c * .78, c, c, c);
+    d.addColorStop(0, 'rgba(255,255,255,0)'); d.addColorStop(1, 'rgba(255,255,255,.55)');
+    g.fillStyle = d; g.beginPath(); g.arc(c, c, c, 0, 7); g.fill();
+  });
+  const MATS = {};
+  const basico = (c, o) => MATS[c + JSON.stringify(o || '')] || (MATS[c + JSON.stringify(o || '')] = new THREE.MeshMatcapMaterial(Object.assign({ color: c, matcap: MATCAP }, o)));
+  const hilo = new THREE.MeshBasicMaterial({ color: '#c9d3e6', transparent: true, opacity: .6 });
   const emojiTex = (e) => texturas[e] || (texturas[e] = lienzo(128, 128, (g) => { g.font = '100px "Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(e, 64, 70); }));
   const puntoTex = () => texturas.punto || (texturas.punto = lienzo(64, 64, (g) => { const d = g.createRadialGradient(32, 32, 0, 32, 32, 32); d.addColorStop(0, 'rgba(255,255,255,1)'); d.addColorStop(.4, 'rgba(255,255,255,.8)'); d.addColorStop(1, 'rgba(255,255,255,0)'); g.fillStyle = d; g.fillRect(0, 0, 64, 64); }));
   const solTex = () => texturas.sol || (texturas.sol = lienzo(256, 256, (g) => {
@@ -68,12 +80,18 @@ export function crearEfectos3d(b3d) {
   function quitar(p) {
     grupo.remove(p.o);
     if (p.dispose) p.dispose();
+    if (p.mats) p.mats.forEach(mm => mm.dispose());
     if (p.o.material && p.o.material.isSpriteMaterial) p.o.material.dispose();
   }
-  function agregar(p) { P.push(Object.assign({ v: new THREE.Vector3(), g: 0, t: 0, vida: 2, s: 1, pop: false, spin: 0, fase: Math.random() * 6.28 }, p)); grupo.add(p.o); return p; }
-  const ent = (p) => Math.min(1, p.t * 6);                       // aparece con un saltito
-  const sal = (p) => Math.max(0, Math.min(1, (p.vida - p.t) / .45)); // y se encoge al irse
-  const pop = (p) => (1 + Math.sin(Math.min(1, p.t * 4) * Math.PI) * .25) * ent(p);
+  function agregar(p) {
+    // Las mallas se desvanecen cada una por su cuenta: llevan su copia de los materiales
+    if (p.tipo === 'malla') { p.mats = []; p.o.traverse(o => { if (o.isMesh) { o.material = o.material.clone(); o.material.transparent = true; o.material.depthWrite = false; p.mats.push(o.material); } }); p.alfa = p.mats.map(mm => mm.opacity); }
+    P.push(Object.assign({ v: new THREE.Vector3(), g: 0, t: 0, vida: 2, s: 1, pop: false, spin: 0, fase: Math.random() * 6.28 }, p)); grupo.add(p.o); return p;
+  }
+  const suave = (x) => 1 - Math.pow(1 - Math.min(1, Math.max(0, x)), 3);   // ease-out
+  const ent = (p) => suave(p.t * 2.6);                                     // entra creciendo con calma
+  const sal = (p) => Math.max(0, Math.min(1, (p.vida - p.t) / .8));        // y se desvanece al irse
+  const pop = (p) => (1 + Math.sin(Math.min(1, p.t * 2.2) * Math.PI) * .08) * ent(p);
 
   /* ---------- Piezas ---------- */
   function sprite(e, size, pos, extra) {
@@ -82,33 +100,30 @@ export function crearEfectos3d(b3d) {
     return agregar(Object.assign({ o, tipo: 'sprite', size }, extra));
   }
   function corazon(color, size, pos, extra) {
-    const o = new THREE.Group(), c = new THREE.Mesh(CORAZON, basico(color)), f = new THREE.Mesh(CORAZON, contorno);
-    f.scale.setScalar(1.12); o.add(f, c); o.position.copy(pos);
+    const o = new THREE.Group(), c = new THREE.Mesh(CORAZON, basico(color));
+    o.add(c); o.position.copy(pos);
     return agregar(Object.assign({ o, tipo: 'malla', size: size * K, vira: true }, extra));
   }
   function globo(color, size, pos, extra) {
-    const o = new THREE.Group(), cuerpo = new THREE.Mesh(GLOBO, basico(color)), borde = new THREE.Mesh(GLOBO, contorno), nudo = new THREE.Mesh(NUDO, basico(color)), cuerda = new THREE.Mesh(HILO, hilo);
-    cuerpo.scale.set(1, 1.2, 1); borde.scale.set(1.07, 1.27, 1.07); nudo.position.y = -.66; nudo.rotation.z = Math.PI; cuerda.position.y = -1.3;
-    const brillo = new THREE.Mesh(new THREE.SphereGeometry(.09, 8, 6), basico('#ffffff', { transparent: true, opacity: .55 })); brillo.position.set(-.2, .25, .43); brillo.scale.set(.8, 1.5, .5);
-    o.add(borde, cuerpo, nudo, cuerda, brillo); o.position.copy(pos);
+    const o = new THREE.Group(), cuerpo = new THREE.Mesh(GLOBO, basico(color)), nudo = new THREE.Mesh(NUDO, basico(color)), cuerda = new THREE.Mesh(HILO, hilo);
+    cuerpo.scale.set(1, 1.2, 1); nudo.position.y = -.66; nudo.rotation.z = Math.PI; cuerda.position.y = -1.3;
+    o.add(cuerpo, nudo, cuerda); o.position.copy(pos);
     return agregar(Object.assign({ o, tipo: 'malla', size: size * K, vira: false, bambolea: true }, extra));
   }
 
   /* ---------- Piezas 3D de las reacciones ----------
-     Cada pieza es un grupo de mallas de ~1 de alto, centrado, con su borde azul marino detrás (como los corazones y los
-     globos). Las siluetas planas (estrella, rayo, zeta, signos, nota) se extruyen con bisel para que tengan volumen. Las
+     Cada pieza es un grupo de mallas de ~1 de alto, centrado, sin contorno: el volumen lo da el matcap. Las siluetas planas (estrella, rayo, zeta, signos, nota) se extruyen con bisel para que tengan volumen. Las
      geometrías se hacen una vez y se comparten. */
-  const C = { amarillo: '#ffdd00', oro: '#f2c94c', miel: '#f2b632', marino: MARINO, azul: '#2c4f9e', celeste: '#9fb8e6', crema: '#efe9df', blanco: '#ffffff',
-    gris: '#aeb6c7', piedra: '#9aa2b2', rosa: '#f29bb0', rojo: '#e2574c', verde: '#9fbf7a', hoja: '#7fa86a', cafe: '#8a6a4a', cafeOsc: '#5b4632' };
+  const C = { amarillo: '#f6c84a', oro: '#e9b949', miel: '#e8a93a', marino: MARINO, azul: '#2c4f9e', celeste: '#a9bde3', crema: '#efe9df', blanco: '#ffffff',
+    gris: '#c3c9d6', piedra: '#a3aaba', rosa: '#e7a9b6', rojo: '#d9776b', verde: '#a9c59a', hoja: '#8fb17f', cafe: '#9b7d62', cafeOsc: '#6b5847' };
   const GEOS = {};
   const geoDe = (k, f) => GEOS[k] || (GEOS[k] = f());
   const extruir = (shape, depth = .16) => { const g = new THREE.ExtrudeGeometry(shape, { depth, bevelEnabled: true, bevelThickness: .04, bevelSize: .035, bevelSegments: 2, curveSegments: 12 }); g.center(); return g; };
   const forma = (pts) => { const sh = new THREE.Shape(); sh.moveTo(pts[0][0], pts[0][1]); pts.slice(1).forEach(([x, y]) => sh.lineTo(x, y)); sh.closePath(); return sh; };
-  // Una malla con su borde detrás (borde = false para piezas chicas o translúcidas)
-  function m(geo, color, pos, rot, esc, borde = true, extra) {
+  // Una malla (el argumento borde queda por compatibilidad: ya no hay contornos)
+  function m(geo, color, pos, rot, esc, borde, extra) {
     const g = new THREE.Group(), c = new THREE.Mesh(geo, basico(color, extra));
     g.add(c);
-    if (borde) { const b = new THREE.Mesh(geo, contorno); b.scale.setScalar(1.1); g.add(b); }
     if (pos) g.position.set(...pos);
     if (rot) g.rotation.set(...rot);
     if (esc) { if (typeof esc === 'number') g.scale.setScalar(esc); else g.scale.set(...esc); }
@@ -129,7 +144,7 @@ export function crearEfectos3d(b3d) {
   const PIEZAS = {
     estrella: () => m(ESTRELLA(), pick([C.amarillo, C.oro, C.amarillo])),
     chispa: () => m(geoDe('chispa', () => new THREE.OctahedronGeometry(.32)), pick([C.amarillo, C.blanco, C.oro]), null, null, [.7, 1.2, .7], false),
-    corazonP: () => { const g = new THREE.Group(), cc = new THREE.Mesh(CORAZON, basico(pick(AMARILLOS))), b = new THREE.Mesh(CORAZON, contorno); b.scale.setScalar(1.12); g.add(b, cc); g.scale.setScalar(.9); return g; },
+    corazonP: () => { const g = new THREE.Group(); g.add(new THREE.Mesh(CORAZON, basico(pick(AMARILLOS)))); g.scale.setScalar(.9); return g; },
     rayo: () => m(RAYO(), C.amarillo),
     zeta: () => m(ZETA(), pick([C.celeste, C.blanco])),
     check: () => m(CHECK(), C.verde),
@@ -165,23 +180,32 @@ export function crearEfectos3d(b3d) {
   function pieza(nombre, size, pos, extra) {
     const o = (PIEZAS[nombre] || PIEZAS.estrella)();
     o.position.copy(pos);
-    return agregar(Object.assign({ o, tipo: 'malla', size: size * K, vira: true, vuelta: r(1, 2.2) }, extra));
+    return agregar(Object.assign({ o, tipo: 'malla', size: size * K, vira: true, vuelta: r(.5, 1.1) }, extra));
+  }
+
+  // Un aro de luz fino que se abre y se apaga donde estaba el gesto (el «sí, te vi» de cada reacción)
+  const ARO = new THREE.RingGeometry(.47, .5, 64);
+  function aro(sx, sy, d, color = '#ffffff') {
+    const mat = new THREE.MeshBasicMaterial({ color, transparent: true, opacity: .8, depthWrite: false, side: THREE.DoubleSide, blending: THREE.AdditiveBlending, fog: false });
+    const o = new THREE.Mesh(ARO, mat); o.position.copy(punto(sx, sy, d - .9));
+    agregar({ o, tipo: 'especial', vida: 1.1, dispose: () => mat.dispose(), update: (p) => {
+      const k = suave(p.t / p.vida); o.quaternion.copy(camera.quaternion); o.scale.setScalar((.15 + k * .55) * K * 1.6); mat.opacity = .75 * (1 - k); } });
   }
 
   /* ---------- Emisores ---------- */
   const EMISORES = {
     // Un corazón grande que late donde está la mano y una lluvia de corazones que sube
     corazon(sx, sy, d) {
-      corazon('#ffdd00', .75, punto(sx, sy - .06, d - .9), { vida: 1.9, v: new THREE.Vector3(0, .18, 0), latido: true });
-      for (let i = 0; i < 18; i++) corazon(pick(AMARILLOS), r(.2, .42), punto(sx + r(-.05, .05), sy + r(-.03, .04), d - r(.2, 1)), { vida: r(2.6, 3.6), v: new THREE.Vector3(r(-.5, .5), r(.8, 1.7), r(-.2, .2)), g: -.18 });
-      for (let i = 0; i < 16; i++) corazon(pick(AMARILLOS), r(.18, .4), punto(r(.02, .98), 1.06, d + r(-1.4, .8)), { vida: 5, v: new THREE.Vector3(r(-.1, .1), r(.55, 1), 0), g: .02 });
+      corazon('#f6c84a', .6, punto(sx, sy - .06, d - .9), { vida: 2.2, v: new THREE.Vector3(0, .12, 0), latido: true });
+      for (let i = 0; i < 8; i++) corazon(pick(AMARILLOS), r(.18, .34), punto(sx + r(-.05, .05), sy + r(-.03, .04), d - r(.2, 1)), { vida: r(2.8, 3.6), v: new THREE.Vector3(r(-.3, .3), r(.5, 1.0), r(-.15, .15)), g: -.1 });
+      for (let i = 0; i < 6; i++) corazon(pick(AMARILLOS), r(.16, .3), punto(r(.05, .95), 1.06, d + r(-1.4, .8)), { vida: 5.5, v: new THREE.Vector3(r(-.08, .08), r(.4, .7), 0), g: .02 });
     },
     // Globos que suben desde abajo, a distintas profundidades: unos pasan delante de Uku y otros por detrás
     globos(sx, sy, d) {
-      for (let i = 0; i < 24; i++) globo(pick(GLOBOS), r(.24, .4), punto(r(.04, .96), 1.12, d + r(-1.4, .9)), { vida: 6, v: new THREE.Vector3(r(-.08, .08), r(.7, 1.25), 0), g: 0 });
+      for (let i = 0; i < 10; i++) globo(pick(GLOBOS), r(.24, .36), punto(r(.06, .94), 1.12, d + r(-1.4, .9)), { vida: 7, v: new THREE.Vector3(r(-.06, .06), r(.45, .8), 0), g: 0 });
     },
     confeti(sx, sy, d) {
-      const N = 240, geo = PLANO, mat = new THREE.MeshBasicMaterial({ side: THREE.DoubleSide }), im = new THREE.InstancedMesh(geo, mat, N), col = new THREE.Color(), m4 = new THREE.Matrix4();
+      const N = 110, geo = PLANO, mat = new THREE.MeshBasicMaterial({ side: THREE.DoubleSide }), im = new THREE.InstancedMesh(geo, mat, N), col = new THREE.Color(), m4 = new THREE.Matrix4();
       const S = Array.from({ length: N }, (_, i) => { const p = punto(r(-.05, 1.05), r(-.7, -.05), d + r(-1.5, .9)); im.setColorAt(i, col.set(pick(CONFETI))); return { p, v: new THREE.Vector3(r(-.15, .15), -r(.45, 1.0), r(-.1, .1)), a: r(0, 6.3), w: r(-7, 7), f: r(0, 6.3), k: r(.8, 1.6) }; });
       const o = new THREE.Group(); o.add(im);
       agregar({ o, tipo: 'especial', vida: 6.5, dispose: () => { geo !== PLANO && geo.dispose(); mat.dispose(); im.dispose(); }, update: (p, dt) => {
@@ -203,7 +227,7 @@ export function crearEfectos3d(b3d) {
     },
     // Flores que saltan de la mano y caen girando: crece un jardín
     jardin(sx, sy, d) {
-      for (let i = 0; i < 18; i++) pieza(pick(['flor', 'flor', 'hoja', 'brote']), r(.2, .34), punto(sx + r(-.03, .03), sy, d - r(.3, 1)), { vida: 2.4, v: new THREE.Vector3(r(-.7, .7), r(1.6, 2.8), r(-.2, .2)), g: -3.2 });
+      for (let i = 0; i < 9; i++) pieza(pick(['flor', 'flor', 'hoja', 'brote']), r(.2, .3), punto(sx + r(-.03, .03), sy, d - r(.3, 1)), { vida: 2.8, v: new THREE.Vector3(r(-.5, .5), r(1.3, 2.2), r(-.15, .15)), g: -2.4 });
     },
     // Sol: un resplandor con rayos allá al fondo, que sube y se apaga
     sol(sx, sy, d) {
@@ -237,20 +261,24 @@ export function crearEfectos3d(b3d) {
   const TABLA = Object.assign({}, EMOJIS, TABLA3D);
   function emojis(cfg, sx, sy, d) {
     const sale = cfg.p ? pieza : sprite, lista = cfg.p || cfg.e;
-    if (cfg.grande) { sale(lista[0], .95, punto(sx, sy - .03, d - .9), { vida: 2, pop: true, v: new THREE.Vector3(0, .15, 0) }); return; }
-    for (let i = 0; i < cfg.n; i++) {
-      const e = pick(lista), size = r(.2, .38);
-      if (cfg.modo === 'cae') sale(e, size, punto(r(.02, .98), -.1, d + r(-1.3, .8)), { vida: 6.5, v: new THREE.Vector3(r(-.12, .12), -r(.5, 1.1), 0) });
-      else if (cfg.modo === 'sube') sale(e, size, punto(sx + r(-.05, .05), sy + r(-.02, .03), d - r(.2, 1)), { vida: r(1.8, 2.8), v: new THREE.Vector3(r(-.5, .5), r(.9, 1.8), r(-.2, .2)), g: -.35 });
-      else { const a = r(0, 6.283), v = r(.8, 2.2); sale(e, size, punto(sx, sy, d - r(.2, .9)), { vida: r(1.5, 2.4), v: new THREE.Vector3(Math.cos(a) * v, Math.sin(a) * v + .5, r(-.3, .3)), g: -1.5 }); }
+    if (cfg.grande) { sale(lista[0], .8, punto(sx, sy - .03, d - .9), { vida: 2.2, pop: true, v: new THREE.Vector3(0, .1, 0) }); return; }
+    // Pocas piezas, que flotan con calma (el detalle está en la forma, no en la cantidad)
+    const n = Math.max(3, Math.ceil(cfg.n * .45));
+    for (let i = 0; i < n; i++) {
+      const e = pick(lista), size = r(.18, .3);
+      if (cfg.modo === 'cae') sale(e, size, punto(r(.05, .95), -.1, d + r(-1.3, .8)), { vida: 7, v: new THREE.Vector3(r(-.08, .08), -r(.35, .7), 0) });
+      else if (cfg.modo === 'sube') sale(e, size, punto(sx + r(-.05, .05), sy + r(-.02, .03), d - r(.2, 1)), { vida: r(2.4, 3.2), v: new THREE.Vector3(r(-.3, .3), r(.5, 1.0), r(-.15, .15)), g: -.12 });
+      else { const a = r(0, 6.283), v = r(.5, 1.2); sale(e, size, punto(sx, sy, d - r(.2, .9)), { vida: r(2, 2.8), v: new THREE.Vector3(Math.cos(a) * v, Math.sin(a) * v + .3, r(-.2, .2)), g: -.6, frena: true }); }
     }
-    sale(lista[0], .7, punto(sx, sy - .04, d - .9), { vida: 1.5, pop: true, v: new THREE.Vector3(0, .2, 0) }); // uno grande que «salta» primero
+    sale(lista[0], .55, punto(sx, sy - .04, d - .9), { vida: 2, pop: true, v: new THREE.Vector3(0, .12, 0) }); // la pieza principal, al frente
   }
 
   function lanzar(tipo, o = {}) {
     const sx = o.x ?? .5, sy = o.y ?? .55, d = dUku();
+    if (!EMISORES[tipo] && !TABLA[tipo]) return;
+    if (tipo !== 'sol' && tipo !== 'fuegos') aro(sx, sy, d);
     if (EMISORES[tipo]) EMISORES[tipo](sx, sy, d);
-    else if (TABLA[tipo]) emojis(TABLA[tipo], sx, sy, d);
+    else emojis(TABLA[tipo], sx, sy, d);
   }
 
   /* ---------- Cada cuadro ---------- */
@@ -260,15 +288,17 @@ export function crearEfectos3d(b3d) {
       const p = P[i];
       p.t += dt;
       if (p.t >= p.vida) { quitar(p); P.splice(i, 1); continue; }
-      if (!RM) { p.v.y += p.g * dt; p.o.position.addScaledVector(p.v, dt); }
+      if (!RM) { p.v.y += p.g * dt; if (p.frena) p.v.multiplyScalar(Math.max(0, 1 - dt * 1.6)); p.o.position.addScaledVector(p.v, dt); }
       if (p.update) p.update(p, dt);
       if (p.tipo === 'sprite') {
         p.o.material.opacity = sal(p);
         const e = p.pop ? pop(p) : ent(p); p.o.scale.set(p.size * e, p.size * e, 1);
       } else if (p.tipo === 'malla') {
-        let k = p.size * (p.latido ? (1 + Math.abs(Math.sin(p.t * 7)) * .12) : 1) * ent(p) * sal(p) * (p.latido ? 1 : 1);
-        if (p.latido) k = p.size * pop(p) * (1 + Math.abs(Math.sin(p.t * 7)) * .1) * sal(p);
+        // crece al entrar y al irse se desvanece (sin encogerse de golpe)
+        let k = p.size * (p.pop ? pop(p) : ent(p)) * (.9 + .1 * sal(p));
+        if (p.latido) k *= 1 + Math.pow(Math.abs(Math.sin(p.t * 4.2)), 4) * .1;
         p.o.scale.setScalar(Math.max(.001, k));
+        const f = Math.min(1, p.t * 3) * sal(p); p.mats.forEach((mm, i) => { mm.opacity = p.alfa[i] * f; });
         // De frente a la cámara; los corazones giran sobre su eje para que se les vea el grosor
         p.o.quaternion.copy(camera.quaternion);
         if (p.vira) { _q.setFromAxisAngle(_ejeY, p.t * (p.vuelta || 1.6) + p.fase); p.o.quaternion.multiply(_q); }

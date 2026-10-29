@@ -8,8 +8,10 @@
      al oso, así que x y z del torso se fijan en su pose de reposo.
    - Los pies siempre en el suelo: cada cuadro se miden las plantas (los
      vértices más bajos del modelo) y la cadera sube o baja hasta apoyarlas.
-   - face: ojos pintados en la textura de la cabeza; para pestañear se
-     cambia el mapa por variantes (entrecerrados, cerrados, contentos).
+   - face: ojos, nariz y boca. En v2 los dibuja un shader sobre la cabeza
+     (formas nítidas en la pose de reposo): pestañea, entrecierra, pone
+     ojos contentos y la boca se abre y se redondea al hablar (voz.js ›
+     boca). En el clásico están pintados y solo pestañea.
    - gest: cómo hace cada gesto de la app con estas clips (velocidad, calma).
    - loadUkuRig(container): visor independiente para verificar el modelo.
    (El oso de respaldo, hecho por código, está en uku-rig-nuevo.js.)
@@ -21,14 +23,12 @@ import { GLTFLoader } from './vendor/three/jsm/loaders/GLTFLoader.js';
 /* Dos versiones del mismo personaje:
    - v2 (por defecto): assets/oso/uku-rig-v2.glb, hecho con tools/uku-suave.py: malla subdividida (un loop
      por arista, para que doble bien en codos, rodillas, cuello y cintura), pesos limpios (sin huesos del lado
-     contrario, 3 por vértice, suavizados) y las texturas aparte.
-   - clasico: assets/oso/uku-rig.glb, el archivo original, tal cual (?oso=clasico o localStorage uku_oso).
-   Las texturas de v2 vienen en dos juegos: oso/tex/ (suavizadas: la cara ya no se escalona) y
-   oso/tex-original/ (las del archivo). ?texturas=original (o localStorage uku_texturas) usa las originales. */
+     contrario, 3 por vértice, suavizados) y las texturas aparte, en oso/tex/, horneadas con tools/uku-hornea.py
+     (suéter azul, bufanda amarilla, sombras suaves y sin la cara pintada: la dibuja el shader de abajo).
+   - clasico: assets/oso/uku-rig.glb, el archivo original, tal cual (?oso=clasico o localStorage uku_oso). */
 const Q = (() => { try { return new URLSearchParams(location.search); } catch (e) { return new URLSearchParams(); } })();
 const LS = (k) => { try { return localStorage.getItem(k); } catch (e) { return null; } };
 export const VARIANTE = (Q.get('oso') || LS('uku_oso')) === 'clasico' ? 'clasico' : 'v2';
-export const TEXTURAS = (Q.get('texturas') || LS('uku_texturas')) === 'original' ? 'original' : 'suaves';
 export const UKU_URL = VARIANTE === 'clasico' ? './oso/uku-rig.glb' : './oso/uku-rig-v2.glb';
 // three.js guarda los nombres sin puntos ni corchetes ni dos puntos ("mixamorig:Hips" -> "mixamorigHips")
 const key = (n) => n.replace(/[\[\].:\/]/g, '');
@@ -36,10 +36,7 @@ const HIPS = key('mixamorig:Hips');
 const NEEDED = ['mixamorig:Hips', 'mixamorig:Head', 'mixamorig:RightHand'].map(key);
 
 export function loadUkuGltf() {
-  const manager = new THREE.LoadingManager();
-  // Las texturas de v2 se piden como oso/tex/…; con las originales se redirige a oso/tex-original/
-  if (TEXTURAS === 'original') manager.setURLModifier(u => u.replace(/\/oso\/tex\//, '/oso/tex-original/'));
-  return new Promise((ok, fail) => new GLTFLoader(manager).load(new URL(UKU_URL, import.meta.url).href, g => {
+  return new Promise((ok, fail) => new GLTFLoader().load(new URL(UKU_URL, import.meta.url).href, g => {
     g.scene.traverse(o => { if (o.isMesh && o.material && o.material.map) { o.material.map.anisotropy = 8; o.material.map.minFilter = THREE.LinearMipmapLinearFilter; o.material.map.magFilter = THREE.LinearFilter; o.material.map.needsUpdate = true; } });
     ok(g);
   }, undefined, fail));
@@ -164,14 +161,24 @@ export function ukuFrom(gltf, { onLog = () => {} } = {}) {
   // sentarse(on, raise): on = true/false; raise = a qué altura (m del personaje) queda el bajo de los pies sobre el suelo
   function sentarse(on, raise = .22) { pose.sitTo = on ? 1 : 0; if (on) pose.raise = raise; }
 
-  /* Ojos: están pintados en la textura de la cabeza (uku_cabeza_final) como dos puntos azul marino sobre el
-     pelaje. Para pestañear se dibujan variantes de la textura y se cambia el mapa unos cuadros. M dice cuánto
-     mide en la cara (mm; x a la derecha, y hacia arriba) un píxel de la textura en x y en y: en el mapa UV los
-     ojos están girados y estirados. */
+  /* Cara. En v2 la textura de la cabeza ya no trae ojos, nariz ni boca: los dibuja CARA (abajo) en la pose de reposo
+     del modelo (metros; x a su izquierda, y arriba, z al frente), con bordes nítidos a cualquier distancia. El shader se
+     instala en el material que tenga la cabeza (bosque3d cambia los materiales: después llama a face.instalar()).
+     En el clásico los ojos están pintados: para pestañear se cambia el mapa por variantes (eyeMap). */
   let headMesh = null, headMap = null;
   root.traverse(o => { if (o.isMesh && o.material && o.material.map && /cabeza/.test(o.material.map.name || '')) { headMesh = o; headMap = o.material.map; } });
   const maps = { open: headMap };
-  const face = {
+  const U = { uLid: { value: 0 }, uFeliz: { value: 0 }, uBoca: { value: 0 }, uRedonda: { value: 0 },
+    uTinta: { value: new THREE.Color('#14274f') }, uLengua: { value: new THREE.Color('#d9828e') }, uBoca0: { value: new THREE.Color('#0d1a38') } };
+  const OJOS = { open: [0, 0], half: [.5, 0], shut: [1, 0], happy: [0, 1] };
+  const face = VARIANTE === 'v2' ? {
+    instalar() { if (headMesh) instalarCara(headMesh.material, U); },
+    eyes(kind) { const [l, f] = OJOS[kind] || OJOS.open; U.uLid.value = l; U.uFeliz.value = f; },
+    // open: 0 cerrada (la sonrisa) a 1 bien abierta; redonda: 0 (a, e, i) a 1 (o, u)
+    mouth(open, redonda = 0) { U.uBoca.value = Math.max(0, Math.min(1, +open || 0)); U.uRedonda.value = Math.max(0, Math.min(1, +redonda || 0)); },
+    uniforms: U
+  } : {
+    instalar() {},
     eyes(kind) {
       if (!headMesh || !headMap || !headMap.image) return;
       if (!maps[kind]) { try { maps[kind] = eyeMap(headMap, kind); } catch (e) { maps[kind] = headMap; } }
@@ -179,6 +186,7 @@ export function ukuFrom(gltf, { onLog = () => {} } = {}) {
     },
     mouth() {} // la boca está pintada: no se abre
   };
+  face.instalar();
 
   // Cómo hace cada gesto de la app: [clip, velocidad, calma (cuánto se acerca a su pose quieta), duración en s, huesos fuera de la calma]
   const gest = {
@@ -194,6 +202,78 @@ export function ukuFrom(gltf, { onLog = () => {} } = {}) {
   };
 
   return { root, body, box, skinned, bones, nodes, clips, playClip, update, face, gest, report, sentarse, pose, B: n => bones[key(n)], N: n => nodes[key(n)] };
+}
+
+/* El shader de la cara. Se agrega a cualquier material (básico o con luz): toma la posición y la normal de reposo
+   (antes del esqueleto) y, en el frente de la cabeza, pinta encima del mapa. Medidas sacadas del modelo:
+   ojos en x ±0,092 y 1,467 (4 × 4,8 cm), nariz en y 1,391 (9,3 × 6,3 cm), sonrisa de y 1,314 al centro a 1,339 en
+   x ±0,073. Cada forma es una distancia con signo; fwidth da el antialias. */
+const CARA = `
+uniform float uLid, uFeliz, uBoca, uRedonda;
+uniform vec3 uTinta, uLengua, uBoca0;
+varying vec3 vCara; varying vec3 vCaraN;
+float cAA(float d) { float w = max(fwidth(d), 1e-5) * .8; return 1. - smoothstep(-w, w, d); }
+float cElipse(vec2 p, vec2 r) { return (length(p / r) - 1.) * min(r.x, r.y); }
+float cTrazo(vec2 p, float y, float hw, float xr) { return max(abs(p.y - y) - hw, abs(p.x) - xr); }
+vec3 cOjo(vec3 c, vec2 p, float lado) {
+  vec2 r = vec2(.0195, .0238);
+  // abierto (y a medio cerrar: el párpado baja recto) ...
+  float lid = clamp(uLid, 0., 1.);
+  float ab = max(cElipse(p, r), p.y - r.y * (1. - 2.15 * lid));
+  float abierto = cAA(ab) * (1. - step(.9, lid)) * (1. - uFeliz);
+  // ... cerrado: una curva hacia abajo ...
+  float cerrado = cAA(cTrazo(p, -r.y * .12 + (p.x * p.x) / (r.x * r.x) * r.y * -.32, .0026, r.x * 1.05)) * step(.9, lid) * (1. - uFeliz);
+  // ... o contento: un arco ^
+  float feliz = cAA(cTrazo(p, r.y * .2 - (p.x * p.x) / (r.x * r.x) * r.y * .62, .0034, r.x * 1.08)) * uFeliz;
+  c = mix(c, uTinta, max(abierto, max(cerrado, feliz)));
+  // brillo: un punto blanco arriba, hacia afuera
+  float brillo = cAA(length(p - vec2(-.0055 * lado, .0085)) - .0052) * abierto * step(lid, .35);
+  return mix(c, vec3(1.), brillo * .92);
+}
+vec3 pintarCara(vec3 c) {
+  vec3 q = vCara;
+  if (vCaraN.z < .1 || q.z < .16 || abs(q.x) > .2 || q.y < 1.24 || q.y > 1.56) return c;
+  // nariz: un óvalo más ancho arriba, con un brillo suave
+  vec2 n = q.xy - vec2(0., 1.3905);
+  float rx = .0462 * (.64 + .36 * smoothstep(-.031, .024, n.y));
+  c = mix(c, uTinta, cAA(cElipse(n, vec2(rx, .0312))));
+  c = mix(c, mix(uTinta, vec3(1.), .5), cAA(cElipse(n - vec2(-.011, .0165), vec2(.0085, .0042))) * .55);
+  // boca: la sonrisa; al hablar se abre (y se redondea con la o y la u), con la lengua al fondo
+  float x = q.x, k = 5.9, w = .072;
+  float ab = clamp(uBoca, 0., 1.), red = clamp(uRedonda, 0., 1.);
+  float y0 = 1.3136 + .002 * ab;
+  float fu = y0 + k * x * x * (1. - .45 * ab);
+  float wo = (.042 + .018 * ab) * (1. - .38 * red);
+  float h = (.004 + .03 * ab) * (1. + .3 * red) * step(.02, ab);
+  float t = clamp(1. - (x * x) / (wo * wo), 0., 1.);
+  float fl = fu - h * sqrt(t);
+  float hueco = max(max(q.y - fu, fl - q.y), abs(x) - wo);
+  float dentro = cAA(hueco);
+  vec2 l = vec2(x / (wo * .62), (q.y - (fu - h * .92)) / max(h * .55, 1e-4));
+  float lengua = cAA((length(l) - 1.) * min(wo * .62, h * .55)) * dentro;
+  c = mix(c, uBoca0, dentro);
+  c = mix(c, uLengua, lengua);
+  // el labio de arriba (la sonrisa) y el surco hasta la nariz
+  c = mix(c, uTinta, cAA(cTrazo(q.xy - vec2(0., 0.), fu, .0027 + .0006 * ab, w * (1. - .25 * red))));
+  c = mix(c, uTinta, cAA(max(abs(x) - .0026, max(q.y - 1.362, y0 - q.y))));
+  // la boca abierta lleva su borde
+  c = mix(c, uTinta, cAA(abs(hueco) - .0018) * step(.02, ab));
+  // ojos
+  c = cOjo(c, q.xy - vec2(.0918, 1.4668), 1.);
+  c = cOjo(c, q.xy - vec2(-.0918, 1.4668), -1.);
+  return c;
+}
+`;
+function instalarCara(mat, U) {
+  if (!mat || mat.userData.cara) return;
+  mat.userData.cara = true;
+  mat.onBeforeCompile = (sh) => {
+    Object.assign(sh.uniforms, U);
+    sh.vertexShader = 'varying vec3 vCara;\nvarying vec3 vCaraN;\n' + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\n  vCara = position; vCaraN = normal;');
+    sh.fragmentShader = CARA + sh.fragmentShader.replace('#include <map_fragment>', '#include <map_fragment>\n  diffuseColor.rgb = pintarCara(diffuseColor.rgb);');
+  };
+  mat.customProgramCacheKey = () => 'uku-cara-' + mat.type;
+  mat.needsUpdate = true;
 }
 
 const EYES = [{ c: [189, 132], M: [-3.08, -5.66, -5.10, 2.61] }, { c: [169, 111], M: [-4.74, -2.86, -2.59, 5.62] }];

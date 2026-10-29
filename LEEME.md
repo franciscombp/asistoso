@@ -220,8 +220,10 @@ cambiar, «DÍAS SIN ACCIDENTES» y el récord. **Uku lo cambia**:
 Los globos, corazones, confeti, fuegos artificiales, monedas, el sol y **todas las reacciones son
 objetos 3D del mundo de Uku** (`efectos3d.js`, three.js), no imágenes ni emojis pegados a la
 pantalla: tienen volumen, pasan delante o detrás de Uku y de los árboles, se desvanecen con la
-niebla y se mueven con la cámara. Cada pieza (`PIEZAS`) está hecha con geometría simple, la
-paleta del mundo y el mismo borde azul marino que Uku: estrellas, chispas, corazones, rayos,
+niebla y se mueven con la cámara. Estilo sobrio, como el juego de «Her»: sin contornos, volumen
+suave con un matcap claro y borde de luz, una paleta corta, la mitad de piezas que antes, que entran
+y se desvanecen con calma, y un aro de luz fino donde estaba el gesto. Cada pieza (`PIEZAS`) está
+hecha con geometría simple: estrellas, chispas, corazones, rayos,
 zetas de sueño, check y cruz, gotas, lunas, notas musicales, signos ¡ y ?, copos, burbujas,
 nubes, flores, hojas, brotes, tarro de miel, abejas, taza, trofeo, pastel, regalo, guitarra,
 coco, ola, manzana, piedra, papel, tijera, trébol y globo. `TABLA3D` dice qué piezas suelta cada
@@ -238,12 +240,37 @@ si no hay WebGL.
 - **Pesos limpios**: sin huesos del lado contrario, máximo 3 huesos por vértice y una pasada de
   suavizado. El suéter pasa de 31 % a 73 % de vértices con un hueso dominante; las piernas, de 72 % a 83 %.
   El esqueleto (Mixamo) es el mismo: no se puede re-riggear sin Blender.
-- **Texturas suavizadas** (cara, brazos y piernas de 512 → 2048 px; la ropa queda en 1024) en
-  `assets/oso/tex/`; las originales, tal cual, en `assets/oso/tex-original/`.
+- **Texturas horneadas** (`tools/uku-hornea.py`, ver «Aspecto de Uku» abajo) en `assets/oso/tex/`;
+  las originales del archivo quedan en `assets/oso/tex-original/` solo como fuente del horneado.
 - **Plantar**: solo los brazos hacen el gesto completo; el resto del cuerpo se queda a medio camino, y
   además ninguna parte del cuerpo (salvo las manos) puede quedar bajo el suelo.
-- Para volver atrás: `?oso=clasico` (modelo original) y `?texturas=original` (malla nueva con las
-  texturas del archivo); también con `localStorage` `uku_oso` / `uku_texturas`.
+- Para volver atrás: `?oso=clasico` (modelo original, con su cara pintada); también con
+  `localStorage` `uku_oso`.
+
+## Aspecto de Uku: suéter azul, bufanda y lentes amarillos, cara que habla
+
+Más sobrio y menos infantil, con la referencia del juego de «Her»:
+
+- **Colores**: suéter azul (`#2a4ea0`), bufanda amarilla (`#f6c426`) y lentes amarillos. Con calor,
+  la guayabera de lino con sus dos pliegues al frente.
+- **Horneado nuevo** (`python3 tools/uku-hornea.py`, un par de minutos; o solo una parte:
+  `cabeza`, `brazos`, `piernas`, `ropa`, `bufanda`, `glb`). En el mundo, las piezas con textura se
+  dibujan sin luz, así que la textura es el aspecto final. Cada texel se calcula en 3D, en la pose de
+  reposo:
+  - **Oclusión ambiental** con 48 mapas de profundidad y una luz suave de arriba: sombras suaves
+    bajo la bufanda, entre los brazos y en los pliegues, como un muñeco de vinilo. La guayabera se
+    hornea sin la bufanda, que no lleva.
+  - **Pelaje con bordes nítidos**: las clases (pelaje, parche claro, oreja, uñas) salen de la textura
+    original y se vuelven a cortar con antialias. Patas sin manchas.
+  - **Suéter y bufanda en punto**: punto fino en el cuerpo y acanalado en ruedo, puños y bufanda.
+    Se definen sobre el cuerpo, así que no importa que el atlas UV venga en pedazos. Ya no hay zigzag.
+- **La cara la dibuja un shader** (`assets/uku-rig.js › CARA`) sobre la cabeza, en la pose de reposo
+  del modelo. Ojos con brillo, nariz y sonrisa quedan nítidos a cualquier distancia. Pestañea,
+  entrecierra y pone ojos contentos ^ ^.
+- **La boca se mueve al hablar** (`voz.js › boca`): cada vocal es una sílaba. La a abre mucho, la e
+  y la o medio, la i y la u poco, y la o y la u redondean la boca. Al abrirse se ve el fondo oscuro
+  y la lengua. Con voz, cada palabra que anuncia el navegador resincroniza; con la voz apagada,
+  Uku mueve la boca al ritmo del globo de texto.
 
 ## Suelo, banca y periódico
 
@@ -254,13 +281,6 @@ si no hay WebGL.
   paseando a la banca, la mitad de las veces **se sienta a leer «El Claro»** 16 s: pose sentada del rig
   (muslos adelante, pantorrillas abajo, codos doblados, cabeza baja), el periódico delante del pecho y
   pasa la página cada 3,5 s; luego se levanta y sigue. `Mimo.escena.mundo().play('read')` lo fuerza.
-- El **suéter** se horneó desde 3D: el patrón se define sobre el
-  cuerpo (altura y ángulo alrededor del torso y de cada manga: amarillo liso, zigzag doble en el pecho y las
-  mangas, canalé en cuello, puños y dobladillo) y se pinta en la textura a través de las UV, triángulo a
-  triángulo, con relleno de borde. Así es continuo aunque las islas UV estén cortadas. El patrón va en un
-  **amarillo apagado** (ocre, como el original), no en azul, y todo el saco es de lana: ya no quedan
-  triángulos grises en el dobladillo ni en las mangas. La cara va en otra textura y no se toca. La original sigue en
-  `assets/oso/tex-original/` (`?texturas=original`).
 - **Sin marca**: no hay logo en la barra ni en el inicio y el icono es un Uku de línea (`icono.svg`).
 
 ## Cámaras: control en tercera persona, vista de pájaro y espejo
@@ -596,7 +616,7 @@ frase hasta haber dicho todas**, y la primera de la baraja nueva nunca es la
 | `caras.js` | face-api: huella y foto de cada cara; identifica (o crea un visitante sin nombre), renombra, junta y marca al dueño. |
 | `visitas.js` | Historial de visitas: quién, desde y hasta cuándo, gestos y si Fran ya la vio. |
 | `panel.js` | Panel «Quién vino»: visitas y personas. |
-| `voz.js` | Voz de Uku (speechSynthesis) y palabras de juego. |
+| `voz.js` | Voz de Uku (speechSynthesis), palabras de juego y la boca al hablar (`boca`, `mover`). |
 | `oido.js` | Oído: el reconocimiento de voz del navegador (Whisper y MiniLM quedan solo para pruebas). |
 | `tareas.js` | Tareas por voz: «Uku…» con recordatorios y post-its (en este navegador, sin red). |
 | `mente.js` | Conversación: el cerebro en la nube (Groq por el Worker); el modelo local queda solo para pruebas (`?llm=`). |
@@ -613,6 +633,8 @@ frase hasta haber dicho todas**, y la primera de la baraja nueva nunca es la
 | `frases.js` | Lo que dice Uku, sus respuestas al toque (`CHARLA`), las adivinanzas y los consejos de oso (`TIPS`). |
 | `assets/bosque3d.js` | El mundo 3D: planeta, claro, escenario, Uku (`assets/uku-rig.js` y `assets/oso/`), mariposas, cámara y paseo. |
 | `assets/clima.js` | Clima del lugar (Open-Meteo) y cómo se viste Uku. |
+| `assets/uku-rig.js` | Carga a Uku (esqueleto, clips, pies en el suelo) y el shader de la cara (ojos, nariz, boca). |
+| `tools/uku-hornea.py` | Hornea las texturas de Uku desde su geometría (con `tools/glb.py` y `tools/raster.py`). |
 
 - **Sin imitación:** se probó que Uku copiara cabeza y brazos, pero la cabeza quedaba mirando hacia arriba; se quitó. Uku queda en su animación de reposo y responde con gestos.
 - **La visión corre en el navegador** (MediaPipe y face-api desde su CDN, ~34 MB la primera vez;
