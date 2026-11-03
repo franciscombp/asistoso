@@ -625,7 +625,7 @@ function setPajaro(on) {
   if (!on && decorando) setDecorar(false);
   escena.setCamara(on ? 'pajaro' : 'libre');
   document.body.classList.toggle('vista-pajaro', on); // sin el desenfoque del sueño: se ve el claro entero
-  if (on) estado('Vista de pájaro: arrastra para moverte, rueda o pellizco para el zoom', '');
+  if (on) estado('Vista de pájaro: arrastra para girar el planeta, rueda o pellizco para el zoom', '');
   pintarModos();
 }
 function setEspejo(on) {

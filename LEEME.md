@@ -307,10 +307,20 @@ Tres botones arriba (o sus teclas) cambian cómo se ve y se usa el claro:
   tú. Con la **mano** frente a la cámara: arriba = adelante, abajo = atrás, a un lado = gira hacia
   ese lado; o con las **flechas** (arriba/abajo avanza y retrocede, izquierda/derecha gira). Al
   soltar se queda; al apagar el modo sigue en lo suyo. `escena.controlar({ avance, giro })`.
-- **🗺️ Vista** (tecla `O`, o «vista de pájaro»): el claro **desde arriba**. Se arrastra con el mouse o
-  el dedo (en dos ejes), se acerca o aleja con la **rueda** o el **pellizco**, y **Uku sigue en sus
-  cosas** mientras tanto (pasea, lee, mira mariposas). El botón **📍** vuelve a él: la cámara lo sigue
-  hasta que vuelvas a arrastrar. En la vista normal la rueda también acerca y aleja.
+- **🗺️ Vista** (tecla `O`, o «vista de pájaro»): **el planeta entero se gira con el dedo**, como en
+  Tolan. Arrastrar con el mouse o el dedo hace rodar el globo (lo que estaba bajo el dedo sigue bajo
+  el dedo, sin ladearse) y se puede dar la vuelta completa, hasta la nieve del polo sur; al soltar en
+  movimiento sigue un poco por **inercia** y se frena solo. Se acerca o aleja con la **rueda** o el
+  **pellizco** (el pellizco también arrastra con el punto medio), de forma continua: más allá de 2,5 de
+  zoom la cámara se va al **espacio** (cielo de noche, niebla azul) y orbita el planeta desde el mismo
+  lado que se estaba mirando; de vuelta, se cae sobre ese mismo sitio. Un **toque en el planeta desde
+  el espacio** vuelve a Uku (salvo decorando). **Uku sigue en sus cosas** mientras tanto (pasea, lee,
+  mira mariposas) y la vista lo sigue hasta que arrastres; el botón **📍** gira el globo hasta él y
+  acerca a ≤ 1,6. Al entrar a la vista se aparece sobre Uku, nunca en el espacio. «Arriba» es la
+  normal del punto mirado, así que el polo sur se ve derecho. En la vista normal la rueda también
+  acerca y aleja. `bosque3d.js › pajaro.q` (marco del punto mirado), `girarVista`, `girarHacia`
+  (trackball), `inercia`, `vistaPajaro()`; `moverVista(dx, dz)` sigue valiendo en metros de arco, ya
+  sin recortes.
 - **🌼 Decorar** (tecla `8`): como en Tolan, **las cosas las pones tú, de a una**. En la vista de
   pájaro, tocas el suelo y aparece lo elegido (florcitas, mata, piedra, arbusto, helecho, guayacán,
   hongos, farolito o banca) con un aro punteado encima; ◀ ▶ cambia qué es, ↻ lo gira, 🗑 lo quita y
@@ -409,8 +419,8 @@ el puente sobre el arroyo.
   lo nuevo se suma al final). Lo demás lo pone Fran con **Decorar**. El planeta es chico (5,5 m de
   radio, 11 veces la altura de Uku) y es una **esfera entera**: al alejar del todo en la vista de
   pájaro (más de 2,5 de zoom) la cámara se va al espacio y orbita el planeta completo, con cielo de
-  noche y estrellas, el claro encima y el resto de la superficie repartido en zonas (ver «Un mundo
-  chico»).
+  noche y estrellas, el lado que se estaba mirando arriba y el resto de la superficie repartido en
+  zonas (ver «Un mundo chico»); se gira con el dedo para ver cualquier lado.
 - **Uku pasea por ellos** (su planificador los usa porque son celdas libres) y por ahí se lo
   guía en «Guíame». El claro es más ancho (2,4 m a los lados, hasta 0,85 m al frente).
 - Cada sendero termina en un **destino con nombre** (`destinos()`: plaza, casa, lago, cascada,

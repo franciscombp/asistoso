@@ -1514,21 +1514,33 @@ function frame(now) {
     _cp.lerp(_tp, camAmt.tercera); _cl.lerp(_tl, camAmt.tercera);
   }
   if (camAmt.pajaro > .001) {
-    if (pajaro.seguir) { pajaro.x = lerp(pajaro.x, pos.x, Math.min(1, dt * 2)); pajaro.z = lerp(pajaro.z, pos.z, Math.min(1, dt * 2)); }
-    const py = groundY(pajaro.x, pajaro.z), z = pajaro.zoom;
-    // Cuanto más lejos, más desde arriba (de cerca se ve en perspectiva; de lejos, el planeta entero centrado)
+    // El globo entero: pajaro.q es el marco del punto mirado (Y = su normal). Siguiendo a Uku, el marco va hacia el suyo;
+    // soltado el dedo, sigue girando un poco por inercia
+    if (pajaro.seguir) { marcoDeUku(_qU); pajaro.q.slerp(_qU, RM ? 1 : Math.min(1, dt * 2)); }
+    else if (pajaro.w.lengthSq() > 4e-4) inercia(dt);
+    pajaro.zoom = RM ? pajaro.zoomA : Math.exp(lerp(Math.log(pajaro.zoom), Math.log(pajaro.zoomA), Math.min(1, dt * 9)));
+    const z = pajaro.zoom;
+    // Cuanto más lejos, más desde arriba (de cerca se ve en perspectiva; de lejos, el planeta entero centrado).
+    // Con q = identidad (centro del claro) es el mismo encuadre de siempre
     const atras = 1.6 * z / (1 + Math.max(0, z - 1) * .6);
-    _tp.set(pajaro.x, py + 2.3 * z, pajaro.z + atras); _tl.set(pajaro.x, py - Math.max(0, z - 1) * .35, pajaro.z);
-    // Más allá de 2,5 de zoom la cámara se va al espacio y orbita el planeta entero (como en Tolan): mira al centro
+    _upL.set(0, 1, 0).applyQuaternion(pajaro.q);
+    _tp.set(0, PLANET_R + 2.3 * z, atras).applyQuaternion(pajaro.q).add(PLANET_C);
+    _tl.set(0, PLANET_R - Math.max(0, z - 1) * .35, 0).applyQuaternion(pajaro.q).add(PLANET_C);
+    // Más allá de 2,5 de zoom la cámara se va al espacio y orbita el planeta entero (como en Tolan) desde el MISMO
+    // marco: lo que se gira es lo que se ve al acercar. Continuo en z: no hay salto entre el suelo y el espacio
     const esp = clamp((z - 2.5) / 4, 0, 1), D = PLANET_R * (2.4 + 2.3 * esp);
-    if (esp > 0) { _ep.set(0, 1.15, 1).normalize().multiplyScalar(D).add(PLANET_C); _tp.lerp(_ep, esp); _tl.lerp(PLANET_C, esp); }
+    if (esp > 0) { _ep.set(0, 1.15, 1).normalize().multiplyScalar(D).applyQuaternion(pajaro.q).add(PLANET_C); _tp.lerp(_ep, esp); _tl.lerp(PLANET_C, esp); }
     _cp.lerp(_tp, camAmt.pajaro); _cl.lerp(_tl, camAmt.pajaro);
-  }
+    _upCam.copy(_UP0).lerp(_upL, camAmt.pajaro).normalize();
+    // En el espacio la niebla toma el azul del cielo de noche: el limbo no se difumina a crema
+    if (scene.fog) { scene.fog.color.copy(bgCol).lerp(_colEsp, esp * camAmt.pajaro); fogEsp = true; }
+  } else if (fogEsp && scene.fog) { scene.fog.color.copy(bgCol); fogEsp = false; }
   // Desde lejos la niebla se abre: así, alejando del todo, se ve el claro entero y el planeta redondo (como en Tolan)
   if (scene.fog) { const lejos = camAmt.pajaro * Math.max(0, pajaro.zoom - 1) * 6; scene.fog.near = FOG_NEAR + lejos; scene.fog.far = 9.5 + lejos * 3; }
   camera.position.copy(_cp);
-  camera.up.set(0, 1, 0);
+  camera.up.copy(camAmt.pajaro > .001 ? _upCam : _UP0); // de pájaro, «arriba» es la normal del punto mirado
   camera.lookAt(_cl);
+  if (Math.abs(camAmt.pajaro - pajShift) > 1e-4) { pajShift = camAmt.pajaro; applyShift(); } // el corrimiento se funde con la vista
   draw();
 }
 /* ---------- Espejo (como los Memoji): Uku imita tu cabeza, tus ojos y tus brazos ----------
@@ -1623,14 +1635,8 @@ export function sitioLibre(x, z) {
 // El punto del claro (x, z) bajo un punto de la pantalla (px del contenedor), o null si no toca el suelo
 const _rayS = new THREE.Raycaster(), _ndcS = new THREE.Vector2(), _esf = new THREE.Sphere(), _hit = new THREE.Vector3();
 export function puntoDeSuelo(cx, cy) {
-  if (!host || !camera) return null;
-  const r = renderer.domElement.getBoundingClientRect();
-  _ndcS.set((cx - r.left) / r.width * 2 - 1, -(cy - r.top) / r.height * 2 + 1);
-  _rayS.setFromCamera(_ndcS, camera);
-  _esf.set(PLANET_C, PLANET_R);
-  if (!_rayS.ray.intersectSphere(_esf, _hit)) return null;
-  // de la esfera a las coordenadas de arco (las que usa surf), válido en toda la esfera
-  return arcoDe(_hit.sub(PLANET_C).divideScalar(PLANET_R));
+  if (!host || !camera || !normalBajo(cx, cy, _nB)) return null;
+  return arcoDe(_nB); // de la esfera a las coordenadas de arco (las que usa surf), válido en toda la esfera
 }
 // Dónde cae en pantalla (px del contenedor) un punto del claro
 const _pp = new THREE.Vector3();
@@ -1646,17 +1652,63 @@ export function pantallaDe(x, z, alto = 0) {
 /* ---------- Cámaras: libre (la de siempre), tercera (detrás de Uku, para manejarlo) y pájaro (el claro desde
    arriba: se arrastra con el mouse o el dedo, hace zoom con la rueda o el pellizco, y Uku sigue en lo suyo) ---------- */
 let camModo = 'libre', terceraYaw = 0;
-const camAmt = { tercera: 0, pajaro: 0 }, pajaro = { x: 0, z: 0, zoom: 1, seguir: true };
+/* Vista de pájaro = el planeta entero se gira con el dedo (como en Tolan). pajaro.q lleva el marco del claro (Y = normal
+   del polo, +Z hacia la cámara, +X derecha) al marco del punto mirado: q·(0,1,0) es su normal, q·(0,0,1) «atrás» y
+   q·(1,0,0) «derecha»; q = identidad mira al centro del claro (la misma imagen de siempre). Es la construcción de placeAt.
+   zoom es el valor animado que usa la cámara y zoomA el que piden la rueda, el pellizco y 📍; ambos en [.4, 7.5].
+   w es la velocidad angular de la inercia (rad/s, vector mundial) y tUlt el performance.now() del último pointermove. */
+const camAmt = { tercera: 0, pajaro: 0 }, pajaro = { q: new THREE.Quaternion(), zoom: 1, zoomA: 1, seguir: true, w: new THREE.Vector3(), tUlt: 0 };
 const _cp = new THREE.Vector3(), _cl = new THREE.Vector3(), _tp = new THREE.Vector3(), _tl = new THREE.Vector3(), _ep = new THREE.Vector3();
-export function setCamara(m) { camModo = m === 'tercera' || m === 'pajaro' ? m : 'libre'; if (camModo === 'tercera') terceraYaw = heading; if (camModo === 'pajaro') { pajaro.seguir = true; } if (renderer) renderer.domElement.style.touchAction = camModo === 'pajaro' ? 'none' : 'pan-y'; }
+const _qU = new THREE.Quaternion(), _qd = new THREE.Quaternion(), _qm = new THREE.Quaternion(), _ax = new THREE.Vector3(), _upL = new THREE.Vector3(), _upN = new THREE.Vector3(), _upA = new THREE.Vector3(), _nA = new THREE.Vector3(), _nB = new THREE.Vector3(), _upCam = new THREE.Vector3(0, 1, 0), _UP0 = new THREE.Vector3(0, 1, 0);
+const _colEsp = new THREE.Color('#2b3470'), bgCol = new THREE.Color('#ffffff'); let fogEsp = false, pajShift = -1; // bgCol: el fondo de la paleta (repaint lo actualiza)
+function marcoDeUku(out) { surf(pos.x, pos.z, _sp); return out.setFromUnitVectors(_nrm, _sp); }
+export function setCamara(m) {
+  const antes = camModo; camModo = m === 'tercera' || m === 'pajaro' ? m : 'libre'; if (camModo === 'tercera') terceraYaw = heading;
+  if (camModo === 'pajaro') { pajaro.seguir = true; pajaro.w.set(0, 0, 0); if (antes !== 'pajaro') { pajaro.zoomA = Math.min(pajaro.zoomA, 2.4); if (camAmt.pajaro < .2) { marcoDeUku(pajaro.q); pajaro.zoom = pajaro.zoomA; } } } // se entra sobre Uku, nunca en el espacio
+  if (renderer) renderer.domElement.style.touchAction = camModo === 'pajaro' ? 'none' : 'pan-y';
+}
 export function camaraActual() { return camModo; }
 export function vistaSigueAUku() { return camModo !== 'pajaro' || pajaro.seguir; }
-export function centrarEnUku() { pajaro.seguir = true; }
-// Mover la vista de pájaro (en metros del claro) y hacer zoom (factor); en la vista libre el zoom es el de siempre
-export function moverVista(dx, dz) { pajaro.seguir = false; pajaro.x = clamp(pajaro.x + dx, -2.8, 2.8); pajaro.z = clamp(pajaro.z + dz, -2.4, 1.4); }
-export function zoomVista(f) { if (camModo === 'pajaro') pajaro.zoom = clamp(pajaro.zoom * f, .4, 7.5); else setZoom(zoomTo * f); }
+// 📍: el globo gira hasta Uku y el zoom cae a ≤ 1,6, a la vez
+export function centrarEnUku() { pajaro.seguir = true; pajaro.zoomA = Math.min(pajaro.zoomA, 1.6); pajaro.w.set(0, 0, 0); }
+// Giro alrededor de la Z y la X LOCALES del marco (sin ladeo): Rz(+θ)·(0,1,0) = (−sin θ, cos θ, 0) lleva el punto mirado
+// a −X local (el mundo se corre a la derecha); Rx(+θ)·(0,1,0) = (0, cos θ, sin θ) lo lleva a +Z local (hacia la cámara)
+export function girarVista(ax, ay) {
+  pajaro.seguir = false;
+  pajaro.q.multiply(_qd.setFromAxisAngle(_ax.set(0, 0, 1), ax)).multiply(_qd.setFromAxisAngle(_ax.set(1, 0, 0), ay)).normalize();
+}
+// Mover la vista de pájaro (en metros de arco, en el sentido de siempre, ya sin recortes: se llega a toda la esfera) y
+// hacer zoom (factor); en la vista libre el zoom es el de siempre
+export function moverVista(dx, dz) { girarVista(-dx / PLANET_R, dz / PLANET_R); }
+export function zoomVista(f) { if (camModo === 'pajaro') pajaro.zoomA = clamp(pajaro.zoomA * f, .4, 7.5); else setZoom(zoomTo * f); }
 export function zoomPajaro() { return pajaro.zoom; }
 export function enElEspacio() { return camModo === 'pajaro' && pajaro.zoom > 2.5; }
+// Trackball exacto para el punto central, sin ladeo: el planeta tiene que llevar la normal a (la que estaba bajo el dedo)
+// a b (la de ahora); Δ⁻¹ se aplica solo al «arriba» y el marco se recompone con la rotación mínima (sin giro sobre la normal)
+function girarHacia(a, b) {
+  pajaro.seguir = false;
+  _qm.setFromUnitVectors(a, b).invert();
+  _upL.set(0, 1, 0).applyQuaternion(pajaro.q);
+  _upN.copy(_upL).applyQuaternion(_qm);
+  pajaro.q.premultiply(_qd.setFromUnitVectors(_upL, _upN)).normalize();
+}
+// Inercia: el globo sigue girando alrededor del eje w y se frena (τ = .35 s)
+function inercia(dt) {
+  const v = pajaro.w.length();
+  _upL.set(0, 1, 0).applyQuaternion(pajaro.q);
+  _upN.copy(_upL).applyQuaternion(_qd.setFromAxisAngle(_ax.copy(pajaro.w).divideScalar(v), v * dt));
+  pajaro.q.premultiply(_qd.setFromUnitVectors(_upL, _upN)).normalize();
+  pajaro.w.multiplyScalar(Math.exp(-dt / .35)); if (pajaro.w.length() < .02) pajaro.w.set(0, 0, 0);
+}
+// Normal de la esfera bajo un píxel (null fuera del limbo)
+function normalBajo(cx, cy, out) {
+  const r = renderer.domElement.getBoundingClientRect();
+  _ndcS.set((cx - r.left) / r.width * 2 - 1, -(cy - r.top) / r.height * 2 + 1); _rayS.setFromCamera(_ndcS, camera); _esf.set(PLANET_C, PLANET_R);
+  if (!_rayS.ray.intersectSphere(_esf, _hit)) return null;
+  return out.copy(_hit).sub(PLANET_C).divideScalar(PLANET_R);
+}
+// Dónde mira la vista de pájaro: { x, z } (arco), zoom, zoomA, seguir y la normal up (para pruebas y para guardarla)
+export function vistaPajaro() { _upL.set(0, 1, 0).applyQuaternion(pajaro.q); const p = arcoDe(_upL); return { x: p.x, z: p.z, zoom: pajaro.zoom, zoomA: pajaro.zoomA, seguir: pajaro.seguir, up: [_upL.x, _upL.y, _upL.z] }; }
 
 // El mundo y Uku son la misma ilustración plana; Uku va en su propia escena, encima, sin borrar la profundidad:
 // lo que está delante de él lo sigue tapando
@@ -1680,7 +1732,8 @@ function resize() {
 }
 function applyShift() {
   if (!host) return;
-  const w = host.clientWidth, h = host.clientHeight, sh = shiftCur.x, sv = shiftCur.y;
+  // De pájaro el corrimiento se anula: el centro del trackball y del pellizco es el centro de la pantalla
+  const w = host.clientWidth, h = host.clientHeight, k = 1 - camAmt.pajaro, sh = shiftCur.x * k, sv = shiftCur.y * k;
   if (!w || !h) return;
   if (Math.abs(sh) > 1e-4 || Math.abs(sv) > 1e-4) camera.setViewOffset(w, h, -w * sh, h * sv, w, h); else camera.clearViewOffset();
   camera.updateProjectionMatrix();
@@ -1695,7 +1748,7 @@ function init() {
   scene = new THREE.Scene();
   const pal = palette();
   scene.background = null; // transparente: la máscara del contenedor funde la escena con la página
-  scene.fog = new THREE.Fog(pal.bg, FOG_NEAR, 9.5); // el fondo del claro se aclara con la distancia, como en una ilustración
+  bgCol.set(pal.bg); scene.fog = new THREE.Fog(pal.bg, FOG_NEAR, 9.5); // el fondo del claro se aclara con la distancia, como en una ilustración
   camera = new THREE.PerspectiveCamera(30, 1, .05, 90); // lejos: el planeta entero desde el espacio
   camera.position.set(0, .75, 2.6);
   // Ilustración vectorial: luz ambiente y un sol de dos tonos (ver toon)
@@ -1746,17 +1799,30 @@ function init() {
   const cv = renderer.domElement;
   cv.style.touchAction = 'pan-y'; // el scroll vertical de la página sigue funcionando
   const dedos = new Map(); let pellizco = 0; // los dedos en pantalla (para el pellizco)
-  cv.addEventListener('pointerdown', e => { dedos.set(e.pointerId, { x: e.clientX, y: e.clientY }); if (dedos.size === 2) { const [a, b] = [...dedos.values()]; pellizco = Math.hypot(a.x - b.x, a.y - b.y); } if (!drag) drag = { x: e.clientX, y: e.clientY, y0: yawTo, moved: false, id: e.pointerId }; });
+  cv.addEventListener('pointerdown', e => { dedos.set(e.pointerId, { x: e.clientX, y: e.clientY }); if (dedos.size === 2) { const [a, b] = [...dedos.values()]; pellizco = Math.hypot(a.x - b.x, a.y - b.y); } pajaro.w.set(0, 0, 0); pajaro.tUlt = performance.now(); if (!drag) drag = { x: e.clientX, y: e.clientY, y0: yawTo, moved: false, id: e.pointerId }; }); // un dedo nuevo corta la inercia
+  const medio = () => { const [a, b] = [...dedos.values()]; return [(a.x + b.x) / 2, (a.y + b.y) / 2]; };
   cv.addEventListener('pointermove', e => {
+    const dos = dedos.size === 2 && pellizco, m0 = dos ? medio() : null;
     if (dedos.has(e.pointerId)) dedos.set(e.pointerId, { x: e.clientX, y: e.clientY });
-    if (dedos.size === 2 && pellizco) { const [a, b] = [...dedos.values()], d = Math.hypot(a.x - b.x, a.y - b.y); if (d > 10) { zoomVista(pellizco / d); pellizco = d; } return; }
+    if (dos) { // pellizco: zoom con la separación y, de pájaro, el globo sigue al punto medio
+      const [a, b] = [...dedos.values()], d = Math.hypot(a.x - b.x, a.y - b.y); if (d > 10) { zoomVista(pellizco / d); pellizco = d; }
+      if (camModo === 'pajaro') { const m1 = medio(); if (normalBajo(m0[0], m0[1], _nA) && normalBajo(m1[0], m1[1], _nB)) girarHacia(_nA, _nB); }
+      return;
+    }
     if (!drag || e.pointerId !== drag.id) return;
     const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
     if (!drag.moved && Math.hypot(dx, dy) > 8) { drag.moved = true; try { cv.setPointerCapture(e.pointerId); } catch (x) {} }
     if (!drag.moved) return;
-    if (camModo === 'pajaro') { // arrastrar el claro: lo que se arrastra se queda bajo el dedo (más o menos)
-      const k = pajaro.zoom * 2.6 / Math.max(300, host ? host.clientHeight : 600);
-      moverVista(-dx * k, -dy * k); drag.x = e.clientX; drag.y = e.clientY; return;
+    if (camModo === 'pajaro') { // arrastrar el globo: lo que estaba bajo el dedo sigue bajo el dedo (trackball)
+      const t = performance.now(), dtm = Math.max(8, t - (pajaro.tUlt || t)), a = normalBajo(drag.x, drag.y, _nA), b = normalBajo(e.clientX, e.clientY, _nB);
+      _upA.set(0, 1, 0).applyQuaternion(pajaro.q);
+      if (a && b) girarHacia(a, b);
+      else { const s = Math.PI / Math.max(300, host.clientWidth); girarVista(dx * s, -dy * s); } // fuera del limbo (en el espacio): una pantalla = media vuelta
+      // inercia: velocidad angular del «arriba» (eje × ángulo / Δt), filtrada
+      const upDesp = _upN.set(0, 1, 0).applyQuaternion(pajaro.q), ang = _upA.angleTo(upDesp);
+      _ax.crossVectors(_upA, upDesp).normalize().multiplyScalar(ang / (dtm / 1000));
+      if (!RM) pajaro.w.lerp(_ax, .5);
+      pajaro.tUlt = t; drag.x = e.clientX; drag.y = e.clientY; return;
     }
     // ±65°: lo alto del claro está detrás del oso, así nunca queda un árbol delante de la cámara
     const v = drag.y0 - dx * .011, L = 1.13; yawTo = Math.max(-L - .15, Math.min(L + .15, v)); idleAt = performance.now();
@@ -1768,12 +1834,16 @@ function init() {
     if (!drag) return;
     const moved = drag.moved; drag = null; idleAt = performance.now();
     if (moved) {
+      // soltado el dedo en movimiento, el globo sigue un poco (si se paró antes de soltar, no)
+      if (performance.now() - pajaro.tUlt > 80 || pajaro.w.length() < .6) pajaro.w.set(0, 0, 0); else pajaro.w.clampLength(0, 6);
       // el arrastre no cuenta como toque (el portal del hub es un botón)
       const stop = ev => { ev.stopPropagation(); ev.preventDefault(); };
       window.addEventListener('click', stop, { capture: true, once: true });
       setTimeout(() => window.removeEventListener('click', stop, true), 400);
       return;
     }
+    // Un toque en el planeta visto desde el espacio vuelve a Uku (como en Tolan); decorando, el toque es para poner cosas
+    if (e.type === 'pointerup' && camModo === 'pajaro' && enElEspacio() && !document.body.classList.contains('decorando')) { centrarEnUku(); return; }
     if (e.type === 'pointerup') { play(['wave', 'nod', 'happy'][Math.floor(Math.random() * 3)]); onTap && onTap(); }
   };
   cv.addEventListener('pointerup', end);
@@ -1792,7 +1862,7 @@ function init() {
 }
 // Tema o región nuevos: se repinta todo con la paleta que toca
 function repaint() {
-  const p = palette(); scene.fog.color.set(p.bg); ground.material.color.set(p.ground);
+  const p = palette(); bgCol.set(p.bg); scene.fog.color.set(p.bg); fogEsp = false; ground.material.color.set(p.ground);
   if (wingM) wingM.color.set(p.flower); if (petals) petals.material.color.set(p.flower); if (smokeM) smokeM.color.set(p.dust);
   buildForest(true);
 }
@@ -1833,7 +1903,7 @@ const frameHooks = [];
 export function enCuadro(fn) { frameHooks.push(fn); }
 // El material plano de dos tonos, para lo que se agrega al mundo desde afuera (efectos3d)
 export function materialPlano(o) { return toon(o); }
-export function mundo3d() { return { THREE, scene, camera, get uku() { return bear; }, groundY, PLANET_C, PLANET_R, get renderer() { return renderer; }, get planeta() { return PLANETA_PUNTOS; }, get garden() { return garden; }, decoEsc, okWalk: (x, z) => okWalk(x, z) }; }
+export function mundo3d() { return { THREE, scene, camera, get uku() { return bear; }, groundY, PLANET_C, PLANET_R, get renderer() { return renderer; }, get planeta() { return PLANETA_PUNTOS; }, get garden() { return garden; }, get pajaro() { return pajaro; }, decoEsc, okWalk: (x, z) => okWalk(x, z) }; }
 export function setScore(s) { if (!bear && target != null) { target = s; return; } if (s !== score) { score = s; if (renderer) buildForest(); } }
 export function setBloom(b) { b = b == null ? null : Math.max(0, Math.min(100, b)); if (b !== bloom) { bloom = b; if (renderer) buildForest(); } }
 /* Lo que hay en el claro: { brotes, flores, guayacanes: 0–4, casa, mariposas, escenario }.
