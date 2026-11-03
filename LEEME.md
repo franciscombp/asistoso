@@ -309,7 +309,8 @@ Tres botones arriba (o sus teclas) cambian cómo se ve y se usa el claro:
   soltar se queda; al apagar el modo sigue en lo suyo. `escena.controlar({ avance, giro })`.
 - **🗺️ Vista** (tecla `O`, o «vista de pájaro»): **el planeta entero se gira con el dedo**, como en
   Tolan. Arrastrar con el mouse o el dedo hace rodar el globo (lo que estaba bajo el dedo sigue bajo
-  el dedo, sin ladearse) y se puede dar la vuelta completa, hasta la nieve del polo sur; al soltar en
+  el dedo, sin ladearse en cada arrastre; en bucles largos puede quedar un poco girado y 📍 lo
+  endereza) y se puede dar la vuelta completa, hasta la nieve del polo sur; al soltar en
   movimiento sigue un poco por **inercia** y se frena solo. Se acerca o aleja con la **rueda** o el
   **pellizco** (el pellizco también arrastra con el punto medio), de forma continua: más allá de 2,5 de
   zoom la cámara se va al **espacio** (cielo de noche, niebla azul) y orbita el planeta desde el mismo

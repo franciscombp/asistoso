@@ -753,7 +753,7 @@ function planetaGeo(pal) {
 // Las zonas del planeta, para que Uku pueda nombrarlas («del otro lado está la laguna») y para las pruebas
 export function zonas() { return ZONAS.map(Z => ({ id: Z.id, nombre: Z.nombre, x: Z.cx, z: Z.cz, r: Z.r })); }
 /* ---------- Polvo de luz (motas blancas que flotan) ---------- */
-let dust = null;
+let dust = null; const DUST_OP = .9; // opacidad del polvo (de pájaro, en el espacio, se apaga)
 // El polvo de luz sí es suave: un punto difuso (lo único con brillo en el dibujo plano, junto al desenfoque de sueño)
 function polvoTexture() {
   const c = document.createElement('canvas'); c.width = c.height = 64;
@@ -776,7 +776,7 @@ function buildDust() {
     speed[i] = .03 + r() * .07;
   }
   const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
-  dust = new THREE.Points(g, new THREE.PointsMaterial({ map: polvoTexture(), size: .045, transparent: true, opacity: .9, depthWrite: false, color: palette().dust, fog: false }));
+  dust = new THREE.Points(g, new THREE.PointsMaterial({ map: polvoTexture(), size: .045, transparent: true, opacity: DUST_OP, depthWrite: false, color: palette().dust, fog: false }));
   dust.userData.speed = speed;
   scene.add(dust);
 }
@@ -1513,6 +1513,7 @@ function frame(now) {
     _tp.set(tx, groundY(tx, tz) + .95, tz); _tl.set(pos.x + Math.sin(terceraYaw) * .9, groundY(pos.x, pos.z) + .22, pos.z + Math.cos(terceraYaw) * .9);
     _cp.lerp(_tp, camAmt.tercera); _cl.lerp(_tl, camAmt.tercera);
   }
+  let esp = 0; // cuánto se está en el espacio (0 en el suelo, 1 en el tope del zoom)
   if (camAmt.pajaro > .001) {
     // El globo entero: pajaro.q es el marco del punto mirado (Y = su normal). Siguiendo a Uku, el marco va hacia el suyo;
     // soltado el dedo, sigue girando un poco por inercia
@@ -1527,9 +1528,11 @@ function frame(now) {
     _tp.set(0, PLANET_R + 2.3 * z, atras).applyQuaternion(pajaro.q).add(PLANET_C);
     _tl.set(0, PLANET_R - Math.max(0, z - 1) * .35, 0).applyQuaternion(pajaro.q).add(PLANET_C);
     // Más allá de 2,5 de zoom la cámara se va al espacio y orbita el planeta entero (como en Tolan) desde el MISMO
-    // marco: lo que se gira es lo que se ve al acercar. Continuo en z: no hay salto entre el suelo y el espacio
-    const esp = clamp((z - 2.5) / 4, 0, 1), D = PLANET_R * (2.4 + 2.3 * esp);
-    if (esp > 0) { _ep.set(0, 1.15, 1).normalize().multiplyScalar(D).applyQuaternion(pajaro.q).add(PLANET_C); _tp.lerp(_ep, esp); _tl.lerp(PLANET_C, esp); }
+    // marco: lo que se gira es lo que se ve al acercar. Continuo en z: no hay salto entre el suelo y el espacio, y esp
+    // llega a 1 justo en el tope del zoom (7,5). La órbita mira el planeta bastante desde arriba (0, 3.2, 1) para que
+    // el punto mirado (el claro, al salir desde él) quede cerca del centro del disco y no caiga inclinado en el borde
+    esp = clamp((z - 2.5) / 5, 0, 1); const D = PLANET_R * (2.4 + 2.3 * esp);
+    if (esp > 0) { _ep.set(0, 3.2, 1).normalize().multiplyScalar(D).applyQuaternion(pajaro.q).add(PLANET_C); _tp.lerp(_ep, esp); _tl.lerp(PLANET_C, esp); }
     _cp.lerp(_tp, camAmt.pajaro); _cl.lerp(_tl, camAmt.pajaro);
     _upCam.copy(_UP0).lerp(_upL, camAmt.pajaro).normalize();
     // En el espacio la niebla toma el azul del cielo de noche: el limbo no se difumina a crema
@@ -1537,6 +1540,7 @@ function frame(now) {
   } else if (fogEsp && scene.fog) { scene.fog.color.copy(bgCol); fogEsp = false; }
   // Desde lejos la niebla se abre: así, alejando del todo, se ve el claro entero y el planeta redondo (como en Tolan)
   if (scene.fog) { const lejos = camAmt.pajaro * Math.max(0, pajaro.zoom - 1) * 6; scene.fog.near = FOG_NEAR + lejos; scene.fog.far = 9.5 + lejos * 3; }
+  if (dust) dust.material.opacity = DUST_OP * (1 - esp * camAmt.pajaro); // desde el espacio el polvo del claro no asoma fuera del limbo
   camera.position.copy(_cp);
   camera.up.copy(camAmt.pajaro > .001 ? _upCam : _UP0); // de pájaro, «arriba» es la normal del punto mirado
   camera.lookAt(_cl);
@@ -1664,7 +1668,11 @@ const _colEsp = new THREE.Color('#2b3470'), bgCol = new THREE.Color('#ffffff'); 
 function marcoDeUku(out) { surf(pos.x, pos.z, _sp); return out.setFromUnitVectors(_nrm, _sp); }
 export function setCamara(m) {
   const antes = camModo; camModo = m === 'tercera' || m === 'pajaro' ? m : 'libre'; if (camModo === 'tercera') terceraYaw = heading;
-  if (camModo === 'pajaro') { pajaro.seguir = true; pajaro.w.set(0, 0, 0); if (antes !== 'pajaro') { pajaro.zoomA = Math.min(pajaro.zoomA, 2.4); if (camAmt.pajaro < .2) { marcoDeUku(pajaro.q); pajaro.zoom = pajaro.zoomA; } } } // se entra sobre Uku, nunca en el espacio
+  if (camModo === 'pajaro') { pajaro.seguir = true; pajaro.w.set(0, 0, 0); if (antes !== 'pajaro') { pajaro.zoomA = Math.min(pajaro.zoomA, 2.4); pajaro.zoom = Math.min(pajaro.zoom, 2.4); if (camAmt.pajaro < .2) { marcoDeUku(pajaro.q); pajaro.zoom = pajaro.zoomA; } } } // se entra sobre Uku, nunca en el espacio (ni un cuadro: así body.espacio no parpadea)
+  else if (antes === 'pajaro') { // al salir, el fundido parte de cerca de Uku: si se miraba la cara opuesta, la recta cruzaría la esfera
+    pajaro.seguir = true; pajaro.w.set(0, 0, 0); pajaro.zoomA = Math.min(pajaro.zoomA, 1.6);
+    if (_upL.set(0, 1, 0).applyQuaternion(pajaro.q).y < 0) { marcoDeUku(pajaro.q); pajaro.zoom = pajaro.zoomA; }
+  }
   if (renderer) renderer.domElement.style.touchAction = camModo === 'pajaro' ? 'none' : 'pan-y';
 }
 export function camaraActual() { return camModo; }
@@ -1799,7 +1807,7 @@ function init() {
   const cv = renderer.domElement;
   cv.style.touchAction = 'pan-y'; // el scroll vertical de la página sigue funcionando
   const dedos = new Map(); let pellizco = 0; // los dedos en pantalla (para el pellizco)
-  cv.addEventListener('pointerdown', e => { dedos.set(e.pointerId, { x: e.clientX, y: e.clientY }); if (dedos.size === 2) { const [a, b] = [...dedos.values()]; pellizco = Math.hypot(a.x - b.x, a.y - b.y); } pajaro.w.set(0, 0, 0); pajaro.tUlt = performance.now(); if (!drag) drag = { x: e.clientX, y: e.clientY, y0: yawTo, moved: false, id: e.pointerId }; }); // un dedo nuevo corta la inercia
+  cv.addEventListener('pointerdown', e => { dedos.set(e.pointerId, { x: e.clientX, y: e.clientY }); if (dedos.size === 2) { const [a, b] = [...dedos.values()]; pellizco = Math.hypot(a.x - b.x, a.y - b.y); if (drag) drag.moved = true; } pajaro.w.set(0, 0, 0); pajaro.tUlt = performance.now(); if (!drag) drag = { x: e.clientX, y: e.clientY, y0: yawTo, moved: false, id: e.pointerId }; }); // un dedo nuevo corta la inercia; el segundo hace del gesto un arrastre (soltar el pellizco no es un toque)
   const medio = () => { const [a, b] = [...dedos.values()]; return [(a.x + b.x) / 2, (a.y + b.y) / 2]; };
   cv.addEventListener('pointermove', e => {
     const dos = dedos.size === 2 && pellizco, m0 = dos ? medio() : null;
@@ -1817,7 +1825,8 @@ function init() {
       const t = performance.now(), dtm = Math.max(8, t - (pajaro.tUlt || t)), a = normalBajo(drag.x, drag.y, _nA), b = normalBajo(e.clientX, e.clientY, _nB);
       _upA.set(0, 1, 0).applyQuaternion(pajaro.q);
       if (a && b) girarHacia(a, b);
-      else { const s = Math.PI / Math.max(300, host.clientWidth); girarVista(dx * s, -dy * s); } // fuera del limbo (en el espacio): una pantalla = media vuelta
+      else if (pajaro.zoom > 2.5) { const s = Math.PI / Math.max(300, host.clientWidth); girarVista(dx * s, -dy * s); } // fuera del limbo, en el espacio: una pantalla = media vuelta
+      else { pajaro.tUlt = t; drag.x = e.clientX; drag.y = e.clientY; return; } // fuera del limbo de cerca (zoom bajo): no gira ni acumula inercia
       // inercia: velocidad angular del «arriba» (eje × ángulo / Δt), filtrada
       const upDesp = _upN.set(0, 1, 0).applyQuaternion(pajaro.q), ang = _upA.angleTo(upDesp);
       _ax.crossVectors(_upA, upDesp).normalize().multiplyScalar(ang / (dtm / 1000));
@@ -1842,8 +1851,8 @@ function init() {
       setTimeout(() => window.removeEventListener('click', stop, true), 400);
       return;
     }
-    // Un toque en el planeta visto desde el espacio vuelve a Uku (como en Tolan); decorando, el toque es para poner cosas
-    if (e.type === 'pointerup' && camModo === 'pajaro' && enElEspacio() && !document.body.classList.contains('decorando')) { centrarEnUku(); return; }
+    // Un toque en el planeta (no en el cielo) visto desde el espacio vuelve a Uku (como en Tolan); decorando, el toque es para poner cosas
+    if (e.type === 'pointerup' && camModo === 'pajaro' && enElEspacio() && !document.body.classList.contains('decorando')) { if (normalBajo(e.clientX, e.clientY, _nA)) centrarEnUku(); return; }
     if (e.type === 'pointerup') { play(['wave', 'nod', 'happy'][Math.floor(Math.random() * 3)]); onTap && onTap(); }
   };
   cv.addEventListener('pointerup', end);
