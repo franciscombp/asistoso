@@ -247,6 +247,17 @@ si no hay WebGL.
 - Para volver atrás: `?oso=clasico` (modelo original, con su cara pintada); también con
   `localStorage` `uku_oso`.
 
+## Pies, giros y paraguas
+
+- **Pies en el suelo**: el rig apoya la planta más baja en cada cuadro (quieto, saludando y asintiendo
+  queda a menos de 1 mm; caminando y plantando, a menos de 1 cm). Ya no se mece girando el cuerpo
+  entero (giraba los pies apoyados) y la sombra de contacto vuelve a ser una elipse plana visible.
+- **Giros con pasitos**: si gira en el sitio (más de 0,3 rad/s sin avanzar), usa la clip de caminar
+  corta y lenta, así mueve las patas en vez de deslizarse.
+- **Paraguas en la mano izquierda**: la derecha queda libre para saludar y para lo demás que sostiene.
+  El brazo izquierdo lo sostiene con el codo doblado (`uku-rig.js › sostener`) y el paraguas es rígido:
+  su largo se mide una vez con el brazo en su pose y no se estira al caminar ni al saludar.
+
 ## Los pesos de Uku (v3)
 
 `assets/oso/uku-rig-v3.glb` (la variante por defecto; `?oso=v2` carga la anterior) es la v2 con los pesos

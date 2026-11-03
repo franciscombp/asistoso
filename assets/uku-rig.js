@@ -93,7 +93,7 @@ export function ukuFrom(gltf, { onLog = () => {} } = {}) {
   /* Pose sentado (para leer en la banca): se aplica después del mixer y la calma. Los muslos van hacia adelante,
      las pantorrillas hacia abajo, los brazos adelante con los codos doblados (sostienen el periódico) y la cabeza
      baja un poco. Las rotaciones son sobre la pose de reposo; `sit` va de 0 a 1 para entrar y salir suave. */
-  const pose = { sit: 0, sitTo: 0, raise: 0, ang: { upLeg: -1.5, leg: 1.55, arm: -1.0, foreArm: -1.2, armZ: .2, head: .45 } };
+  const pose = { sit: 0, sitTo: 0, raise: 0, hold: 0, holdTo: 0, ang: { upLeg: -1.5, leg: 1.55, arm: -1.0, foreArm: -1.2, armZ: .2, head: .45 } };
   // Los huesos de Mixamo tienen giro propio en sus ejes locales: las rotaciones de la pose se hacen alrededor de
   // ejes del personaje (x = a su derecha/izquierda, z = hacia adelante), convertidos al espacio del padre de cada hueso
   const _qp = new THREE.Quaternion(), _qr = new THREE.Quaternion(), _qw = new THREE.Quaternion(), _axw = new THREE.Vector3();
@@ -152,6 +152,16 @@ export function ukuFrom(gltf, { onLog = () => {} } = {}) {
       });
       rotWorld(bones[key('mixamorig:Head')], 1, 0, 0, A.head * k); // la cabeza baja hacia el periódico
     }
+    /* Sostener (el paraguas): el brazo izquierdo deja la clip y queda en su pose de reposo, con el brazo un poco
+       adelante y el codo doblado: la pata a la altura del pecho, firme, aunque el cuerpo camine o salude con la derecha */
+    pose.hold += (pose.holdTo - pose.hold) * Math.min(1, dt * 4);
+    if (pose.hold > .005) {
+      const k = pose.hold, B = (n) => bones[key('mixamorig:Left' + n)];
+      ['Shoulder', 'Arm', 'ForeArm', 'Hand'].forEach(n => { const b = B(n), q = b && rest0Q.get(b); if (q) b.quaternion.slerp(q, k); });
+      root.updateMatrixWorld(true);
+      rotWorld(B('Arm'), 1, 0, 0, -.45 * k); rotWorld(B('Arm'), 0, 0, 1, -.12 * k);           // brazo apenas adelante y pegado al cuerpo
+      rotWorld(B('ForeArm'), 1, 0, 0, -1.35 * k); rotWorld(B('ForeArm'), 0, 1, 0, -.3 * k);  // antebrazo arriba, hacia el centro
+    }
     // Los pies en el suelo: la cadera baja o sube hasta que la planta más baja toca el suelo (ni flota ni se hunde)
     if (!hips) return;
     root.updateMatrixWorld(true);
@@ -164,6 +174,9 @@ export function ukuFrom(gltf, { onLog = () => {} } = {}) {
   }
   // sentarse(on, raise): on = true/false; raise = a qué altura (m del personaje) queda el bajo de los pies sobre el suelo
   function sentarse(on, raise = .22) { pose.sitTo = on ? 1 : 0; if (on) pose.raise = raise; }
+  // sostener(on): el brazo izquierdo sostiene algo (el paraguas) con el codo doblado
+  function sostener(on) { pose.holdTo = on ? 1 : 0; }
+  const rest0Q = new Map(rest0);
 
   /* Cara. En v2 y v3 la textura de la cabeza ya no trae ojos, nariz ni boca: los dibuja CARA (abajo) en la pose de reposo
      del modelo (metros; x a su izquierda, y arriba, z al frente), con bordes nítidos a cualquier distancia. El shader se
@@ -205,7 +218,7 @@ export function ukuFrom(gltf, { onLog = () => {} } = {}) {
     plantAt: { hold: [1.6, 3.4], at: 3.4 } // plantar: cuándo sostiene el brote y cuándo queda en la tierra (s del gesto)
   };
 
-  return { root, body, box, skinned, bones, nodes, clips, playClip, update, face, gest, report, sentarse, pose, B: n => bones[key(n)], N: n => nodes[key(n)] };
+  return { root, body, box, skinned, bones, nodes, clips, playClip, update, face, gest, report, sentarse, sostener, pose, B: n => bones[key(n)], N: n => nodes[key(n)] };
 }
 
 /* El shader de la cara. Se agrega a cualquier material (básico o con luz): toma la posición y la normal de reposo

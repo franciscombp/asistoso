@@ -863,7 +863,7 @@ function buildFlies() {
 }
 const _fp = new THREE.Vector3(), _fv = new THREE.Vector3(), _fu = new THREE.Vector3();
 // Uku ofrece la mano solo si está quieto, sin gesto y sin el paraguas
-const handFree = () => !!(bear && bones.hand_R && !gesture && !moving && !focus && !umb);
+const handFree = () => !!(bear && bones.hand_R && !gesture && !moving && !focus); // el paraguas va en la izquierda
 function perchPoint(f, out) {
   const P = f.perch; if (!P) return null;
   // sobre la pata derecha, del lado de la cámara (en metros, con los ejes de Uku)
@@ -930,10 +930,12 @@ let GEST = {}, IDLE = null, WALK = null, PLANT_AT = { hold: [1.6, 3.4], at: 3.4 
 // Conversando solo hace los gestos de pie: los que lo agachan (asentir, plantar) quedan para su mundo
 const STANDING = { wave: 1, happy: 1, talk: 1 };
 const BEAR_S = .58, WALK_V = .15; // Uku grande; pasea despacio (m/s)
-let pos = { x: 0, z: 0 }, heading = 0, goal = null, idleFor = 3, acts = 0, speed = 0, turnTo = 0, moving = false, swayB = 0;
+let pos = { x: 0, z: 0 }, heading = 0, goal = null, idleFor = 3, acts = 0, speed = 0, turnTo = 0, moving = false, swayB = 0, giroV = 0, headingAntes = 0;
 function clipFor() {
   if (gesture && GEST[gesture] && (!focus || STANDING[gesture])) return GEST[gesture];
   if (moving) return [WALK[0], WALK[1] * clamp(speed / WALK_V, .5, 1.1), WALK[2]];
+  // Girando en el sitio da pasitos (la clip de caminar, corta y más lenta): no se desliza sobre los pies quietos
+  if (giroV > .3) return [WALK[0], WALK[1] * clamp(.45 + giroV * .3, .45, 1), .5];
   return IDLE;
 }
 // Pasear: elige un punto del claro, gira hacia él, camina despacio y se queda un rato mirando
@@ -975,6 +977,8 @@ function brain(dt) {
   }
   speed = lerp(speed, want, Math.min(1, dt * 3));
   moving = Math.abs(speed) > .03 || want !== 0;
+  // Qué tan rápido gira (rad/s, suavizado): girando en el sitio, clipFor le da pasitos
+  if (dt > 0) giroV = lerp(giroV, Math.abs(angDiff(heading, headingAntes)) / dt, Math.min(1, dt * 6)); headingAntes = heading;
   pos.x += Math.sin(heading) * speed * dt; pos.z += Math.cos(heading) * speed * dt;
 }
 /* Por dónde puede andar Uku: todo el claro a la vista, sin pisar los canteros, el lago ni lo que tiene puesto
@@ -1239,7 +1243,7 @@ function eyes(dt, t) {
 
 function holdObject(kind) {
   if (held) { held.parent && held.parent.remove(held); held = null; }
-  if (!kind || !bones.hand_R || umb) return; // con el paraguas en la mano no sostiene otra cosa
+  if (!kind || !bones.hand_R || (umb && kind === 'periodico')) return; // el paraguas va en la izquierda: la derecha queda libre (menos para el periódico, que pide las dos)
   if (kind === 'coin') {
     held = new THREE.Mesh(new THREE.CylinderGeometry(.06, .06, .014, 28), toon({ color: '#ffd200' }));
     // sobre la palma: en reposo la palma mira a (0, -0.89, 0.45) en el espacio del hueso
@@ -1320,28 +1324,34 @@ function hatLana() {
   const { W, top } = HEAD; g.scale.setScalar(7.7 * W); g.position.set(0, top - .62 * W, -.09 * W); g.rotation.x = -.1;
   return g;
 }
-/* Paraguas en la mano derecha: vive en la escena y cada cuadro se apoya en
-   la palma y apunta a un punto sobre la cabeza (así cubre a Uku aunque el
-   brazo se mueva). El mango se estira lo que haga falta. */
+/* Paraguas en la mano izquierda (la derecha saluda): el brazo izquierdo lo sostiene con el codo doblado (rig.sostener) y
+   el paraguas es rígido: largo fijo, medido una vez con el brazo ya en su pose; cada cuadro se apoya en la pata y apunta
+   a un punto sobre la cabeza, así cubre a Uku aunque camine. La tela queda horizontal. */
 let umb = null;
 function umbrella() {
   const g = new THREE.Group(), canopy = new THREE.Group(), cloth = mat('#1b2a4e', { side: THREE.DoubleSide }), stripe = mat('#ffd200', { side: THREE.DoubleSide });
   for (let i = 0; i < 8; i++) canopy.add(new THREE.Mesh(new THREE.ConeGeometry(.29, .11, 2, 1, true, i / 8 * Math.PI * 2, Math.PI / 4), i % 2 ? stripe : cloth));
   const tip = new THREE.Mesh(new THREE.CylinderGeometry(.006, .006, .06, 5), mat('#2f2f2f')); tip.position.y = .08; canopy.add(tip);
   const pole = new THREE.Mesh(new THREE.CylinderGeometry(.007, .007, 1, 5), mat('#2f2f2f'));
-  const handle = new THREE.Mesh(new THREE.TorusGeometry(.03, .008, 6, 12, Math.PI), mat('#2f2f2f')); handle.rotation.z = Math.PI; handle.position.set(.03, -.02, 0);
+  const handle = new THREE.Mesh(new THREE.TorusGeometry(.03, .008, 6, 12, Math.PI), mat('#2f2f2f')); handle.rotation.z = Math.PI; handle.position.set(-.03, -.02, 0);
   g.add(canopy, pole, handle);
-  g.userData = { canopy, pole };
+  g.userData = { canopy, pole, L: 0 };
   return g;
 }
-const _h = new THREE.Vector3(), _t = new THREE.Vector3(), _d = new THREE.Vector3(), _up = new THREE.Vector3(0, 1, 0);
+const _h = new THREE.Vector3(), _t = new THREE.Vector3(), _d = new THREE.Vector3(), _up = new THREE.Vector3(0, 1, 0), _bu = new THREE.Vector3();
 function placeUmbrella() {
-  if (!umb || !bones.hand_R || !bones.head) return;
-  bones.hand_R.getWorldPosition(_h); if (bones.hand_R.children[0]) _h.lerp(bones.hand_R.children[0].getWorldPosition(_t), .6); // centro de la pata
-  bones.head.getWorldPosition(_t); _t.x = _h.x * .45; _t.y += .3; _t.z += .03; // sobre la cabeza, un poco hacia la mano
-  _d.subVectors(_t, _h); const L = _d.length(); _d.normalize();
+  const mano = bones.hand_L || bones.hand_R;
+  if (!umb || !mano || !bones.head) return;
+  mano.getWorldPosition(_h); if (mano.children[0]) _h.lerp(mano.children[0].getWorldPosition(_t), .6); // centro de la pata
+  _bu.set(0, 1, 0).applyQuaternion(bear.quaternion); // el «arriba» de Uku (la normal del planeta)
+  (bones.headTop || bones.head).getWorldPosition(_t); _t.addScaledVector(_bu, .06 * bear.scale.x / BEAR_S).lerp(_h, .12); // sobre la coronilla, apenas hacia la pata
+  _d.subVectors(_t, _h); const dist = _d.length(); _d.normalize();
+  const u = umb.userData;
+  // Largo fijo: se mide cuando el brazo ya está en su pose (y si Uku cambia de tamaño); después no se estira nunca
+  const k = rig && rig.pose ? rig.pose.hold : 1;
+  if (!u.L || (k > .95 && !u.medido) || Math.abs((u.esc || 0) - bear.scale.x) > .002) { u.L = dist; u.esc = bear.scale.x; u.medido = k > .95; }
   umb.position.copy(_h); umb.quaternion.setFromUnitVectors(_up, _d);
-  const u = umb.userData; u.pole.scale.y = L; u.pole.position.y = L / 2; u.canopy.position.y = L;
+  u.pole.scale.y = u.L; u.pole.position.y = u.L / 2; u.canopy.position.y = u.L;
   u.canopy.quaternion.setFromUnitVectors(_d, _up); // la tela queda horizontal aunque el mango vaya inclinado
 }
 function shades() {
@@ -1429,6 +1439,7 @@ function dressBear() {
   bones.head.add(acc);
   if (umb && look.hat !== 'paraguas') { scene.remove(umb); umb.traverse(c => { c.geometry && c.geometry.dispose(); c.material && c.material.dispose(); }); umb = null; }
   if (!umb && look.hat === 'paraguas') { umb = umbrella(); scene.add(umb); }
+  if (rig && rig.sostener) rig.sostener(!!umb); // el brazo izquierdo sostiene el paraguas
   guayabera(look.shirt === 'guayabera');
   const lentes = rig.N('lentes'); if (lentes) lentes.visible = !look.shades; // con gafas de sol se guarda los lentes
 }
@@ -1480,7 +1491,7 @@ function frame(now) {
     // Los pies siempre en el suelo (el rig apoya el pie más bajo); quieto, se mece apenas.
     // Sobre la esfera su eje vertical es la normal del planeta
     const still = !moving && !gesture && !RM && !focus;
-    swayB = lerp(swayB, still ? Math.sin(t * .35) * .035 : 0, Math.min(1, dt * 2));
+    swayB = 0; // antes se mecía girando el cuerpo entero, y los pies apoyados giraban con él (se deslizaban): la vida la pone la clip
     surf(pos.x, pos.z, _sp);
     bear.position.copy(PLANET_C).addScaledVector(_sp, PLANET_R);
     // Sombra de contacto: lo asienta en el suelo
@@ -1842,7 +1853,7 @@ function init() {
   bearScene.add(new THREE.AmbientLight(AMB, Math.PI));
   solUku = new THREE.DirectionalLight(SOL, Math.PI); bearScene.add(solUku);
   stage = new THREE.Group(); bearScene.add(stage); // el claro de Uku: arriba del planeta, sin giro
-  shadow = new THREE.Mesh(new THREE.CircleGeometry(.14, 48).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ map: dotTexture(), color: '#4e5870', transparent: true, opacity: .16, depthWrite: false, fog: false }));
+  shadow = new THREE.Mesh(new THREE.CircleGeometry(.14, 48).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ map: dotTexture(), color: '#4e5870', transparent: true, opacity: .3, depthWrite: false, fog: false }));
   shadow.scale.set(1, 1, .8); shadow.visible = false; scene.add(shadow);
   clock = new THREE.Clock();
   import(OSO === 'nuevo' ? './uku-rig-nuevo.js' : './uku-rig.js').then(R => R.loadUkuGltf().then(g => [R, g])).then(([R, g]) => {
@@ -1869,7 +1880,7 @@ function init() {
     stage.add(bear);
     if (target != null) { score = target; target = null; buildForest(); }
     // Lo que se sostiene, se pone o se atacha usa estos huesos
-    bones.hand_R = rig.B('mixamorig:RightHand'); bones.head = rig.B('mixamorig:Head'); bones.headTop = rig.B('mixamorig:HeadTop_End'); bones.neck = rig.B('mixamorig:Neck'); bones.chest = rig.B('mixamorig:Spine1');
+    bones.hand_R = rig.B('mixamorig:RightHand'); bones.hand_L = rig.B('mixamorig:LeftHand'); bones.head = rig.B('mixamorig:Head'); bones.headTop = rig.B('mixamorig:HeadTop_End'); bones.neck = rig.B('mixamorig:Neck'); bones.chest = rig.B('mixamorig:Spine1');
     measureHead();
     dressBear();
     play('wave');
@@ -1984,7 +1995,7 @@ const frameHooks = [];
 export function enCuadro(fn) { frameHooks.push(fn); }
 // El material plano de dos tonos, para lo que se agrega al mundo desde afuera (efectos3d)
 export function materialPlano(o) { return toon(o); }
-export function mundo3d() { return { THREE, scene, camera, get uku() { return bear; }, groundY, PLANET_C, PLANET_R, get renderer() { return renderer; }, get planeta() { return PLANETA_PUNTOS; }, get garden() { return garden; }, get pajaro() { return pajaro; }, decoEsc, okWalk: (x, z) => okWalk(x, z), camTapada: () => camera ? camTapada(camera.position.x, camera.position.y, camera.position.z) : false, get ocultacion() { return { ocT, ocl, ocYaw, ocYawTo, velados: velados.size }; } }; }
+export function mundo3d() { return { THREE, scene, camera, get uku() { return bear; }, get rig() { return rig; }, get estado() { return { pos, heading, speed, moving, gesture, giroV, clip: clipFor()[0] }; }, groundY, PLANET_C, PLANET_R, get renderer() { return renderer; }, get planeta() { return PLANETA_PUNTOS; }, get garden() { return garden; }, get pajaro() { return pajaro; }, decoEsc, okWalk: (x, z) => okWalk(x, z), camTapada: () => camera ? camTapada(camera.position.x, camera.position.y, camera.position.z) : false, get ocultacion() { return { ocT, ocl, ocYaw, ocYawTo, velados: velados.size }; } }; }
 export function setScore(s) { if (!bear && target != null) { target = s; return; } if (s !== score) { score = s; if (renderer) buildForest(); } }
 export function setBloom(b) { b = b == null ? null : Math.max(0, Math.min(100, b)); if (b !== bloom) { bloom = b; if (renderer) buildForest(); } }
 /* Lo que hay en el claro: { brotes, flores, guayacanes: 0–4, casa, mariposas, escenario }.
