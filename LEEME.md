@@ -257,6 +257,10 @@ si no hay WebGL.
 - **Paraguas en la mano izquierda**: la derecha queda libre para saludar y para lo demás que sostiene.
   El brazo izquierdo lo sostiene con el codo doblado (`uku-rig.js › sostener`) y el paraguas es rígido:
   su largo se mide una vez con el brazo en su pose y no se estira al caminar ni al saludar.
+- **Manos ocupadas**: leer y plantar piden las dos manos. Si tiene el paraguas abierto, primero lo
+  cierra (la tela se pliega sobre el palo), lo cuelga cruzado en la espalda y baja el brazo; ahí empieza
+  la acción. Al terminar lo vuelve a tomar con la izquierda, sube el brazo y lo abre
+  (`bosque3d.js › pasoParaguas`). Saludar no lo guarda: usa la otra mano.
 
 ## Los pesos de Uku (v3)
 

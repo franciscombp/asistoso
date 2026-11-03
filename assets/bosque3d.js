@@ -1243,7 +1243,7 @@ function eyes(dt, t) {
 
 function holdObject(kind) {
   if (held) { held.parent && held.parent.remove(held); held = null; }
-  if (!kind || !bones.hand_R || (umb && kind === 'periodico')) return; // el paraguas va en la izquierda: la derecha queda libre (menos para el periódico, que pide las dos)
+  if (!kind || !bones.hand_R || (umb && kind === 'periodico' && umbEstado !== 'guardado')) return; // el paraguas va en la izquierda: la derecha queda libre (menos para el periódico, que pide las dos)
   if (kind === 'coin') {
     held = new THREE.Mesh(new THREE.CylinderGeometry(.06, .06, .014, 28), toon({ color: '#ffd200' }));
     // sobre la palma: en reposo la palma mira a (0, -0.89, 0.45) en el espacio del hueso
@@ -1354,6 +1354,45 @@ function placeUmbrella() {
   u.pole.scale.y = u.L; u.pole.position.y = u.L / 2; u.canopy.position.y = u.L;
   u.canopy.quaternion.setFromUnitVectors(_d, _up); // la tela queda horizontal aunque el mango vaya inclinado
 }
+/* Manos ocupadas: leer y plantar piden las dos manos. Con el paraguas abierto, Uku primero lo cierra (.5 s: la tela se
+   pliega sobre el palo), lo cuelga cruzado en la espalda y baja el brazo; ahí empieza la acción. Al terminar (sin gesto
+   ni lectura) lo vuelve a tomar con la izquierda, sube el brazo y lo abre. umbT: 0 abierto … 1 cerrado. */
+const MANOS = { read: 1, plant: 1 };
+let umbEstado = 'abierto', umbT = 0, pendiente = null;
+const _ub = new THREE.Vector3(), _uf = new THREE.Vector3(), _ur = new THREE.Vector3(), _uq = new THREE.Quaternion(), _uI = new THREE.Quaternion();
+function pasoParaguas(dt) {
+  if (!umb) { umbEstado = 'abierto'; umbT = 0; pendiente = null; return; }
+  const u = umb.userData;
+  if (umbEstado === 'cerrando') {
+    umbT = Math.min(1, umbT + dt / .5);
+    if (umbT >= 1) { umbEstado = 'guardado'; const p = pendiente; pendiente = null; if (p) play(p.name, p.opts); }
+  } else if (umbEstado === 'guardado') {
+    if (!pendiente && !gesture && !leyendo) umbEstado = 'abriendo';
+  } else if (umbEstado === 'abriendo') {
+    // primero sube el brazo con el paraguas cerrado; con el brazo arriba, lo abre
+    if (!rig.pose || rig.pose.hold > .8) umbT = Math.max(0, umbT - dt / .5);
+    if (umbT <= 0) umbEstado = 'abierto';
+  }
+  if (pendiente || gesture || leyendo) idleFor = Math.max(idleFor, 1); // mientras cambia de manos no se va a pasear
+  const enMano = umbEstado === 'abierto' || umbEstado === 'cerrando' || umbEstado === 'abriendo';
+  if (rig.sostener) rig.sostener(umbEstado !== 'guardado');
+  // la tela: abierta, horizontal; cerrada, plegada a lo largo del palo
+  const c = umbT * umbT * (3 - 2 * umbT);
+  u.canopy.scale.set(1 - .86 * c, 1 + .9 * c, 1 - .86 * c);
+  if (enMano) {
+    placeUmbrella();
+    _uq.copy(u.canopy.quaternion); u.canopy.quaternion.copy(_uq.slerp(_uI, c)); // al cerrarse se alinea con el palo
+  } else {
+    // en la espalda: cruzado, del lado izquierdo de la cadera al hombro derecho, sin tocar el cuerpo
+    const chest = bones.chest || bones.neck; if (!chest) return;
+    const s = bear.scale.x / BEAR_S;
+    _ub.set(0, 1, 0).applyQuaternion(bear.quaternion); _uf.set(0, 0, 1).applyQuaternion(bear.quaternion); _ur.set(1, 0, 0).applyQuaternion(bear.quaternion);
+    chest.getWorldPosition(_h); _h.addScaledVector(_uf, -.11 * s).addScaledVector(_ur, .07 * s).addScaledVector(_ub, -.13 * s);
+    _d.copy(_ub).addScaledVector(_ur, -.55).normalize();
+    umb.position.copy(_h); umb.quaternion.setFromUnitVectors(_up, _d);
+    u.pole.scale.y = u.L; u.pole.position.y = u.L / 2; u.canopy.position.y = u.L; u.canopy.quaternion.identity();
+  }
+}
 function shades() {
   const g = new THREE.Group(), lens = mat('#1e2126', { flatShading: false }), frame = mat('#111111');
   [-1, 1].forEach(s => {
@@ -1439,7 +1478,7 @@ function dressBear() {
   bones.head.add(acc);
   if (umb && look.hat !== 'paraguas') { scene.remove(umb); umb.traverse(c => { c.geometry && c.geometry.dispose(); c.material && c.material.dispose(); }); umb = null; }
   if (!umb && look.hat === 'paraguas') { umb = umbrella(); scene.add(umb); }
-  if (rig && rig.sostener) rig.sostener(!!umb); // el brazo izquierdo sostiene el paraguas
+  if (rig && rig.sostener) rig.sostener(!!umb && umbEstado !== 'guardado'); // el brazo izquierdo sostiene el paraguas (si no lo guardó para leer o plantar)
   guayabera(look.shirt === 'guayabera');
   const lentes = rig.N('lentes'); if (lentes) lentes.visible = !look.shades; // con gafas de sol se guarda los lentes
 }
@@ -1501,7 +1540,7 @@ function frame(now) {
     bear.updateMatrixWorld(true);
     if (espejo.on) espejoPaso(dt); else lookAround(dt);
     eyes(dt, t);
-    if (umb) placeUmbrella();
+    if (umb) pasoParaguas(dt);
   }
   if (forest) forest.children.slice().forEach(o => {
     const u = o.userData;
@@ -1965,6 +2004,9 @@ export function setAmbient(name) { ambient = name || null; if (ambient === 'walk
 export function play(name, opts) {
   name = ALIAS[name] || name;
   if (name === 'walk') { setAmbient('walk'); return; }
+  // Leer y plantar piden las dos manos: con el paraguas en la mano, primero lo cierra y lo cuelga en la espalda
+  // (pasoParaguas), y la acción empieza cuando ya tiene las manos libres
+  if (umb && MANOS[name] && umbEstado !== 'guardado') { pendiente = { name, opts }; if (umbEstado !== 'cerrando') { umbEstado = 'cerrando'; } goal = null; ruta = []; return; }
   gesture = NAMES.includes(name) ? name : null; gestureT = 0; plantedNow = false;
   if (gesture) goal = null;
   holdObject(opts && opts.hold !== 'can' ? opts.hold : null);
@@ -1995,7 +2037,7 @@ const frameHooks = [];
 export function enCuadro(fn) { frameHooks.push(fn); }
 // El material plano de dos tonos, para lo que se agrega al mundo desde afuera (efectos3d)
 export function materialPlano(o) { return toon(o); }
-export function mundo3d() { return { THREE, scene, camera, get uku() { return bear; }, get rig() { return rig; }, get estado() { return { pos, heading, speed, moving, gesture, giroV, clip: clipFor()[0] }; }, groundY, PLANET_C, PLANET_R, get renderer() { return renderer; }, get planeta() { return PLANETA_PUNTOS; }, get garden() { return garden; }, get pajaro() { return pajaro; }, decoEsc, okWalk: (x, z) => okWalk(x, z), camTapada: () => camera ? camTapada(camera.position.x, camera.position.y, camera.position.z) : false, get ocultacion() { return { ocT, ocl, ocYaw, ocYawTo, velados: velados.size }; } }; }
+export function mundo3d() { return { THREE, scene, camera, get uku() { return bear; }, get rig() { return rig; }, get estado() { return { pos, heading, speed, moving, gesture, giroV, clip: clipFor()[0], paraguas: umbEstado, leyendo }; }, groundY, PLANET_C, PLANET_R, get renderer() { return renderer; }, get planeta() { return PLANETA_PUNTOS; }, get garden() { return garden; }, get pajaro() { return pajaro; }, decoEsc, okWalk: (x, z) => okWalk(x, z), camTapada: () => camera ? camTapada(camera.position.x, camera.position.y, camera.position.z) : false, get ocultacion() { return { ocT, ocl, ocYaw, ocYawTo, velados: velados.size }; } }; }
 export function setScore(s) { if (!bear && target != null) { target = s; return; } if (s !== score) { score = s; if (renderer) buildForest(); } }
 export function setBloom(b) { b = b == null ? null : Math.max(0, Math.min(100, b)); if (b !== bloom) { bloom = b; if (renderer) buildForest(); } }
 /* Lo que hay en el claro: { brotes, flores, guayacanes: 0–4, casa, mariposas, escenario }.
