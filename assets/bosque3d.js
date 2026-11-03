@@ -1166,7 +1166,11 @@ function readStep(dt) {
   }
 }
 const _rp = new THREE.Vector3(), _rf = new THREE.Vector3(), _ry = new THREE.Vector3(0, 1, 0), _rq = new THREE.Quaternion(), _rq2 = new THREE.Quaternion(), _rq3 = new THREE.Quaternion(), _re = new THREE.Euler();
-function readEnd() { if (!leyendo) return; leyendo = false; rig.sentarse(false); holdObject(null); idleFor = 1.5; }
+function readEnd() {
+  if (!leyendo) return; leyendo = false; rig.sentarse(false); holdObject(null); idleFor = 1.5;
+  // Se levanta y da un paso al frente: de pie en el asiento quedaba metido en la banca
+  if (esc) { const nx = pos.x + Math.sin(heading) * .3, nz = pos.z + Math.cos(heading) * .3; if (okWalk(nx, nz)) { pos.x = nx; pos.z = nz; } else { const q = puntoLibreCerca(nx, nz); if (q) { pos.x = q.x; pos.z = q.z; } } goal = null; ruta = []; }
+}
 // Plantar: toma un brote de su lado, se agacha y lo deja en la tierra frente a él; el brote crece despacio
 let plantedNow = false;
 function plantStep() {
@@ -1338,18 +1342,20 @@ function umbrella() {
   g.userData = { canopy, pole, L: 0 };
   return g;
 }
-const _h = new THREE.Vector3(), _t = new THREE.Vector3(), _d = new THREE.Vector3(), _up = new THREE.Vector3(0, 1, 0), _bu = new THREE.Vector3();
+const _h = new THREE.Vector3(), _t = new THREE.Vector3(), _d = new THREE.Vector3(), _up = new THREE.Vector3(0, 1, 0), _bu = new THREE.Vector3(), _ub2 = new THREE.Vector3();
 function placeUmbrella() {
   const mano = bones.hand_L || bones.hand_R;
   if (!umb || !mano || !bones.head) return;
   mano.getWorldPosition(_h); if (mano.children[0]) _h.lerp(mano.children[0].getWorldPosition(_t), .6); // centro de la pata
   _bu.set(0, 1, 0).applyQuaternion(bear.quaternion); // el «arriba» de Uku (la normal del planeta)
-  (bones.headTop || bones.head).getWorldPosition(_t); _t.addScaledVector(_bu, .06 * bear.scale.x / BEAR_S).lerp(_h, .12); // sobre la coronilla, apenas hacia la pata
-  _d.subVectors(_t, _h); const dist = _d.length(); _d.normalize();
+  (bones.headTop || bones.head).getWorldPosition(_t); _t.addScaledVector(_bu, .06 * bear.scale.x / BEAR_S); // sobre la coronilla
+  // El palo va casi derecho (el «arriba» de Uku), apenas inclinado hacia la cabeza: no cruza en diagonal
+  _d.subVectors(_t, _h).normalize().lerp(_bu, .8).normalize();
   const u = umb.userData;
-  // Largo fijo: se mide cuando el brazo ya está en su pose (y si Uku cambia de tamaño); después no se estira nunca
-  const k = rig && rig.pose ? rig.pose.hold : 1;
-  if (!u.L || (k > .95 && !u.medido) || Math.abs((u.esc || 0) - bear.scale.x) > .002) { u.L = dist; u.esc = bear.scale.x; u.medido = k > .95; }
+  // Largo fijo: el que deja la tela a la altura de la coronilla, medido cuando el brazo ya está en su pose (y si Uku
+  // cambia de tamaño); después no se estira nunca
+  const k = rig && rig.pose ? rig.pose.hold : 1, alto = _ub2.subVectors(_t, _h).dot(_bu) / Math.max(.3, _d.dot(_bu));
+  if (!u.L || (k > .95 && !u.medido) || Math.abs((u.esc || 0) - bear.scale.x) > .002) { u.L = Math.max(.15, alto); u.esc = bear.scale.x; u.medido = k > .95; }
   umb.position.copy(_h); umb.quaternion.setFromUnitVectors(_up, _d);
   u.pole.scale.y = u.L; u.pole.position.y = u.L / 2; u.canopy.position.y = u.L;
   u.canopy.quaternion.setFromUnitVectors(_d, _up); // la tela queda horizontal aunque el mango vaya inclinado

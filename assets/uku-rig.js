@@ -160,7 +160,7 @@ export function ukuFrom(gltf, { onLog = () => {} } = {}) {
       ['Shoulder', 'Arm', 'ForeArm', 'Hand'].forEach(n => { const b = B(n), q = b && rest0Q.get(b); if (q) b.quaternion.slerp(q, k); });
       root.updateMatrixWorld(true);
       rotWorld(B('Arm'), 1, 0, 0, -.45 * k); rotWorld(B('Arm'), 0, 0, 1, -.12 * k);           // brazo apenas adelante y pegado al cuerpo
-      rotWorld(B('ForeArm'), 1, 0, 0, -1.35 * k); rotWorld(B('ForeArm'), 0, 1, 0, -.3 * k);  // antebrazo arriba, hacia el centro
+      rotWorld(B('ForeArm'), 1, 0, 0, -1.35 * k); rotWorld(B('ForeArm'), 0, 1, 0, -.5 * k);  // antebrazo arriba, hacia el centro (la pata bajo el mentón: el palo sube derecho)
     }
     // Los pies en el suelo: la cadera baja o sube hasta que la planta más baja toca el suelo (ni flota ni se hunde)
     if (!hips) return;
