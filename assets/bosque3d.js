@@ -642,7 +642,8 @@ function decoEsc() {
     tufts: scatter(5, 16, .5, 2.3, libre, .45), rocks: scatter(17, 4, .9, 2.2, libre, 1.0),
     bushes: scatter(23, 4, 1.3, 2.2, (x, z) => libre(x, z) && Math.hypot(x, z) > 1.3, 1.0), daisies: scatter(43, 9, .6, 2.3, libre, .5),
     silvestres: scatter(61, 7, .6, 2.3, libre, .6), helechitos: scatter(67, 3, 1.1, 2.2, (x, z) => libre(x, z) && Math.hypot(x, z) > 1.1, 1.0),
-    parches: scatter(73, 5, .8, 2.2, (x, z) => distSendero(x, z) > .3 && Math.hypot(x - LAGO_P[0], z - LAGO_P[1]) > lagoEnForma() + .5 && VISIBLE(x, z), 1.0)
+    // Calvas de otro tono: pocas, chicas y bien separadas, y no más allá de 1,9 m (al sur del claro se solapaban)
+    parches: scatter(73, 4, .8, 2.2, (x, z) => distSendero(x, z) > .3 && Math.hypot(x - LAGO_P[0], z - LAGO_P[1]) > lagoEnForma() + .5 && VISIBLE(x, z) && Math.hypot(x, z) < 1.9, 1.4)
   };
 }
 function buildGarden(pal) {
@@ -655,7 +656,7 @@ function buildGarden(pal) {
   D.bushes.filter(enLago).forEach(p => { const m = M(p, 1 + p.s * .5), c = pal.round[p.v % pal.round.length]; [[0, .1, 0, .13], [.1, .07, .04, .09], [-.09, .06, -.03, .08]].forEach(([x, y, z, r]) => parts.push(pc(new THREE.IcosahedronGeometry(r, 0), c, m.clone().multiply(TRS([x, y, z], [p.t, 0, 0]))))); });
   D.daisies.filter(enLago).forEach(p => { const m = M(p, .8 + p.s * .4); parts.push(pc(CYL(.003, .004, .05, 3), pal.grass, m.clone().multiply(TRS([0, .025, 0]))), pc(new THREE.SphereGeometry(.01, 5, 3), pal.dust, m.clone().multiply(TRS([0, .052, 0], 0, [1, .6, 1])))); });
   if (esc) planetaGeo(pal).forEach(g => parts.push(g));
-  (D.parches || []).forEach((p, i) => { const col = pal.bg === '#1f1f1f' ? ['#30333b', '#2f3238'][i % 2] : ['#c7ccd4', '#aab1bc'][i % 2]; parts.push(casquete(p.x, p.z, .5 + p.s * .4, col)); });
+  (D.parches || []).forEach((p, i) => { const col = pal.bg === '#1f1f1f' ? ['#30333b', '#2f3238'][i % 2] : ['#c7ccd4', '#aab1bc'][i % 2]; parts.push(casquete(p.x, p.z, .35 + p.s * .2, col)); });
   (D.silvestres || []).forEach(p => { const m = M(p, .9 + p.s * .5); PARTS.silvestre(pal, p.v).forEach(g => parts.push(g.applyMatrix4(m))); });
   (D.helechitos || []).forEach(p => { const m = M(p, .8 + p.s * .6); PARTS.helechito(pal, p.v).forEach(g => parts.push(g.applyMatrix4(m))); });
   garden = new THREE.Mesh(kit(parts), LAMB); garden.visible = !focus; scene.add(garden);
@@ -678,14 +679,20 @@ Object.assign(PARTS, {
   // Peñón del roquedal: una roca alta con otra al pie, una grieta en sombra y un poco de pasto en la cima
   penon: pal => [pc(new THREE.DodecahedronGeometry(.55, 0), pal.rock, [0, .6, 0], [0, .3, 0], [1, 1.3, .8]), pc(new THREE.DodecahedronGeometry(.3, 0), pal.rock, [.45, .3, .1], [.2, .9, 0]),
     pc(new THREE.DodecahedronGeometry(.22, 0), pal.trunk, [-.35, .2, -.1], [.1, .5, 0]), pc(new THREE.IcosahedronGeometry(.14, 0), pal.grass, [0, 1.35, 0], [0, 0, 0], [1, .6, 1])],
-  // Guayacán madre de la pradera: el guayacán de siempre, que se pone a escala 1,7
-  guayaMadre: pal => PARTS.guaya(pal, 0),
-  // Hongo grande del silvestre: pie crema y sombrero azul gris con lunares (sin amarillo, que es solo del claro y la pradera)
-  hongoGrande: pal => [pc(CYL(.12, .18, .7, 8), CREMA, [0, .35, 0]), pc(new THREE.SphereGeometry(.5, 10, 6, 0, Math.PI * 2, 0, Math.PI / 2), pal.pine[0], [0, .7, 0], 0, [1, .75, 1]),
-    ...[[.2, .25, .3], [-.25, .22, .2], [.05, .32, -.3], [-.1, .35, .1], [.3, .2, -.15]].map(([x, y, z]) => pc(new THREE.SphereGeometry(.07, 5, 3), CREMA, [x, .7 + y, z], 0, [1, .6, 1])),
-    pc(CYL(.05, .07, .3, 6), CREMA, [.45, .15, .1]), pc(new THREE.SphereGeometry(.2, 8, 5, 0, Math.PI * 2, 0, Math.PI / 2), pal.round[1], [.45, .3, .1], 0, [1, .75, 1])],
-  // Pino nevado del polo sur: el pino de siempre en blancos azulados, con una capa de nieve en cada piso
-  pinoNevado: pal => { const osc = pal.bg === '#1f1f1f', P = Object.assign({}, pal, { pine: osc ? ['#4a4e5a', '#565a66', '#5f636f'] : ['#e6e9ee', '#dfe3ea', '#f3f4f7'] });
+  // Guayacán madre de la pradera: el guayacán de siempre a escala 1,5, con la copa de un solo amarillo más oscuro (para que
+  // se distinga de los guayacanes vecinos) y el tronco y las ramas el doble de gruesos
+  guayaMadre: pal => {
+    const osc = pal.bg === '#1f1f1f', g = osc ? '#e6c13d' : '#e8b93a', o = PARTS.guaya(Object.assign({}, pal, { guaya: [g, g] }), 0);
+    o[0] = pc(CYL(.08, .12, .5), pal.trunk, [0, .25, 0], [0, 0, .05]);
+    [[-.5, .3], [.55, -.2], [.1, .6]].forEach(([a, b], i) => { o[1 + i] = pc(CYL(.044, .064, .36), pal.trunk, [Math.sin(a) * .1, .6, Math.sin(b) * .08], [b * .6, 0, -a * .9]); });
+    return o; },
+  // Hongo grande del silvestre: pie crema, sombrero azul gris oscuro y lunares casi blancos (sin amarillo, que es solo del claro y la pradera)
+  hongoGrande: pal => { const osc = pal.bg === '#1f1f1f', som = osc ? '#3c4659' : '#7d8aa3', lun = osc ? '#d9dce4' : '#f3f4f7';
+    return [pc(CYL(.12, .18, .7, 8), CREMA, [0, .35, 0]), pc(new THREE.SphereGeometry(.5, 10, 6, 0, Math.PI * 2, 0, Math.PI / 2), som, [0, .7, 0], 0, [1, .75, 1]),
+    ...[[.2, .25, .3], [-.25, .22, .2], [.05, .32, -.3], [-.1, .35, .1], [.3, .2, -.15]].map(([x, y, z]) => pc(new THREE.SphereGeometry(.07, 5, 3), lun, [x, .7 + y, z], 0, [1, .6, 1])),
+    pc(CYL(.05, .07, .3, 6), CREMA, [.45, .15, .1]), pc(new THREE.SphereGeometry(.2, 8, 5, 0, Math.PI * 2, 0, Math.PI / 2), som, [.45, .3, .1], 0, [1, .75, 1])]; },
+  // Pino nevado del polo sur: el pino de siempre en celeste pálido, con una capa de nieve blanca en cada piso (que se lea sobre la nieve)
+  pinoNevado: pal => { const osc = pal.bg === '#1f1f1f', P = Object.assign({}, pal, { pine: osc ? ['#4a4e5a', '#565a66', '#5f636f'] : ['#c5cfe2', '#b9c6de', '#c5cfe2'] });
     return [...PARTS.pino(P, 0), ...[[.32, .5, .45], [.25, .42, .72], [.17, .32, .95]].map(([r, h, y]) => pc(new THREE.SphereGeometry(r + .02, 7, 4), '#ffffff', [0, y - h / 2 + .03, 0], 0, [1, .25, 1]))]; },
   // Árbol lejano: el más barato (60 triángulos), para los racimos del bosquecito, la laguna y el silvestre
   arbolLejano: (pal, v) => [pc(CYL(.04, .06, .45, 5), pal.trunk, [0, .22, 0]), pc(new THREE.IcosahedronGeometry(.3, 0), pal.round[v % 2], [0, .62, 0], [0, v, 0]),
@@ -696,26 +703,36 @@ Object.assign(PARTS, {
    hito { kind, esc, en } y racimos { kind, n, esc: [min, max], gap, r0, r1 } alrededor del centro. Los azimuts son irregulares
    y están girados de modo que, al alejar desde el claro (la cámara mira desde +z), de entrada se vean el bosquecito, la
    pradera y la laguna; la nieve queda abajo y el roquedal y el silvestre, del otro lado: hay que girar el planeta. */
+// Las piezas van chicas (escala 0,9–1,4; los hitos 1,3–1,6) y en más cantidad: de cerca (zoom 1,6) queda aire entre
+// ellas y desde el espacio la zona se lee por la mancha de tono y el conjunto, no por piezas gigantes.
+// Copas más oscuras para el bosquecito (desde el espacio el bosque se lee como mancha oscura, no como piezas pálidas)
+const PAL_BOSQUE = (pal, osc) => Object.assign({}, pal, { round: osc ? ['#3d4659', '#444e63'] : ['#aab6cc', '#9aa7c0'] });
 const ZONAS = [
-  { id: 'bosque', nombre: 'Bosquecito nublado', a: 1.40, b: -0.40, r: 2.0, ri: 1.0, tonos: ['#a4aec2', '#98a3b9'], tonosOsc: ['#242731', '#1f2229'], hito: { kind: 'arbolMadre', esc: 1.0, R: .9 },
-    racimos: [{ kind: 'arbolLejano', n: 7, esc: [1.4, 1.8], gap: .75, r0: .6, r1: 1.7 }, { kind: 'helecho', n: 2, esc: [1.3, 1.4], gap: .8, r0: .5, r1: 1.5 }, { kind: 'arbusto', n: 4, esc: [1.4, 1.7], gap: .5, r0: .4, r1: 1.6 },
-      { kind: 'hojona', n: 3, esc: [1.3, 1.5], gap: .5, r0: .4, r1: 1.5 }, { kind: 'tufts', n: 6, esc: [1.6, 2.0], gap: .4, r0: .3, r1: 1.8 }, { kind: 'helechito', n: 2, esc: [1.3, 1.5], gap: .6, r0: .5, r1: 1.5 }] },
-  { id: 'pradera', nombre: 'Pradera de guayacanes', a: 1.35, b: 1.45, r: 1.8, ri: .9, tonos: ['#d9d4c3', '#e4dfcf'], tonosOsc: ['#33322c', '#3a3832'], hito: { kind: 'guayaMadre', esc: 1.7, R: .9 },
-    racimos: [{ kind: 'guaya', n: 4, esc: [1.3, 1.5], gap: .9, r0: .7, r1: 1.5 }, { kind: 'silvestre', n: 10, esc: [1.3, 1.6], gap: .3, r0: .3, r1: 1.6 }, { kind: 'flor', v: 0, n: 6, esc: [1.4, 1.6], gap: .35, r0: .3, r1: 1.6 },
-      { kind: 'arbusto', n: 2, esc: [1.3, 1.5], gap: .6, r0: .6, r1: 1.5 }, { kind: 'tufts', n: 4, esc: [1.6, 2.0], gap: .4, r0: .3, r1: 1.6 }] },
-  { id: 'roquedal', nombre: 'Roquedal', a: 1.40, b: 3.20, r: 1.6, ri: .8, tonos: ['#d6d9df', '#e3e5ea'], tonosOsc: ['#363942', '#3d4049'], hito: { kind: 'penon', esc: 1.0, R: .8 },
-    racimos: [{ kind: 'piedra', n: 7, esc: [1.8, 2.8], gap: .45, r0: .3, r1: 1.3 }, { kind: 'arbusto', n: 2, esc: [1.3, 1.5], gap: .6, r0: .6, r1: 1.4 }, { kind: 'tufts', n: 3, esc: [1.6, 1.9], gap: .5, r0: .4, r1: 1.4 }] },
+  { id: 'bosque', nombre: 'Bosquecito nublado', a: 1.40, b: -0.40, r: 2.0, ri: 1.0, tonos: ['#8f9bb3', '#7f8ca6'], tonosOsc: ['#1f2229', '#1a1d24'],
+    hito: { kind: 'arbolMadre', esc: 1.35, R: 1.1, pal: (pal, osc) => Object.assign({}, pal, { round: osc ? ['#4a5469', '#3d4659'] : ['#8a97b0', '#7f8ca6'] }), cap: { r: .6, tono: '#7f8ca6', tonoOsc: '#171a20' } }, // copa más grande y más oscura que las vecinas: se reconoce desde el espacio
+    racimos: [{ kind: 'arbolLejano', n: 8, esc: [.9, 1.15], gap: .95, r0: .9, r1: 1.7, pal: PAL_BOSQUE }, // con aire entre copas y un anillo de suelo alrededor del árbol madre { kind: 'helecho', n: 3, esc: [1.0, 1.2], gap: .8, r0: .5, r1: 1.5 }, { kind: 'arbusto', n: 6, esc: [1.0, 1.2], gap: .5, r0: .4, r1: 1.6 },
+      { kind: 'hojona', n: 4, esc: [1.0, 1.2], gap: .5, r0: .4, r1: 1.5 }, { kind: 'tufts', n: 12, esc: [1.2, 1.5], gap: .4, r0: .3, r1: 1.8 }, { kind: 'helechito', n: 3, esc: [1.0, 1.2], gap: .6, r0: .5, r1: 1.5 }] },
+  { id: 'pradera', nombre: 'Pradera de guayacanes', a: 1.35, b: 1.45, r: 1.8, ri: .9, tonos: ['#d9d4c3', '#e4dfcf'], tonosOsc: ['#33322c', '#3a3832'], hito: { kind: 'guayaMadre', esc: 1.5, R: .9 },
+    racimos: [{ kind: 'guaya', n: 5, esc: [1.0, 1.2], gap: 1.2, r0: 1.0, r1: 1.5 }, { kind: 'silvestre', n: 14, esc: [1.0, 1.3], gap: .3, r0: .3, r1: 1.6 }, { kind: 'flor', v: 0, n: 8, esc: [1.0, 1.3], gap: .35, r0: .3, r1: 1.6 },
+      { kind: 'arbusto', n: 3, esc: [1.0, 1.2], gap: .6, r0: .6, r1: 1.5 }, { kind: 'tufts', n: 6, esc: [1.2, 1.5], gap: .4, r0: .3, r1: 1.6 }] },
+  // Roquedal: parche más claro que el suelo y piedras más oscuras que el parche (en el tema oscuro, al revés)
+  { id: 'roquedal', nombre: 'Roquedal', a: 1.40, b: 3.20, r: 1.6, ri: .8, tonos: ['#e8eaef', '#f3f4f7'], tonosOsc: ['#3f424b', '#484b54'], hito: { kind: 'penon', esc: 1.0, R: .8 },
+    racimos: [{ kind: 'piedra', n: 10, esc: [1.2, 1.8], gap: .45, r0: .3, r1: 1.3, pal: (pal, osc) => Object.assign({}, pal, { rock: osc ? '#2f3139' : '#d6d9df' }) }, { kind: 'arbusto', n: 3, esc: [1.0, 1.2], gap: .6, r0: .6, r1: 1.4 },
+      { kind: 'tufts', n: 5, esc: [1.2, 1.5], gap: .5, r0: .4, r1: 1.4 }] },
   { id: 'laguna', nombre: 'Laguna', a: 2.00, b: 0.55, r: 1.6, laguna: true, tonos: ['#c3d3e8', '#f3f4f7'], tonosOsc: ['#283046', '#4a4e5a'],
-    racimos: [{ kind: 'arbolLejano', n: 2, esc: [1.3, 1.5], gap: .9, r0: 1.1, r1: 1.5 }, { kind: 'piedra', n: 3, esc: [1.4, 1.6], gap: .5, r0: 1.05, r1: 1.5 }, { kind: 'heliconia', n: 3, esc: [1.3, 1.5], gap: .45, r0: 1.05, r1: 1.5 },
-      { kind: 'tufts', n: 6, esc: [1.8, 2.2], gap: .35, r0: .95, r1: 1.2 }] },
-  { id: 'silvestre', nombre: 'Silvestre', a: 2.05, b: 2.40, r: 1.4, ri: .7, tonos: ['#aeb6c6', '#a3acbd'], tonosOsc: ['#26292f', '#22252b'], hito: { kind: 'hongoGrande', esc: 1.3, R: .8 },
-    racimos: [{ kind: 'arbolLejano', n: 2, esc: [1.3, 1.5], gap: .9, r0: .6, r1: 1.3 }, { kind: 'arbusto', n: 3, esc: [1.3, 1.6], gap: .55, r0: .4, r1: 1.3 }, { kind: 'lena', n: 1, esc: [1.5, 1.5], gap: 0, r0: .5, r1: 1.0 },
-      { kind: 'hongoGrande', n: 2, esc: [.5, .7], gap: .5, r0: .4, r1: 1.1 }, { kind: 'tufts', n: 5, esc: [1.6, 1.9], gap: .4, r0: .3, r1: 1.3 }] },
-  { id: 'reservaA', nombre: 'Reserva (para Decorar)', a: 1.25, b: 4.45, r: 1.1, tonos: ['#c7ccd4'], tonosOsc: ['#30333b'], racimos: [{ kind: 'tufts', n: 2, esc: [1.6, 1.8], gap: .5, r0: .3, r1: 1.0 }] },
-  { id: 'reservaB', nombre: 'Reserva (para Decorar)', a: 2.25, b: 4.20, r: 1.1, tonos: ['#c7ccd4'], tonosOsc: ['#30333b'], racimos: [{ kind: 'piedra', n: 1, esc: [1.4, 1.4], gap: 0, r0: .2, r1: .9 }, { kind: 'tufts', n: 1, esc: [1.6, 1.6], gap: 0, r0: .2, r1: .9 }] },
-  // El polo sur: la nieve (lo único blanco del planeta), con un pino nevado y unas piedras blancas; nada verde ni amarillo
-  { id: 'nieve', nombre: 'Nieve del polo sur', polo: true, r: 2.2, tonos: ['#f3f4f7', '#ffffff'], tonosOsc: ['#4a4e5a', '#565a66'], sub: [[2.9, 0.0], [2.95, 3.2]], hito: { kind: 'pinoNevado', esc: 1.4, R: .7, en: [2.95, 1.2] },
-    racimos: [{ kind: 'piedra', n: 3, esc: [1.8, 2.2], gap: .6, r0: 0, r1: 1.6, pal: (pal, osc) => Object.assign({}, pal, { rock: osc ? '#565a66' : '#f3f4f7' }) }] }
+    racimos: [{ kind: 'arbolLejano', n: 3, esc: [1.0, 1.3], gap: .9, r0: 1.1, r1: 1.5 }, { kind: 'piedra', n: 4, esc: [1.2, 1.6], gap: .5, r0: 1.05, r1: 1.5 }, { kind: 'heliconia', n: 4, esc: [1.0, 1.2], gap: .45, r0: 1.05, r1: 1.5 },
+      { kind: 'tufts', n: 8, esc: [1.2, 1.5], gap: .35, r0: .95, r1: 1.2 }] },
+  { id: 'silvestre', nombre: 'Silvestre', a: 2.05, b: 2.40, r: 1.4, ri: .7, tonos: ['#a0a9bb', '#929cb0'], tonosOsc: ['#23262d', '#1e2128'], hito: { kind: 'hongoGrande', esc: 1.5, R: .8 },
+    racimos: [{ kind: 'arbolLejano', n: 3, esc: [1.0, 1.3], gap: .9, r0: .6, r1: 1.3 }, { kind: 'arbusto', n: 4, esc: [1.0, 1.2], gap: .55, r0: .4, r1: 1.3 }, { kind: 'lena', n: 1, esc: [1.2, 1.2], gap: 0, r0: .5, r1: 1.0 },
+      { kind: 'hongoGrande', n: 2, esc: [.45, .6], gap: .5, r0: .4, r1: 1.1 }, { kind: 'tufts', n: 7, esc: [1.2, 1.5], gap: .4, r0: .3, r1: 1.3 }] },
+  // Las reservas: un parche apenas distinto del suelo con una piedra y una mata, nada más (son para Decorar)
+  { id: 'reservaA', nombre: 'Reserva (para Decorar)', a: 1.25, b: 4.45, r: 1.1, ri: .5, tonos: ['#c3c9d2', '#cdd2da'], tonosOsc: ['#33363e', '#3a3d46'], racimos: [{ kind: 'piedra', n: 1, esc: [1.4, 1.4], gap: 0, r0: .2, r1: .9 }, { kind: 'tufts', n: 1, esc: [1.3, 1.3], gap: 0, r0: .2, r1: .9 }] },
+  { id: 'reservaB', nombre: 'Reserva (para Decorar)', a: 2.25, b: 4.20, r: 1.1, ri: .5, tonos: ['#c3c9d2', '#cdd2da'], tonosOsc: ['#33363e', '#3a3d46'], racimos: [{ kind: 'piedra', n: 1, esc: [1.4, 1.4], gap: 0, r0: .2, r1: .9 }, { kind: 'tufts', n: 1, esc: [1.3, 1.3], gap: 0, r0: .2, r1: .9 }] },
+  // El polo sur: la nieve (lo único blanco del planeta): parche casi blanco con dos manchones blancos del todo, un pino nevado
+  // y unas piedras celeste pálido (que se lean sobre lo blanco); nada verde ni amarillo
+  { id: 'nieve', nombre: 'Nieve del polo sur', polo: true, r: 2.2, tonos: ['#e9ebf0', '#ffffff'], tonosOsc: ['#4a4e5a', '#5f636f'], sub: [[2.9, 0.0], [2.95, 3.2]], hito: { kind: 'pinoNevado', esc: 1.4, R: .7, en: [2.95, 1.2] },
+    racimos: [{ kind: 'piedra', n: 7, esc: [1.2, 1.8], gap: .6, r0: 0, r1: 2.0, pal: (pal, osc) => Object.assign({}, pal, { rock: osc ? '#565a66' : '#e3e5ea' }) },
+      { kind: 'tufts', n: 5, esc: [1.2, 1.5], gap: .6, r0: .3, r1: 1.9 }] } // matas blancas: la nieve no queda pelada de cerca
 ];
 // Centro de cada zona (y de su hito) en coordenadas de arco, calculado una vez: lo usan sitioLibre y zonas()
 ZONAS.forEach((Z, i) => {
@@ -737,17 +754,28 @@ function planetaGeo(pal) {
     out.push(casqueteN(n0, Z.r, t[0])); if (Z.ri) out.push(casqueteN(n0, Z.ri, t[1], encimaDe(Z.r)));
     (Z.sub || []).forEach(([a, b]) => out.push(casqueteN(polar(a, b, _sp), .8, t[1], encimaDe(Z.r))));
     if (Z.laguna) out.push(casqueteN(n0, 1.0, t[1], encimaDe(Z.r)), casqueteN(n0, .75, AGUA(pal), encimaDe(1.0, encimaDe(Z.r)))); // orilla clara y agua
-    if (Z.hito) poner(Z.hito.kind, 0, { x: Z.hitoX, z: Z.hitoZ, rot: Z.hito.rot || 0 }, Z.hito.esc, true);
+    if (Z.hito) { // el hito, con su propio tono si lo pide y, si lo pide, un parchecito bajo el tronco encima de los demás
+      const H = Z.hito;
+      if (H.cap) out.push(casqueteN(H.en ? polar(H.en[0], H.en[1], _sp) : n0, H.cap.r, osc ? H.cap.tonoOsc : H.cap.tono, encimaDe(Z.ri || 0, encimaDe(Z.r))));
+      poner(H.kind, 0, { x: Z.hitoX, z: Z.hitoZ, rot: H.rot || 0 }, H.esc, true, H.pal && H.pal(pal, osc));
+    }
     const ok = (x, z) => (!Z.hito || distEsf(x, z, Z.hitoX, Z.hitoZ) > Z.hito.R) && (!Z.laguna || distEsf(x, z, Z.cx, Z.cz) > .95) && Math.hypot(x, z) <= LEJOS_MAX;
     Z.racimos.forEach((G, j) => scatterEsf(Z.seed + j, G.n, n0, G.r1, ok, G.gap, G.r0)
       .forEach(p => poner(G.kind, G.v == null ? p.v : G.v, p, G.esc[0] + p.s * (G.esc[1] - G.esc[0]), GRANDE[G.kind], G.pal && G.pal(pal, osc))));
   });
-  // El aire entre zonas: unas pocas piedras y matas sueltas y, muy de vez en cuando, un árbol o un arbusto solo (para que
-  // desde el espacio el suelo pelado no parezca un planeta sin nada: lo que marca que es «aire» es la separación)
-  scatterEsf(131, 10, _nrm, Math.PI * PLANET_R, fueraDeZonas, 1.5, 4.8).forEach(p => poner('piedra', 0, p, 1.3 + p.s * .7));
-  scatterEsf(137, 22, _nrm, Math.PI * PLANET_R, fueraDeZonas, 1.5, 4.8).forEach(p => poner('tufts', 0, p, 1.5 + p.s * .7));
-  scatterEsf(139, 8, _nrm, Math.PI * PLANET_R, fueraDeZonas, 2.6, 4.8).forEach(p => poner('arbolLejano', p.v, p, 1.3 + p.s * .3, true));
-  scatterEsf(143, 8, _nrm, Math.PI * PLANET_R, fueraDeZonas, 2.2, 4.8).forEach(p => poner('arbusto', 0, p, 1.4 + p.s * .4));
+  // El aire entre zonas: piedras y matas sueltas, de vez en cuando un árbol o un arbusto solo y unos parchecitos de tono
+  // (para que desde el espacio el suelo pelado no parezca un planeta sin nada: lo que marca que es «aire» es la separación)
+  scatterEsf(131, 18, _nrm, Math.PI * PLANET_R, fueraDeZonas, 1.5, 4.8).forEach(p => poner('piedra', 0, p, 1.2 + p.s * .6));
+  scatterEsf(137, 40, _nrm, Math.PI * PLANET_R, fueraDeZonas, 1.5, 4.8).forEach(p => poner('tufts', 0, p, 1.2 + p.s * .4));
+  scatterEsf(139, 10, _nrm, Math.PI * PLANET_R, fueraDeZonas, 2.6, 4.8).forEach(p => poner('arbolLejano', p.v, p, 1.0 + p.s * .3, true));
+  scatterEsf(143, 14, _nrm, Math.PI * PLANET_R, fueraDeZonas, 2.2, 4.8).forEach(p => poner('arbusto', 0, p, 1.0 + p.s * .2));
+  scatterEsf(149, 10, _nrm, Math.PI * PLANET_R, fueraDeZonas, 1.2, 4.8).forEach(p => out.push(casquete(p.x, p.z, .4 + p.s * .2, osc ? '#2f323a' : '#bfc5ce'))); // un tono más bajo que las reservas, que llevan dos anillos
+  // Tres mini grupos (piedra, arbusto y mata) en la franja pelada, a 3,6–4,5 m del claro: el anillo sin nada no es perfecto
+  const enFranja = (x, z) => { const d = Math.hypot(x, z); return d > 3.6 && d < 4.5 && ZONAS.every(Z => distEsf(x, z, Z.cx, Z.cz) > Z.r + .3); };
+  scatterEsf(151, 3, _nrm, 4.4, enFranja, 2.5, 3.7).forEach((c, i) => {
+    const piezas = ['piedra', 'arbusto', 'tufts'], esc = [1.3, 1.0, 1.3];
+    scatterEsf(157 + i, 3, surf(c.x, c.z, new THREE.Vector3()), .4, enFranja, .25, .1).forEach((p, j) => poner(piezas[j], 0, p, esc[j]));
+  });
   return PLANETA = out;
 }
 // Las zonas del planeta, para que Uku pueda nombrarlas («del otro lado está la laguna») y para las pruebas
