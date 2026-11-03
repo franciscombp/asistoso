@@ -672,7 +672,7 @@ ui.escena.addEventListener('pointerup', (e) => {
   if (!decorando || !toque || Math.hypot(e.clientX - toque.x, e.clientY - toque.y) > 8 || performance.now() - toque.t > 600) return;
   const b = B3(), p = b.puntoDeSuelo(e.clientX, e.clientY);
   if (!p) return;
-  const cerca = b.decoracionLista().map(d => ({ d, dist: Math.hypot(d.x - p.x, d.z - p.z) })).filter(x => x.dist < .25).sort((a, c) => a.dist - c.dist)[0];
+  const cerca = b.decoracionLista().map(d => ({ d, dist: b.distEsf(d.x, d.z, p.x, p.z) })).filter(x => x.dist < .25).sort((a, c) => a.dist - c.dist)[0];
   if (cerca) { decorando.actual = cerca.d.id; decorando.k = cerca.d.k; pintarDecorar(); return; }
   if (!b.sitioLibre(p.x, p.z)) { estado('Ahí no cabe: prueba en un sitio libre', 'error'); return; }
   const nuevo = b.ponerDecoracion(decorando.k, p.x, p.z, Math.random() * 6.28);

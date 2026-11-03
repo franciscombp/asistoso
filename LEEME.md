@@ -314,9 +314,13 @@ Tres botones arriba (o sus teclas) cambian cómo se ve y se usa el claro:
 - **🌼 Decorar** (tecla `8`): como en Tolan, **las cosas las pones tú, de a una**. En la vista de
   pájaro, tocas el suelo y aparece lo elegido (florcitas, mata, piedra, arbusto, helecho, guayacán,
   hongos, farolito o banca) con un aro punteado encima; ◀ ▶ cambia qué es, ↻ lo gira, 🗑 lo quita y
-  ✓ lo deja. Tocar algo ya puesto lo elige. Solo en sitios libres (fuera de los corredores, el lago
-  y lo que hay). Se guarda en este equipo (`mimo_decoracion`). `bosque3d.js › DECORABLES`,
-  `ponerDecoracion`, `puntoDeSuelo`, `pantallaDe`.
+  ✓ lo deja. Tocar algo ya puesto lo elige. Solo en sitios libres: en el claro, fuera de los
+  corredores, el lago y lo que hay; y **en toda la esfera** (las zonas, las reservas, el aire entre
+  ellas, hasta la nieve), salvo el bosque del claro y su franja, los hitos, el agua y la orilla de
+  la laguna, lo grande que ya hay y la cara que no se ve desde la cámara. Se guarda en este equipo
+  (`mimo_decoracion`). `bosque3d.js › DECORABLES`, `ponerDecoracion`, `sitioLibre`, `puntoDeSuelo`,
+  `pantallaDe` (estos dos valen para toda la esfera; `arcoDe` y `distEsf` son las coordenadas de arco
+  y la distancia sobre la superficie).
 - **🪞 Espejo** (tecla `E`, o «imítame»): Uku **te imita como un Memoji**: gira, cabecea e inclina la
   cabeza como tú, pestañea cuando pestañeas, pone ojos contentos cuando sonríes, y mueve los brazos
   como los tuyos (en espejo: tu izquierda es su derecha). La postura que tengas al encenderlo es el
@@ -360,7 +364,32 @@ Lo principal es la asistencia; el mundo acompaña, así que es **chico y fácil 
 planeta de 5,5 m de radio con un claro de unos 3,5 m de ancho y solo lo útil: la casa de Uku, el
 lago con su cascada y el puente, la banca con el farol, el letrero del bosque, el buzón, la leña y
 la tortuga. Lo demás lo pones tú con Decorar. Al alejar en la vista de pájaro se ve el planeta
-entero (una esfera con parches, árboles y arbustos repartidos) con el claro encima.
+entero con el claro encima.
+
+**El resto del planeta va por zonas, como en Tolan** (`bosque3d.js › ZONAS`, `planetaGeo()`): en vez
+de cosas regadas al azar, seis lugares con nombre, cada uno un parche grande de otro tono con un
+subparche adentro, un **hito** que se reconoce desde el espacio (1,3–2 m) y unos racimos de piezas
+grandes (a 1,3–2,8× su tamaño del claro), más dos reservas vacías y la nieve del polo sur. Entre
+zona y zona queda **suelo pelado** (≥ 2,1 m entre bordes) y alrededor del claro una franja sin nada
+(hasta 4,8 m de arco): lo que separa las zonas es el espacio libre, no caminos. En el aire entre
+zonas solo hay piedras y matas sueltas y, muy de vez en cuando, un árbol o un arbusto solo. Todo
+con semilla fija (el planeta es el mismo en cada visita) y en la única malla del jardín.
+
+| Zona | Qué es | Hito |
+|---|---|---|
+| Bosquecito nublado | árboles de copa amplia, helechos, hojas grandes y musgo, sobre un parche más oscuro | el árbol madre, con raíces y barbas de musgo |
+| Pradera de guayacanes | guayacanes en flor y florcitas sobre un parche crema; lo único amarillo fuera del claro | el guayacán madre (1,7×) |
+| Roquedal | un nido de piedras grandes sobre un parche claro | el peñón, con pasto en la cima |
+| Laguna | agua celeste con orilla clara, juncos, heliconias y un par de árboles | la laguna misma |
+| Silvestre | hongos, leña y arbustos sobre un parche gris | el hongo grande (sombrero azul gris, sin amarillo) |
+| Reserva A y B | dos parches casi vacíos, para Decorar | ninguno |
+| Nieve del polo sur | parches blancos y piedras blancas; nada verde ni amarillo | el pino nevado |
+
+Los azimuts están girados de modo que, al alejar desde el claro, de entrada se vean el bosquecito,
+la pradera y la laguna; el roquedal, el silvestre y la nieve quedan del otro lado. `zonas()` da los
+centros con su nombre (para que Uku pueda decir «del otro lado está la laguna»). Idea para después:
+que las zonas «despierten» con la relación (`memoria.js › mundo()`), una zona dormida es solo su
+parche.
 
 ## Senderos: por dónde se navega
 
@@ -374,14 +403,14 @@ el puente sobre el arroyo.
   revisa el diseño y dice qué cosa queda sobre un sendero.
 - **No se dibujan** (un bosque no tiene caminos de tierra): son corredores invisibles. La única pista
   son los **farolitos** en las esquinas y el **poste indicador** entre el lago y la cascada.
-- **Casi vacío, como el planeta de Tolan**: el relleno automático es mínimo (`decoEsc()`: unas 28
-  matas, 14 margaritas, 10 florcitas, 6 piedras, 5 arbustos, 5 helechitos y 7 parches de suelo de
-  otro tono, muy separados y regados hasta el borde del bosque). Lo demás lo pone Fran con
-  **Decorar**. El planeta es chico (8 m de radio, 16 veces la altura de Uku) y es una **esfera
-  entera**: al alejar del todo en la vista de pájaro (más de 2,5 de zoom) la cámara se va al espacio
-  y orbita el planeta completo, con cielo de noche y estrellas, el claro encima y el resto de la
-  superficie con parches de dos tonos, árboles, arbustos, matas y piedras repartidos por toda la
-  esfera (`planetaGeo()`).
+- **Casi vacío, como el planeta de Tolan**: el relleno automático del claro es poco (`decoEsc()`:
+  unas 16 matas, 9 margaritas, 7 florcitas, 4 piedras, 4 arbustos, 3 helechitos y 5 parches de
+  suelo de otro tono, muy separados y regados por el anillo exterior; las mismas semillas de antes,
+  lo nuevo se suma al final). Lo demás lo pone Fran con **Decorar**. El planeta es chico (5,5 m de
+  radio, 11 veces la altura de Uku) y es una **esfera entera**: al alejar del todo en la vista de
+  pájaro (más de 2,5 de zoom) la cámara se va al espacio y orbita el planeta completo, con cielo de
+  noche y estrellas, el claro encima y el resto de la superficie repartido en zonas (ver «Un mundo
+  chico»).
 - **Uku pasea por ellos** (su planificador los usa porque son celdas libres) y por ahí se lo
   guía en «Guíame». El claro es más ancho (2,4 m a los lados, hasta 0,85 m al frente).
 - Cada sendero termina en un **destino con nombre** (`destinos()`: plaza, casa, lago, cascada,

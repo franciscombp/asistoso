@@ -103,6 +103,32 @@ function placeAt(g, x, z, rot) {
 }
 // Altura del suelo bajo un punto (x, z) de la escena
 const groundY = (x, z) => Math.sqrt(Math.max(0, PLANET_R * PLANET_R - x * x - z * z)) - PLANET_R;
+/* Toda la esfera: lo de afuera del claro se ubica con las mismas coordenadas de arco (x, z) que usa surf, de modo que
+   un punto cualquiera del planeta (hasta la antípoda, a π·R = 17,3 m del centro del claro) se nombra igual. */
+// Normal unitaria de un punto polar: a = ángulo desde el claro (rad), b = azimut desde +z hacia +x
+function polar(a, b, out) { return out.set(Math.sin(a) * Math.sin(b), Math.cos(a), Math.sin(a) * Math.cos(b)); }
+// Inversa de surf: de una normal unitaria a coordenadas de arco { x, z }. La antípoda queda en { 0, π·R }
+export function arcoDe(n, out = {}) {
+  const h = Math.hypot(n.x, n.z), a = Math.acos(clamp(n.y, -1, 1)), d = a * PLANET_R;
+  if (h < 1e-6) { out.x = 0; out.z = n.y > 0 ? 0 : Math.PI * PLANET_R; return out; }
+  out.x = n.x / h * d; out.z = n.z / h * d; return out;
+}
+// Distancia sobre la superficie (metros de arco) entre dos puntos en coordenadas de arco
+const _d1 = new THREE.Vector3(), _d2 = new THREE.Vector3(), _X = new THREE.Vector3(1, 0, 0);
+export function distEsf(x1, z1, x2, z2) { surf(x1, z1, _d1); surf(x2, z2, _d2); return PLANET_R * Math.acos(clamp(_d1.dot(_d2), -1, 1)); }
+// n puntos uniformes (en área) en la corona esférica de centro n0 (normal) y radios de arco r0..r1 en metros;
+// ok(x, z) descarta los que no sirven y gap (metros de arco) los separa. Semilla fija: el planeta es el mismo cada vez.
+function scatterEsf(seed, n, n0, r1, ok, gap, r0 = 0) {
+  const r = rng(seed), out = [], e1 = new THREE.Vector3().crossVectors(n0, Math.abs(n0.y) < .9 ? _nrm : _X).normalize(), e2 = new THREE.Vector3().crossVectors(n0, e1), p = new THREE.Vector3(), c0 = Math.cos(r0 / PLANET_R), c1 = Math.cos(r1 / PLANET_R);
+  for (let i = 0; out.length < n && i < n * 40; i++) {
+    const t = Math.acos(c0 - r() * (c0 - c1)), f = r() * 6.2832;
+    p.copy(n0).multiplyScalar(Math.cos(t)).addScaledVector(e1, Math.cos(f) * Math.sin(t)).addScaledVector(e2, Math.sin(f) * Math.sin(t));
+    const q = arcoDe(p, { rot: r() * 6.28, s: r(), v: Math.floor(r() * 3), t: r() });
+    if ((ok && !ok(q.x, q.z)) || (gap && out.some(o => distEsf(o.x, o.z, q.x, q.z) < gap))) continue;
+    out.push(q);
+  }
+  return out;
+}
 // Puntos al azar en un anillo alrededor de Uku; ok(x, z) descarta los que no sirven y gap los separa
 function scatter(seed, n, r0, r1, ok, gap) {
   const r = rng(seed), out = [];
@@ -589,22 +615,34 @@ const _dum = new THREE.Object3D();
 /* Regado por todo el claro (hasta el borde del bosque, 3,4 m), con mucha separación y mucho espacio libre: la plazuela y
    los senderos quedan despejados, y nada se amontona cerca de la cámara. Lo lejano se apoya solo donde se ve el suelo. */
 // Un parche de suelo de otro tono: un casquete de la esfera (sigue la curva del planeta) centrado en (x, z), de radio r
-const _qc = new THREE.Quaternion();
-function casquete(x, z, r, color, estiro = 1) {
+// El casquete tiene pocos lados (CAP_W): entre vértice y vértice la cuerda se hunde (hasta 2,6 cm en los grandes) y se
+// metería bajo el suelo, que está teselado fino (se veían «dedos» de suelo encima del parche). Se levanta lo que se hunde.
+const _qc = new THREE.Quaternion(), CAP_W = 28, CAP_H = 6;
+const hundeCap = r => PLANET_R * Math.sin(Math.min(r / PLANET_R, Math.PI / 2)) * (1 - Math.cos(Math.PI / CAP_W));
+// Para apilar parches: a qué altura (alto) va el que se pone encima de uno de radio r que está a alto
+const encimaDe = (r, alto = .004) => alto + hundeCap(r) + .004;
+function casquete(x, z, r, color, estiro = 1, alto = .004) {
   surf(x, z, _sp); _qc.setFromUnitVectors(_nrm, _sp);
-  const g = new THREE.SphereGeometry(PLANET_R + .004, 20, 8, 0, Math.PI * 2, 0, r / PLANET_R);
+  const g = new THREE.SphereGeometry(PLANET_R + alto + hundeCap(r * Math.max(1, estiro)), CAP_W, CAP_H, 0, Math.PI * 2, 0, r / PLANET_R);
   return pc(g, color, new THREE.Matrix4().compose(PLANET_C, _qc, _s4.set(1, 1, estiro)));
+}
+// El mismo parche dado por su normal (sirve en la antípoda, donde surf degenera); alto lo levanta para apilar tonos
+function casqueteN(n0, r, color, alto = .004) {
+  _qc.setFromUnitVectors(_nrm, n0);
+  const g = new THREE.SphereGeometry(PLANET_R + alto + hundeCap(r), CAP_W, CAP_H, 0, Math.PI * 2, 0, r / PLANET_R);
+  return pc(g, color, new THREE.Matrix4().compose(PLANET_C, _qc, _s4.set(1, 1, 1)));
 }
 let DECO_ESC = null;
 function decoEsc() {
   if (DECO_ESC) return DECO_ESC;
   const libre = (x, z) => distSendero(x, z) > .22 && Math.hypot(x - PLAZA[0], z - PLAZA[1]) > .55 && Math.hypot(x - LAGO_P[0], z - LAGO_P[1]) > lagoEnForma() + .18
     && !quienBloquea(x, z) && VISIBLE(x, z) && z < 1.0 && z > -1.9;
+  // Un poco más que antes (49 piezas) pero con las mismas semillas: lo de siempre no se mueve, lo nuevo se suma al final
   return DECO_ESC = {
-    tufts: scatter(5, 14, .5, 2.3, libre, .45), rocks: scatter(17, 3, .9, 2.2, libre, 1.0),
-    bushes: scatter(23, 3, 1.1, 2.2, (x, z) => libre(x, z) && Math.hypot(x, z) > 1.2, 1.0), daisies: scatter(43, 7, .6, 2.3, libre, .5),
-    silvestres: scatter(61, 5, .6, 2.3, libre, .6), helechitos: scatter(67, 2, 1.0, 2.2, (x, z) => libre(x, z) && Math.hypot(x, z) > 1.1, 1.0),
-    parches: scatter(73, 4, .8, 2.2, (x, z) => distSendero(x, z) > .3 && Math.hypot(x - LAGO_P[0], z - LAGO_P[1]) > lagoEnForma() + .5 && VISIBLE(x, z), 1.0)
+    tufts: scatter(5, 16, .5, 2.3, libre, .45), rocks: scatter(17, 4, .9, 2.2, libre, 1.0),
+    bushes: scatter(23, 4, 1.3, 2.2, (x, z) => libre(x, z) && Math.hypot(x, z) > 1.3, 1.0), daisies: scatter(43, 9, .6, 2.3, libre, .5),
+    silvestres: scatter(61, 7, .6, 2.3, libre, .6), helechitos: scatter(67, 3, 1.1, 2.2, (x, z) => libre(x, z) && Math.hypot(x, z) > 1.1, 1.0),
+    parches: scatter(73, 5, .8, 2.2, (x, z) => distSendero(x, z) > .3 && Math.hypot(x - LAGO_P[0], z - LAGO_P[1]) > lagoEnForma() + .5 && VISIBLE(x, z), 1.0)
   };
 }
 function buildGarden(pal) {
@@ -617,28 +655,103 @@ function buildGarden(pal) {
   D.bushes.filter(enLago).forEach(p => { const m = M(p, 1 + p.s * .5), c = pal.round[p.v % pal.round.length]; [[0, .1, 0, .13], [.1, .07, .04, .09], [-.09, .06, -.03, .08]].forEach(([x, y, z, r]) => parts.push(pc(new THREE.IcosahedronGeometry(r, 0), c, m.clone().multiply(TRS([x, y, z], [p.t, 0, 0]))))); });
   D.daisies.filter(enLago).forEach(p => { const m = M(p, .8 + p.s * .4); parts.push(pc(CYL(.003, .004, .05, 3), pal.grass, m.clone().multiply(TRS([0, .025, 0]))), pc(new THREE.SphereGeometry(.01, 5, 3), pal.dust, m.clone().multiply(TRS([0, .052, 0], 0, [1, .6, 1])))); });
   if (esc) planetaGeo(pal).forEach(g => parts.push(g));
-  (D.parches || []).forEach((p, i) => { const col = pal.bg === '#1f1f1f' ? ['#30333b', '#2f3238'][i % 2] : ['#c7ccd4', '#b0b7c2'][i % 2]; parts.push(casquete(p.x, p.z, .4 + p.s * .4, col)); });
+  (D.parches || []).forEach((p, i) => { const col = pal.bg === '#1f1f1f' ? ['#30333b', '#2f3238'][i % 2] : ['#c7ccd4', '#aab1bc'][i % 2]; parts.push(casquete(p.x, p.z, .5 + p.s * .4, col)); });
   (D.silvestres || []).forEach(p => { const m = M(p, .9 + p.s * .5); PARTS.silvestre(pal, p.v).forEach(g => parts.push(g.applyMatrix4(m))); });
   (D.helechitos || []).forEach(p => { const m = M(p, .8 + p.s * .6); PARTS.helechito(pal, p.v).forEach(g => parts.push(g.applyMatrix4(m))); });
   garden = new THREE.Mesh(kit(parts), LAMB); garden.visible = !focus; scene.add(garden);
 }
-/* El resto del planeta (lo que no es el claro): parches grandes de dos tonos, árboles, arbustos y matas repartidos por
-   toda la esfera, para que al alejar se vea un mundo entero y no un claro flotando. Puntos al azar sobre la esfera
-   (fuera del casquete del claro, a más de 4,6 m de arco del centro), con semilla fija. Se calcula una vez. */
-let PLANETA = null;
+/* ---------- El resto del planeta: un mundo por zonas (como el de Tolan) ----------
+   Fuera del claro el planeta no se rellena al azar: tiene seis ZONAS con nombre, cada una un parche grande de otro tono con
+   un subparche interior, un hito (algo de 1,3–2 m que se reconoce desde el espacio) y unos racimos de piezas grandes,
+   más dos reservas vacías para Decorar y la nieve del polo sur. Entre zona y zona queda suelo pelado (≥ 2,1 m): lo que
+   las separa es el espacio libre, no caminos. Alrededor del claro hay una franja sin nada (hasta 4,8 m de arco) para que
+   lo automático no caiga en el propio borde del bosque. Todo va en la malla única del jardín (cero llamadas de dibujo
+   nuevas, nada animado). Semilla fija por zona: el planeta es el mismo en cada visita. Amarillo solo en la pradera. */
+Object.assign(PARTS, {
+  // Árbol madre del bosquecito nublado: tronco con raíces, copa amplia y aplastada en capas, barbas de musgo colgando
+  arbolMadre: pal => [pc(CYL(.07, .12, .9, 7), pal.trunk, [0, .45, 0]),
+    ...[0, 1, 2].map(i => pc(CYL(.03, .05, .25, 5), pal.trunk, [Math.cos(i * 2.094) * .1, .1, Math.sin(i * 2.094) * .1], [0, -i * 2.094, 1.1])),
+    pc(new THREE.IcosahedronGeometry(.55, 1), pal.round[0], [0, 1.2, 0], [0, .4, 0], [1, .55, 1]),
+    pc(new THREE.IcosahedronGeometry(.32, 0), pal.round[1], [.4, 1.05, .1], [.3, 0, 0]), pc(new THREE.IcosahedronGeometry(.32, 0), pal.round[1], [-.4, 1.05, .1], [0, .7, 0]),
+    pc(new THREE.IcosahedronGeometry(.2, 0), pal.pine[2 % pal.pine.length], [0, 1.5, 0], [.2, .5, 0]),
+    pc(new THREE.ConeGeometry(.04, .3, 3), pal.grass, [.3, .85, .25], [Math.PI, 0, 0]), pc(new THREE.ConeGeometry(.04, .3, 3), pal.grass, [-.25, .88, -.2], [Math.PI, 0, 0])],
+  // Peñón del roquedal: una roca alta con otra al pie, una grieta en sombra y un poco de pasto en la cima
+  penon: pal => [pc(new THREE.DodecahedronGeometry(.55, 0), pal.rock, [0, .6, 0], [0, .3, 0], [1, 1.3, .8]), pc(new THREE.DodecahedronGeometry(.3, 0), pal.rock, [.45, .3, .1], [.2, .9, 0]),
+    pc(new THREE.DodecahedronGeometry(.22, 0), pal.trunk, [-.35, .2, -.1], [.1, .5, 0]), pc(new THREE.IcosahedronGeometry(.14, 0), pal.grass, [0, 1.35, 0], [0, 0, 0], [1, .6, 1])],
+  // Guayacán madre de la pradera: el guayacán de siempre, que se pone a escala 1,7
+  guayaMadre: pal => PARTS.guaya(pal, 0),
+  // Hongo grande del silvestre: pie crema y sombrero azul gris con lunares (sin amarillo, que es solo del claro y la pradera)
+  hongoGrande: pal => [pc(CYL(.12, .18, .7, 8), CREMA, [0, .35, 0]), pc(new THREE.SphereGeometry(.5, 10, 6, 0, Math.PI * 2, 0, Math.PI / 2), pal.pine[0], [0, .7, 0], 0, [1, .75, 1]),
+    ...[[.2, .25, .3], [-.25, .22, .2], [.05, .32, -.3], [-.1, .35, .1], [.3, .2, -.15]].map(([x, y, z]) => pc(new THREE.SphereGeometry(.07, 5, 3), CREMA, [x, .7 + y, z], 0, [1, .6, 1])),
+    pc(CYL(.05, .07, .3, 6), CREMA, [.45, .15, .1]), pc(new THREE.SphereGeometry(.2, 8, 5, 0, Math.PI * 2, 0, Math.PI / 2), pal.round[1], [.45, .3, .1], 0, [1, .75, 1])],
+  // Pino nevado del polo sur: el pino de siempre en blancos azulados, con una capa de nieve en cada piso
+  pinoNevado: pal => { const osc = pal.bg === '#1f1f1f', P = Object.assign({}, pal, { pine: osc ? ['#4a4e5a', '#565a66', '#5f636f'] : ['#e6e9ee', '#dfe3ea', '#f3f4f7'] });
+    return [...PARTS.pino(P, 0), ...[[.32, .5, .45], [.25, .42, .72], [.17, .32, .95]].map(([r, h, y]) => pc(new THREE.SphereGeometry(r + .02, 7, 4), '#ffffff', [0, y - h / 2 + .03, 0], 0, [1, .25, 1]))]; },
+  // Árbol lejano: el más barato (60 triángulos), para los racimos del bosquecito, la laguna y el silvestre
+  arbolLejano: (pal, v) => [pc(CYL(.04, .06, .45, 5), pal.trunk, [0, .22, 0]), pc(new THREE.IcosahedronGeometry(.3, 0), pal.round[v % 2], [0, .62, 0], [0, v, 0]),
+    pc(new THREE.IcosahedronGeometry(.17, 0), pal.pine[v % pal.pine.length], [.12, .82, .05], [v, 0, 0])]
+});
+/* Las zonas: centro en polares (a = ángulo desde el claro, b = azimut desde +z, hacia +x), r = radio del parche en metros de arco, ri = el
+   subparche interior; tonos [exterior, interior] para tema claro y oscuro (todos con ≥ 10 % de contraste contra el suelo);
+   hito { kind, esc, en } y racimos { kind, n, esc: [min, max], gap, r0, r1 } alrededor del centro. Los azimuts son irregulares
+   y están girados de modo que, al alejar desde el claro (la cámara mira desde +z), de entrada se vean el bosquecito, la
+   pradera y la laguna; la nieve queda abajo y el roquedal y el silvestre, del otro lado: hay que girar el planeta. */
+const ZONAS = [
+  { id: 'bosque', nombre: 'Bosquecito nublado', a: 1.40, b: -0.40, r: 2.0, ri: 1.0, tonos: ['#a4aec2', '#98a3b9'], tonosOsc: ['#242731', '#1f2229'], hito: { kind: 'arbolMadre', esc: 1.0, R: .9 },
+    racimos: [{ kind: 'arbolLejano', n: 7, esc: [1.4, 1.8], gap: .75, r0: .6, r1: 1.7 }, { kind: 'helecho', n: 2, esc: [1.3, 1.4], gap: .8, r0: .5, r1: 1.5 }, { kind: 'arbusto', n: 4, esc: [1.4, 1.7], gap: .5, r0: .4, r1: 1.6 },
+      { kind: 'hojona', n: 3, esc: [1.3, 1.5], gap: .5, r0: .4, r1: 1.5 }, { kind: 'tufts', n: 6, esc: [1.6, 2.0], gap: .4, r0: .3, r1: 1.8 }, { kind: 'helechito', n: 2, esc: [1.3, 1.5], gap: .6, r0: .5, r1: 1.5 }] },
+  { id: 'pradera', nombre: 'Pradera de guayacanes', a: 1.35, b: 1.45, r: 1.8, ri: .9, tonos: ['#d9d4c3', '#e4dfcf'], tonosOsc: ['#33322c', '#3a3832'], hito: { kind: 'guayaMadre', esc: 1.7, R: .9 },
+    racimos: [{ kind: 'guaya', n: 4, esc: [1.3, 1.5], gap: .9, r0: .7, r1: 1.5 }, { kind: 'silvestre', n: 10, esc: [1.3, 1.6], gap: .3, r0: .3, r1: 1.6 }, { kind: 'flor', v: 0, n: 6, esc: [1.4, 1.6], gap: .35, r0: .3, r1: 1.6 },
+      { kind: 'arbusto', n: 2, esc: [1.3, 1.5], gap: .6, r0: .6, r1: 1.5 }, { kind: 'tufts', n: 4, esc: [1.6, 2.0], gap: .4, r0: .3, r1: 1.6 }] },
+  { id: 'roquedal', nombre: 'Roquedal', a: 1.40, b: 3.20, r: 1.6, ri: .8, tonos: ['#d6d9df', '#e3e5ea'], tonosOsc: ['#363942', '#3d4049'], hito: { kind: 'penon', esc: 1.0, R: .8 },
+    racimos: [{ kind: 'piedra', n: 7, esc: [1.8, 2.8], gap: .45, r0: .3, r1: 1.3 }, { kind: 'arbusto', n: 2, esc: [1.3, 1.5], gap: .6, r0: .6, r1: 1.4 }, { kind: 'tufts', n: 3, esc: [1.6, 1.9], gap: .5, r0: .4, r1: 1.4 }] },
+  { id: 'laguna', nombre: 'Laguna', a: 2.00, b: 0.55, r: 1.6, laguna: true, tonos: ['#c3d3e8', '#f3f4f7'], tonosOsc: ['#283046', '#4a4e5a'],
+    racimos: [{ kind: 'arbolLejano', n: 2, esc: [1.3, 1.5], gap: .9, r0: 1.1, r1: 1.5 }, { kind: 'piedra', n: 3, esc: [1.4, 1.6], gap: .5, r0: 1.05, r1: 1.5 }, { kind: 'heliconia', n: 3, esc: [1.3, 1.5], gap: .45, r0: 1.05, r1: 1.5 },
+      { kind: 'tufts', n: 6, esc: [1.8, 2.2], gap: .35, r0: .95, r1: 1.2 }] },
+  { id: 'silvestre', nombre: 'Silvestre', a: 2.05, b: 2.40, r: 1.4, ri: .7, tonos: ['#aeb6c6', '#a3acbd'], tonosOsc: ['#26292f', '#22252b'], hito: { kind: 'hongoGrande', esc: 1.3, R: .8 },
+    racimos: [{ kind: 'arbolLejano', n: 2, esc: [1.3, 1.5], gap: .9, r0: .6, r1: 1.3 }, { kind: 'arbusto', n: 3, esc: [1.3, 1.6], gap: .55, r0: .4, r1: 1.3 }, { kind: 'lena', n: 1, esc: [1.5, 1.5], gap: 0, r0: .5, r1: 1.0 },
+      { kind: 'hongoGrande', n: 2, esc: [.5, .7], gap: .5, r0: .4, r1: 1.1 }, { kind: 'tufts', n: 5, esc: [1.6, 1.9], gap: .4, r0: .3, r1: 1.3 }] },
+  { id: 'reservaA', nombre: 'Reserva (para Decorar)', a: 1.25, b: 4.45, r: 1.1, tonos: ['#c7ccd4'], tonosOsc: ['#30333b'], racimos: [{ kind: 'tufts', n: 2, esc: [1.6, 1.8], gap: .5, r0: .3, r1: 1.0 }] },
+  { id: 'reservaB', nombre: 'Reserva (para Decorar)', a: 2.25, b: 4.20, r: 1.1, tonos: ['#c7ccd4'], tonosOsc: ['#30333b'], racimos: [{ kind: 'piedra', n: 1, esc: [1.4, 1.4], gap: 0, r0: .2, r1: .9 }, { kind: 'tufts', n: 1, esc: [1.6, 1.6], gap: 0, r0: .2, r1: .9 }] },
+  // El polo sur: la nieve (lo único blanco del planeta), con un pino nevado y unas piedras blancas; nada verde ni amarillo
+  { id: 'nieve', nombre: 'Nieve del polo sur', polo: true, r: 2.2, tonos: ['#f3f4f7', '#ffffff'], tonosOsc: ['#4a4e5a', '#565a66'], sub: [[2.9, 0.0], [2.95, 3.2]], hito: { kind: 'pinoNevado', esc: 1.4, R: .7, en: [2.95, 1.2] },
+    racimos: [{ kind: 'piedra', n: 3, esc: [1.8, 2.2], gap: .6, r0: 0, r1: 1.6, pal: (pal, osc) => Object.assign({}, pal, { rock: osc ? '#565a66' : '#f3f4f7' }) }] }
+];
+// Centro de cada zona (y de su hito) en coordenadas de arco, calculado una vez: lo usan sitioLibre y zonas()
+ZONAS.forEach((Z, i) => {
+  Z.seed = 201 + 10 * i; Z.n0 = Z.polo ? new THREE.Vector3(0, -1, 0) : polar(Z.a, Z.b, new THREE.Vector3());
+  const c = arcoDe(Z.n0); Z.cx = c.x; Z.cz = c.z;
+  if (Z.hito) { const h = Z.hito.en ? arcoDe(polar(Z.hito.en[0], Z.hito.en[1], _sp)) : c; Z.hitoX = h.x; Z.hitoZ = h.z; }
+});
+const LEJOS_MAX = 3.0 * PLANET_R; // más allá placeAt degenera (la antípoda): ahí no va nada
+const fueraDeZonas = (x, z) => { const d = Math.hypot(x, z); return d > 4.8 && d <= LEJOS_MAX && ZONAS.every(Z => distEsf(x, z, Z.cx, Z.cz) > Z.r + .6); };
+let PLANETA = null, PLANETA_PUNTOS = []; // los puntos puestos: { x, z, kind, grande } para sitioLibre y para las pruebas
 function planetaGeo(pal) {
   if (PLANETA) return PLANETA;
-  const r = rng(131), out = [], M = (x, z, rot, sc) => { placeAt(_dum, x, z, rot); return new THREE.Matrix4().compose(_dum.position, _dum.quaternion, _s4.setScalar(sc)); };
-  // un punto al azar de la esfera, dado como coordenadas de arco (las que usa surf), fuera del claro
-  const punto = () => { const a = Math.acos(1 - 2 * r()) * .88 + .5, b = r() * 6.283, d = Math.min(a, 3.05) * PLANET_R; return { x: Math.sin(b) * d, z: Math.cos(b) * d, rot: r() * 6.28, s: r(), v: Math.floor(r() * 3) }; };
-  const oscuro = pal.bg === '#1f1f1f';
-  for (let i = 0; i < 24; i++) { const p = punto(), col = oscuro ? ['#30333b', '#2a2d34'][i % 2] : ['#c7ccd4', '#aeb5c0'][i % 2]; out.push(casquete(p.x, p.z, .7 + p.s * 1.1, col)); }
-  for (let i = 0; i < 26; i++) { const p = punto(); PARTS[p.v === 0 ? 'guaya' : 'nublado'](pal, p.v).forEach(g => out.push(g.applyMatrix4(M(p.x, p.z, p.rot, 1.1 + p.s * .5)))); }
-  for (let i = 0; i < 24; i++) { const p = punto(); PARTS.arbusto(pal).forEach(g => out.push(g.applyMatrix4(M(p.x, p.z, p.rot, 1 + p.s)))); }
-  for (let i = 0; i < 30; i++) { const p = punto(); PARTS.tufts(pal).forEach(g => out.push(g.applyMatrix4(M(p.x, p.z, p.rot, 1.2 + p.s)))); }
-  for (let i = 0; i < 8; i++) { const p = punto(); PARTS.piedra(pal).forEach(g => out.push(g.applyMatrix4(M(p.x, p.z, p.rot, 1.2 + p.s * 1.5)))); }
+  const out = [], osc = pal.bg === '#1f1f1f', M = (x, z, rot, sc) => { placeAt(_dum, x, z, rot); return new THREE.Matrix4().compose(_dum.position, _dum.quaternion, _s4.setScalar(sc)); };
+  const poner = (kind, v, p, sc, grande, palX) => { PARTS[kind](palX || pal, v).forEach(g => out.push(g.applyMatrix4(M(p.x, p.z, p.rot, sc)))); PLANETA_PUNTOS.push({ x: p.x, z: p.z, kind, grande: !!grande }); };
+  const GRANDE = { guaya: 1, helecho: 1, arbolLejano: 1, hongoGrande: 1 };
+  PLANETA_PUNTOS = [];
+  ZONAS.forEach(Z => {
+    const n0 = Z.n0, t = osc ? Z.tonosOsc : Z.tonos;
+    out.push(casqueteN(n0, Z.r, t[0])); if (Z.ri) out.push(casqueteN(n0, Z.ri, t[1], encimaDe(Z.r)));
+    (Z.sub || []).forEach(([a, b]) => out.push(casqueteN(polar(a, b, _sp), .8, t[1], encimaDe(Z.r))));
+    if (Z.laguna) out.push(casqueteN(n0, 1.0, t[1], encimaDe(Z.r)), casqueteN(n0, .75, AGUA(pal), encimaDe(1.0, encimaDe(Z.r)))); // orilla clara y agua
+    if (Z.hito) poner(Z.hito.kind, 0, { x: Z.hitoX, z: Z.hitoZ, rot: Z.hito.rot || 0 }, Z.hito.esc, true);
+    const ok = (x, z) => (!Z.hito || distEsf(x, z, Z.hitoX, Z.hitoZ) > Z.hito.R) && (!Z.laguna || distEsf(x, z, Z.cx, Z.cz) > .95) && Math.hypot(x, z) <= LEJOS_MAX;
+    Z.racimos.forEach((G, j) => scatterEsf(Z.seed + j, G.n, n0, G.r1, ok, G.gap, G.r0)
+      .forEach(p => poner(G.kind, G.v == null ? p.v : G.v, p, G.esc[0] + p.s * (G.esc[1] - G.esc[0]), GRANDE[G.kind], G.pal && G.pal(pal, osc))));
+  });
+  // El aire entre zonas: unas pocas piedras y matas sueltas y, muy de vez en cuando, un árbol o un arbusto solo (para que
+  // desde el espacio el suelo pelado no parezca un planeta sin nada: lo que marca que es «aire» es la separación)
+  scatterEsf(131, 10, _nrm, Math.PI * PLANET_R, fueraDeZonas, 1.5, 4.8).forEach(p => poner('piedra', 0, p, 1.3 + p.s * .7));
+  scatterEsf(137, 22, _nrm, Math.PI * PLANET_R, fueraDeZonas, 1.5, 4.8).forEach(p => poner('tufts', 0, p, 1.5 + p.s * .7));
+  scatterEsf(139, 8, _nrm, Math.PI * PLANET_R, fueraDeZonas, 2.6, 4.8).forEach(p => poner('arbolLejano', p.v, p, 1.3 + p.s * .3, true));
+  scatterEsf(143, 8, _nrm, Math.PI * PLANET_R, fueraDeZonas, 2.2, 4.8).forEach(p => poner('arbusto', 0, p, 1.4 + p.s * .4));
   return PLANETA = out;
 }
+// Las zonas del planeta, para que Uku pueda nombrarlas («del otro lado está la laguna») y para las pruebas
+export function zonas() { return ZONAS.map(Z => ({ id: Z.id, nombre: Z.nombre, x: Z.cx, z: Z.cz, r: Z.r })); }
 /* ---------- Polvo de luz (motas blancas que flotan) ---------- */
 let dust = null;
 // El polvo de luz sí es suave: un punto difuso (lo único con brillo en el dibujo plano, junto al desenfoque de sueño)
@@ -1485,14 +1598,28 @@ const KD = 'mimo_decoracion';
 let decoracion = (() => { try { return JSON.parse(localStorage.getItem(KD) || '[]'); } catch (e) { return []; } })();
 function guardarDecoracion() { try { localStorage.setItem(KD, JSON.stringify(decoracion)); } catch (e) {} if (renderer) buildForest(); }
 export function decoracionLista() { return decoracion.slice(); }
-export function ponerDecoracion(k, x, z, rot = 0) { if (!DECORABLES[k]) return null; const d = { id: Date.now().toString(36) + Math.random().toString(36).slice(2, 5), k, x: +x, z: +z, rot: +rot }; decoracion.push(d); guardarDecoracion(); return d; }
+export function ponerDecoracion(k, x, z, rot = 0) { if (!DECORABLES[k] || Math.hypot(+x, +z) > Math.PI * PLANET_R - .4) return null; const d = { id: Date.now().toString(36) + Math.random().toString(36).slice(2, 5), k, x: +x, z: +z, rot: +rot }; decoracion.push(d); guardarDecoracion(); return d; }
 export function moverDecoracion(id, x, z) { const d = decoracion.find(o => o.id === id); if (d) { d.x = +x; d.z = +z; guardarDecoracion(); } }
 export function girarDecoracion(id, paso = Math.PI / 4) { const d = decoracion.find(o => o.id === id); if (d) { d.rot = (d.rot || 0) + paso; guardarDecoracion(); } }
 export function cambiarDecoracion(id, k) { const d = decoracion.find(o => o.id === id); if (d && DECORABLES[k]) { d.k = k; guardarDecoracion(); } }
 export function quitarDecoracion(id) { decoracion = decoracion.filter(o => o.id !== id); guardarDecoracion(); }
 export function quitarTodaDecoracion() { decoracion = []; guardarDecoracion(); }
-// ¿Se puede poner algo ahí? Fuera de los corredores, del lago, de lo que hay puesto y dentro del claro
-export function sitioLibre(x, z) { return !!esc && distSendero(x, z) > .14 && Math.hypot(x - LAGO_P[0], z - LAGO_P[1]) > lagoEnForma() + .14 && !quienBloquea(x, z) && Math.hypot(x, z * .8) < 2.2 && VISIBLE(x, z); }
+/* ¿Se puede poner algo ahí? En el claro: fuera de los corredores, del lago y de lo que hay puesto (la regla de siempre).
+   En el resto de la esfera: en cualquier sitio que se vea desde la cámara, salvo el bosque del claro y su franja pelada,
+   la antípoda (placeAt degenera), los hitos de las zonas, el agua y la orilla de la laguna, y lo grande que ya hay. */
+const dentroDelClaro = (x, z) => Math.hypot(x, z * .8) < 2.2;
+const _vd = new THREE.Vector3();
+function visibleDesdeCamara(x, z) { if (!camera) return true; surf(x, z, _sp); return _vd.copy(camera.position).sub(PLANET_C).addScaledVector(_sp, -PLANET_R).dot(_sp) > .05; }
+export function sitioLibre(x, z) {
+  if (!esc) return false;
+  if (dentroDelClaro(x, z)) return distSendero(x, z) > .14 && Math.hypot(x - LAGO_P[0], z - LAGO_P[1]) > lagoEnForma() + .14 && !quienBloquea(x, z) && VISIBLE(x, z);
+  const d = Math.hypot(x, z);
+  if (d < 3.8 || d > Math.PI * PLANET_R - .4) return false;
+  if (!visibleDesdeCamara(x, z)) return false;
+  if (ZONAS.some(Z => Z.hito && distEsf(x, z, Z.hitoX, Z.hitoZ) < Z.hito.R + .3)) return false;
+  if (ZONAS.some(Z => Z.laguna && distEsf(x, z, Z.cx, Z.cz) < 1.05)) return false;
+  return decoracion.every(o => distEsf(x, z, o.x, o.z) >= .22) && PLANETA_PUNTOS.every(p => !p.grande || distEsf(x, z, p.x, p.z) >= .35);
+}
 // El punto del claro (x, z) bajo un punto de la pantalla (px del contenedor), o null si no toca el suelo
 const _rayS = new THREE.Raycaster(), _ndcS = new THREE.Vector2(), _esf = new THREE.Sphere(), _hit = new THREE.Vector3();
 export function puntoDeSuelo(cx, cy) {
@@ -1502,16 +1629,16 @@ export function puntoDeSuelo(cx, cy) {
   _rayS.setFromCamera(_ndcS, camera);
   _esf.set(PLANET_C, PLANET_R);
   if (!_rayS.ray.intersectSphere(_esf, _hit)) return null;
-  // de la esfera a las coordenadas del claro (las que usa surf): la distancia sobre la superficie en cada eje
-  const n = _hit.clone().sub(PLANET_C).divideScalar(PLANET_R), h = Math.hypot(n.x, n.z), a = Math.acos(clamp(n.y, -1, 1)), d = a * PLANET_R;
-  if (h < 1e-6) return { x: 0, z: 0 };
-  return { x: n.x / h * d, z: n.z / h * d };
+  // de la esfera a las coordenadas de arco (las que usa surf), válido en toda la esfera
+  return arcoDe(_hit.sub(PLANET_C).divideScalar(PLANET_R));
 }
 // Dónde cae en pantalla (px del contenedor) un punto del claro
 const _pp = new THREE.Vector3();
 export function pantallaDe(x, z, alto = 0) {
   if (!host || !camera) return null;
-  surf(x, z, _sp); _pp.copy(PLANET_C).addScaledVector(_sp, PLANET_R + alto).project(camera);
+  surf(x, z, _sp); _pp.copy(PLANET_C).addScaledVector(_sp, PLANET_R + alto);
+  if (_vd.copy(camera.position).sub(_pp).dot(_sp) <= .02) return null; // en la cara oculta del planeta
+  _pp.project(camera);
   if (_pp.z > 1) return null;
   return { x: (_pp.x + 1) / 2 * host.clientWidth, y: (1 - _pp.y) / 2 * host.clientHeight };
 }
@@ -1706,7 +1833,7 @@ const frameHooks = [];
 export function enCuadro(fn) { frameHooks.push(fn); }
 // El material plano de dos tonos, para lo que se agrega al mundo desde afuera (efectos3d)
 export function materialPlano(o) { return toon(o); }
-export function mundo3d() { return { THREE, scene, camera, get uku() { return bear; }, groundY }; }
+export function mundo3d() { return { THREE, scene, camera, get uku() { return bear; }, groundY, PLANET_C, PLANET_R, get renderer() { return renderer; }, get planeta() { return PLANETA_PUNTOS; }, get garden() { return garden; }, decoEsc, okWalk: (x, z) => okWalk(x, z) }; }
 export function setScore(s) { if (!bear && target != null) { target = s; return; } if (s !== score) { score = s; if (renderer) buildForest(); } }
 export function setBloom(b) { b = b == null ? null : Math.max(0, Math.min(100, b)); if (b !== bloom) { bloom = b; if (renderer) buildForest(); } }
 /* Lo que hay en el claro: { brotes, flores, guayacanes: 0–4, casa, mariposas, escenario }.
