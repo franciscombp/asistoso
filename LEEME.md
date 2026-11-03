@@ -247,6 +247,25 @@ si no hay WebGL.
 - Para volver atrás: `?oso=clasico` (modelo original, con su cara pintada); también con
   `localStorage` `uku_oso`.
 
+## Los pesos de Uku (v3)
+
+`assets/oso/uku-rig-v3.glb` (la variante por defecto; `?oso=v2` carga la anterior) es la v2 con los pesos
+del skin hechos de nuevo por `tools/uku-pesos.py` (numpy, 3 s). Solo cambian `JOINTS_0`/`WEIGHTS_0`: la
+malla en reposo, las UV, las texturas, los huesos y las clips son byte a byte los de v2, así la silueta no
+cambia; cambia cómo se dobla:
+
+- **Cápsulas por hueso** (segmento, radio y margen en los extremos, con falloff suave) en el espacio del
+  bind; en la columna y la cabeza manda solo la altura; los muslos se funden lateralmente desde la entrepierna.
+- **Por partes**: nunca una pierna pesa a la otra; las manos van enteras a `Hand` (los clips de Mixamo
+  curvaban los dedos y arrugaban la manopla); la cabeza por encima de la boca es rígida con `Head`; la
+  entrepierna y el ruedo del suéter se quedan con la cadera; la bufanda copia los pesos de la cabeza y el
+  suéter que cubre. `HandIndex*`, `HeadTop_End` y `Toe_End` pesan 0.
+- **Suavizado laplaciano** por partes con las costuras UV soldadas, máximo 4 huesos por vértice.
+- Medición antes/después: `python3 tools/uku-rig-mide.py [ruta.glb] --costuras` (distorsión de aristas por
+  clip, triángulos invertidos, candy wrapper en codos y rodillas, estadística de pesos).
+- Orden si se vuelve a hornear: `tools/uku-hornea.py` escribe los materiales en v2; después
+  `python3 tools/uku-pesos.py` regenera v3 a partir de v2 (hereda lo horneado).
+
 ## Dibujo vectorial plano
 
 Todo el mundo (el claro, Uku, lo que lleva puesto y las reacciones) se ve como un dibujo vectorial
@@ -714,6 +733,8 @@ frase hasta haber dicho todas**, y la primera de la baraja nueva nunca es la
 | `assets/clima.js` | Clima del lugar (Open-Meteo) y cómo se viste Uku. |
 | `assets/uku-rig.js` | Carga a Uku (esqueleto, clips, pies en el suelo) y el shader de la cara (ojos, nariz, boca). |
 | `tools/uku-hornea.py` | Hornea las texturas de Uku desde su geometría (con `tools/glb.py` y `tools/raster.py`). |
+| `tools/uku-pesos.py` | Re-pesa el rig de Uku (v2 → v3): cápsulas por hueso, partes, suavizado; solo cambia JOINTS/WEIGHTS. |
+| `tools/uku-rig-mide.py` | Mide cómo deforma un rig de Uku con sus clips (aristas, triángulos invertidos, candy wrapper, pesos). |
 
 - **Sin imitación:** se probó que Uku copiara cabeza y brazos, pero la cabeza quedaba mirando hacia arriba; se quitó. Uku queda en su animación de reposo y responde con gestos.
 - **La visión corre en el navegador** (MediaPipe y face-api desde su CDN, ~34 MB la primera vez;

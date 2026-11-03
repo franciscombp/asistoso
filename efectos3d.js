@@ -76,7 +76,20 @@ export function crearEfectos3d(b3d) {
     if (p.mats) p.mats.forEach(mm => mm.dispose());
     if (p.o.material && p.o.material.isSpriteMaterial) p.o.material.dispose();
   }
+  // Ninguna pieza nace sobre la cara de Uku: si cae delante de él y dentro de su cabeza (con margen), se corre a un lado
+  const _c = new THREE.Vector3(), _der = new THREE.Vector3();
+  function fueraDeLaCara(o) {
+    const hd = b3d.head && b3d.head(), cv = b3d.mundo3d().renderer && b3d.mundo3d().renderer.domElement; if (!hd || !cv) return;
+    const W = cv.clientWidth || innerWidth, H = cv.clientHeight || innerHeight, dc = camera.position.distanceTo(o.position);
+    if (dc > dUku() + .25) return; // detrás de él: no estorba
+    _c.copy(o.position).project(camera); const sx = (_c.x + 1) / 2 * W, sy = (1 - _c.y) / 2 * H, dist = Math.hypot(sx - hd.x, sy - hd.y), lim = hd.r * 2.2;
+    if (dist >= lim) return;
+    const lado = sx - hd.x ? Math.sign(sx - hd.x) : (hd.x > W / 2 ? -1 : 1), px = lim * 1.3 - dist + 8; // píxeles que faltan (con margen: la pieza ya se mueve al nacer), hacia el lado donde ya está
+    const mPorPx = 2 * dc * Math.tan(camera.fov * Math.PI / 360) / H; // metros por píxel a esa profundidad
+    _der.setFromMatrixColumn(camera.matrixWorld, 0).normalize(); o.position.addScaledVector(_der, lado * px * mPorPx);
+  }
   function agregar(p) {
+    if (p.tipo === 'malla' || p.tipo === 'sprite') fueraDeLaCara(p.o);
     // Las mallas se desvanecen cada una por su cuenta: llevan su copia de los materiales
     if (p.tipo === 'malla') { p.mats = []; p.o.traverse(o => { if (o.isMesh) { o.material = o.material.clone(); o.material.transparent = true; o.material.depthWrite = false; p.mats.push(o.material); } }); p.alfa = p.mats.map(mm => mm.opacity); }
     P.push(Object.assign({ v: new THREE.Vector3(), g: 0, t: 0, vida: 2, s: 1, pop: false, spin: 0, fase: Math.random() * 6.28 }, p)); grupo.add(p.o); return p;

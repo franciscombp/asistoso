@@ -25,7 +25,7 @@ import * as THREE from './vendor/three/three.module.min.js';
 import { mergeGeometries } from './vendor/three/jsm/utils/BufferGeometryUtils.js';
 // El oso: el de siempre (uku-rig.js) o el de respaldo hecho por código (uku-rig-nuevo.js, con ?oso=nuevo o
 // localStorage uku_oso = nuevo) para probarlo
-export const OSO = (() => { try { const q = new URLSearchParams(location.search).get('oso'), v = q || localStorage.getItem('uku_oso'); return v === 'nuevo' ? 'nuevo' : v === 'clasico' ? 'clasico' : 'v2'; } catch (e) { return 'v2'; } })();
+export const OSO = (() => { try { const q = new URLSearchParams(location.search).get('oso'), v = q || localStorage.getItem('uku_oso'); return v === 'nuevo' ? 'nuevo' : v === 'clasico' ? 'clasico' : v === 'v2' ? 'v2' : 'v3'; } catch (e) { return 'v3'; } })();
 
 const RM = matchMedia('(prefers-reduced-motion: reduce)').matches;
 const lerp = THREE.MathUtils.lerp, clamp = THREE.MathUtils.clamp;
@@ -985,6 +985,7 @@ function okWalk(x, z) {
   if (Math.hypot(x, z * .8) > R || z < zmin || z > zmax) return false;
   // Los senderos son corredores siempre libres (lo que hay puesto queda a los lados)
   if (esc && distSendero(x, z) < ANCHO_SENDERO / 2 + .04) return true;
+  if (chocaPuesto(x, z)) return false; // lo que Fran decoró y los brotes que plantó también estorban
   if (esc) { if (!ESC_TREES) ESC_TREES = escTrees(); if (!ESC_TREES.every(t => Math.hypot(x - t.x, z - t.z) > .22)) return false; }
   if (!ZONA.canteros.every(([bx, bz]) => Math.hypot(x - bx, z - bz) > BED_R + .08)) return false;
   // Solo lo que está puesto de verdad: la casa y los guayacanes (tronco fino)
@@ -1000,6 +1001,32 @@ function okWalk(x, z) {
     if (!ESC_ZONA.guayas.every(([gx, gz]) => Math.hypot(x - gx, z - gz) > .32)) return false;
   }
   return true;
+}
+/* Lo puesto a mano (decorar) y los brotes plantados no se pisan: cada cosa con su radio (la banca y el guayacán, grandes).
+   decoClaro es la decoración que cae dentro del claro (la del resto del planeta no está en su camino). */
+const RADIO_DECO = { banca: .3, guaya: .32, arbusto: .18, farolito: .14 };
+const radioDeco = k => RADIO_DECO[k] || .12;
+let decoClaro = [], holgura = 0; // holgura: al planear se rodea con un margen, así el paso siguiente no roza lo puesto
+function chocaPuesto(x, z) {
+  for (let i = 0; i < decoClaro.length; i++) { const d = decoClaro[i]; if (Math.hypot(x - d.x, z - d.z) < radioDeco(d.k) + holgura) return true; }
+  for (let i = 0; i < planted.length; i++) if (Math.hypot(x - planted[i].x, z - planted[i].z) < .1 + holgura) return true;
+  return false;
+}
+// Cambió lo puesto: las celdas del planificador se rehacen, si Uku iba a algún lado vuelve a planear el camino, y si
+// algo le quedó encima se corre
+function puestoCambio() {
+  decoClaro = decoracion.filter(d => dentroDelClaro(d.x, d.z)); celdas = null;
+  if (goal) { const dest = ruta.length ? ruta[ruta.length - 1] : goal; if (!irA(dest.x, dest.z)) { goal = null; ruta = []; idleFor = 1; } }
+  despejarUku();
+}
+// Si algo quedó encima de Uku (decoración guardada de otra visita, o recién puesta), se corre al punto libre más cercano
+function despejarUku() {
+  if (!bear || leyendo || gesture === 'read' || okWalk(pos.x, pos.z)) return;
+  const p = puntoLibreCerca(pos.x, pos.z); if (p) { pos.x = p.x; pos.z = p.z; goal = null; ruta = []; }
+}
+function puntoLibreCerca(x, z) {
+  for (let r = .1; r <= 1.5; r += .1) for (let i = 0; i < 16; i++) { const a = i / 16 * Math.PI * 2 + r, px = x + Math.sin(a) * r, pz = z + Math.cos(a) * r; if (okWalk(px, pz)) return { x: px, z: pz }; }
+  return null;
 }
 /* Lugares que Uku visita cuando pasea con escenario: se acerca, se queda un rato mirándolos y sigue.
    Cada uno: dónde está lo que mira y desde qué lado se le acerca (hacia el centro del claro). */
@@ -1042,17 +1069,19 @@ function rejilla() {
   for (let j = 0; j < H; j++) for (let i = 0; i < W; i++) ok[j * W + i] = okWalk(-R + i * PASO, zmin + j * PASO) ? 1 : 0;
   return celdas = { R, zmin, W, H, ok, cx: (x) => Math.max(0, Math.min(W - 1, Math.round((x + R) / PASO))), cz: (z) => Math.max(0, Math.min(H - 1, Math.round((z - zmin) / PASO))) };
 }
-function planear(x, z) {
+function planear(x, z) { holgura = .05; try { return planear0(x, z); } finally { holgura = 0; } }
+function planear0(x, z) {
   if (tramoLibre(pos.x, pos.z, x, z)) return [{ x, z }];
-  const g = rejilla(), s0 = g.cz(pos.z) * g.W + g.cx(pos.x), s1 = g.cz(z) * g.W + g.cx(x);
+  const g = rejilla(), s0 = g.cz(pos.z) * g.W + g.cx(pos.x), s1 = g.cz(z) * g.W + g.cx(x), i0 = s0 % g.W, j0 = (s0 - i0) / g.W;
+  const salida = (i, j) => Math.abs(i - i0) <= 2 && Math.abs(j - j0) <= 2; // si quedó pegado a algo (dentro de su margen), puede salir
   const prev = new Int32Array(g.W * g.H).fill(-1); prev[s0] = s0;
   const cola = [s0]; let hallado = s1 === s0;
   for (let q = 0; q < cola.length && !hallado; q++) {
     const c = cola[q], ci = c % g.W, cj = (c - ci) / g.W;
     for (let dj = -1; dj <= 1 && !hallado; dj++) for (let di = -1; di <= 1; di++) {
       const i = ci + di, j = cj + dj; if ((!di && !dj) || i < 0 || j < 0 || i >= g.W || j >= g.H) continue;
-      const n = j * g.W + i; if (prev[n] !== -1 || !(g.ok[n] || n === s1)) continue;
-      if (di && dj && !(g.ok[cj * g.W + i] && g.ok[j * g.W + ci])) continue; // no corta esquinas
+      const n = j * g.W + i; if (prev[n] !== -1 || !(g.ok[n] || n === s1 || salida(i, j))) continue;
+      if (di && dj && !salida(i, j) && !(g.ok[cj * g.W + i] && g.ok[j * g.W + ci])) continue; // no corta esquinas
       prev[n] = c; cola.push(n); if (n === s1) { hallado = true; break; }
     }
   }
@@ -1142,7 +1171,7 @@ function plantStep() {
     plantedNow = true; holdObject(null);
     planted.push({ key: 'X' + plantN++, x: pos.x + Math.sin(heading) * .17, z: pos.z + Math.cos(heading) * .17, rot: Math.random() * 6.28 });
     if (planted.length > 6) planted.shift();
-    buildForest();
+    celdas = null; buildForest(); // el brote nuevo (y el que se fue) cambian por dónde puede andar
   }
 }
 // Mirada: la cabeza (y un poco el cuello) siguen a una mariposa cercana, a algo del paisaje un rato o a ti
@@ -1375,7 +1404,7 @@ function guayabera(on) {
   // El oso de siempre: las piezas con la textura de la ropa
   if (!ropaMaps) { ropaMaps = []; rig.root.traverse(o => { if (o.isMesh && o.material.map && /ropa/.test(o.material.map.name || '')) ropaMaps.push([o, o.material.map]); }); }
   if (ropaMaps.length) {
-    ropaMaps.forEach(([o, m]) => { const t = on ? (guayaMap || (OSO === 'v2' ? linoTex(m) : guayaTex(m))) : m; if (o.material.map !== t) { o.material.map = t; o.material.needsUpdate = true; } });
+    ropaMaps.forEach(([o, m]) => { const t = on ? (guayaMap || (OSO === 'v2' || OSO === 'v3' ? linoTex(m) : guayaTex(m))) : m; if (o.material.map !== t) { o.material.map = t; o.material.needsUpdate = true; } });
     return;
   }
   const ropa = rig.skinned.find(m => m.name === 'ropa');
@@ -1520,16 +1549,23 @@ function frame(now) {
   // La cámara acompaña a Uku por el claro: en libertad un poco menos (se le ve pasear), con un mensaje o conversando del todo
   folCur = lerp(folCur, front || focus || manual || manualRel || performance.now() - manualAt < 4000 ? 1 : .8, Math.min(1, dt * 1.5)); // manejándolo, la cámara lo sigue del todo
   const fx = pos.x * folCur, fz = pos.z * folCur, fy = groundY(fx, fz);
-  // Ningún objeto se mete entre la cámara y Uku: si uno le tapa la cabeza, la cámara sube y se aleja (suave, con histéresis)
-  const bx = Math.sin(yaw) * cd + Math.cos(yaw) * sway + fx, by = ch + fy, bz = Math.cos(yaw) * cd - Math.sin(yaw) * sway + fz;
+  // Ningún objeto se mete entre la cámara y Uku: si uno le tapa la cabeza o el pecho, la cámara sube y se aleja (suave,
+  // con histéresis) y, si aun así sigue tapada casi medio segundo, gira alrededor de él hacia el lado libre (ocYaw)
+  const yw = yaw + ocYaw, bx = Math.sin(yw) * cd + Math.cos(yw) * sway + fx, by = ch + fy, bz = Math.cos(yw) * cd - Math.sin(yw) * sway + fz;
+  velar(); // en tercera persona y de pájaro cerca, lo que se interpone se vuelve translúcido (y ya no cuenta como tapar)
   if (++ocN % 3 === 0) {
     const ahoraTapada = camTapada(camera.position.x, camera.position.y, camera.position.z);
-    if (ahoraTapada) ocT = Math.min(1, ocT + .2);
-    else if (!camTapada(bx, by, bz)) ocT = Math.max(0, ocT - .12);
+    if (ahoraTapada) { ocT = 1; if (!ocDesde) ocDesde = t; } // tapada: sube ya (la histéresis es solo para bajar)
+    else { ocDesde = 0; if (!camTapada(bx, by, bz)) ocT = Math.max(0, ocT - .12); }
+    if (ahoraTapada && camModo === 'libre' && t - ocDesde > .4) { // ya subida y alejada y sigue tapada: prueba a un lado y al otro
+      const cdM = cd * 1.9, chM = ch + .9 + fy;
+      for (const dy of [.7, -.7, 1.3, -1.3]) { const y2 = yw + dy; if (!camTapada(Math.sin(y2) * cdM + fx, chM, Math.cos(y2) * cdM + fz)) { ocYawTo = clamp(ocYaw + dy, -2.6, 2.6); ocDesde = t; break; } }
+    } else if (!ahoraTapada && ocT <= 0 && ocYawTo && !camTapada(Math.sin(yaw) * cd + fx, ch + fy, Math.cos(yaw) * cd + fz)) ocYawTo = 0; // destapada: vuelve a su sitio
   }
-  ocl = RM ? ocT : lerp(ocl, ocT, Math.min(1, dt * 3));
-  const cdF = cd * (1 + .9 * ocl), chF = ch + .9 * ocl;
-  _cp.set(Math.sin(yaw) * cdF + Math.cos(yaw) * sway + fx, chF + fy, Math.cos(yaw) * cdF - Math.sin(yaw) * sway + fz);
+  ocl = RM ? ocT : lerp(ocl, ocT, Math.min(1, dt * (ocT > ocl ? 6 : 3)));
+  ocYaw = RM ? ocYawTo : lerp(ocYaw, ocYawTo, Math.min(1, dt * 2.5));
+  const cdF = cd * (1 + .9 * ocl), chF = ch + .9 * ocl, ywF = yaw + ocYaw;
+  _cp.set(Math.sin(ywF) * cdF + Math.cos(ywF) * sway + fx, chF + fy, Math.cos(ywF) * cdF - Math.sin(ywF) * sway + fz);
   _cl.set(fx, .32 + .04 * focusAmt + .1 * planoAmt + fy, fz);
   // Tercera persona (detrás de Uku, mirando adelante) y vista de pájaro (el claro desde arriba): se funden con la libre
   camAmt.tercera = RM ? (camModo === 'tercera' ? 1 : 0) : lerp(camAmt.tercera, camModo === 'tercera' ? 1 : 0, Math.min(1, dt * 2.5));
@@ -1538,7 +1574,7 @@ function frame(now) {
     terceraYaw += angDiff(heading, terceraYaw) * Math.min(1, dt * 3);
     // Detrás y un poco arriba (Uku ocupa el tercio inferior de la pantalla y se ve el camino por delante)
     const d = 1.7 * zoomCur, tx = pos.x - Math.sin(terceraYaw) * d, tz = pos.z - Math.cos(terceraYaw) * d;
-    _tp.set(tx, groundY(tx, tz) + .95, tz); _tl.set(pos.x + Math.sin(terceraYaw) * .9, groundY(pos.x, pos.z) + .22, pos.z + Math.cos(terceraYaw) * .9);
+    _tp.set(tx, groundY(tx, tz) + .95 + .8 * ocl, tz); _tl.set(pos.x + Math.sin(terceraYaw) * .9, groundY(pos.x, pos.z) + .22, pos.z + Math.cos(terceraYaw) * .9); // tapada por el jardín (que no se vela por pieza): sube
     _cp.lerp(_tp, camAmt.tercera); _cl.lerp(_tl, camAmt.tercera);
   }
   let esp = 0; // cuánto se está en el espacio (0 en el suelo, 1 en el tope del zoom)
@@ -1640,7 +1676,7 @@ Object.assign(PARTS, {
 });
 const KD = 'mimo_decoracion';
 let decoracion = (() => { try { return JSON.parse(localStorage.getItem(KD) || '[]'); } catch (e) { return []; } })();
-function guardarDecoracion() { try { localStorage.setItem(KD, JSON.stringify(decoracion)); } catch (e) {} if (renderer) buildForest(); }
+function guardarDecoracion() { try { localStorage.setItem(KD, JSON.stringify(decoracion)); } catch (e) {} if (renderer) buildForest(); puestoCambio(); }
 export function decoracionLista() { return decoracion.slice(); }
 export function ponerDecoracion(k, x, z, rot = 0) { if (!DECORABLES[k] || Math.hypot(+x, +z) > Math.PI * PLANET_R - .4) return null; const d = { id: Date.now().toString(36) + Math.random().toString(36).slice(2, 5), k, x: +x, z: +z, rot: +rot }; decoracion.push(d); guardarDecoracion(); return d; }
 export function moverDecoracion(id, x, z) { const d = decoracion.find(o => o.id === id); if (d) { d.x = +x; d.z = +z; guardarDecoracion(); } }
@@ -1652,11 +1688,18 @@ export function quitarTodaDecoracion() { decoracion = []; guardarDecoracion(); }
    En el resto de la esfera: en cualquier sitio que se vea desde la cámara, salvo el bosque del claro y su franja pelada,
    la antípoda (placeAt degenera), los hitos de las zonas, el agua y la orilla de la laguna, y lo grande que ya hay. */
 const dentroDelClaro = (x, z) => Math.hypot(x, z * .8) < 2.2;
+decoClaro = decoracion.filter(d => dentroDelClaro(d.x, d.z)); // lo guardado de otra visita ya cuenta para andar
 const _vd = new THREE.Vector3();
 function visibleDesdeCamara(x, z) { if (!camera) return true; surf(x, z, _sp); return _vd.copy(camera.position).sub(PLANET_C).addScaledVector(_sp, -PLANET_R).dot(_sp) > .05; }
-export function sitioLibre(x, z) {
+// k (opcional) es lo que se va a poner: lo grande necesita más sitio (no se encima a Uku, a otra cosa puesta ni al sendero)
+export function sitioLibre(x, z, k) {
   if (!esc) return false;
-  if (dentroDelClaro(x, z)) return distSendero(x, z) > .14 && Math.hypot(x - LAGO_P[0], z - LAGO_P[1]) > lagoEnForma() + .14 && !quienBloquea(x, z) && VISIBLE(x, z);
+  if (dentroDelClaro(x, z)) {
+    const rk = k ? radioDeco(k) : .12;
+    if (bear && Math.hypot(x - pos.x, z - pos.z) < .35 + rk * .5) return false; // nunca encima de Uku
+    if (!decoracion.every(o => Math.hypot(x - o.x, z - o.z) >= radioDeco(o.k) + rk * .5) || !planted.every(p => Math.hypot(x - p.x, z - p.z) >= .14)) return false;
+    return distSendero(x, z) > .14 + Math.max(0, rk - .12) && Math.hypot(x - LAGO_P[0], z - LAGO_P[1]) > lagoEnForma() + .14 && !quienBloquea(x, z) && VISIBLE(x, z);
+  }
   const d = Math.hypot(x, z);
   if (d < 3.8 || d > Math.PI * PLANET_R - .4) return false;
   if (!visibleDesdeCamara(x, z)) return false;
@@ -1826,10 +1869,11 @@ function init() {
     stage.add(bear);
     if (target != null) { score = target; target = null; buildForest(); }
     // Lo que se sostiene, se pone o se atacha usa estos huesos
-    bones.hand_R = rig.B('mixamorig:RightHand'); bones.head = rig.B('mixamorig:Head'); bones.headTop = rig.B('mixamorig:HeadTop_End'); bones.neck = rig.B('mixamorig:Neck');
+    bones.hand_R = rig.B('mixamorig:RightHand'); bones.head = rig.B('mixamorig:Head'); bones.headTop = rig.B('mixamorig:HeadTop_End'); bones.neck = rig.B('mixamorig:Neck'); bones.chest = rig.B('mixamorig:Spine1');
     measureHead();
     dressBear();
     play('wave');
+    despejarUku(); // si la decoración guardada le cayó encima, arranca en el sitio libre más cercano
     readyFns.splice(0).forEach(f => { try { f(); } catch (e) {} });
   });
   const cv = renderer.domElement;
@@ -1940,7 +1984,7 @@ const frameHooks = [];
 export function enCuadro(fn) { frameHooks.push(fn); }
 // El material plano de dos tonos, para lo que se agrega al mundo desde afuera (efectos3d)
 export function materialPlano(o) { return toon(o); }
-export function mundo3d() { return { THREE, scene, camera, get uku() { return bear; }, groundY, PLANET_C, PLANET_R, get renderer() { return renderer; }, get planeta() { return PLANETA_PUNTOS; }, get garden() { return garden; }, get pajaro() { return pajaro; }, decoEsc, okWalk: (x, z) => okWalk(x, z) }; }
+export function mundo3d() { return { THREE, scene, camera, get uku() { return bear; }, groundY, PLANET_C, PLANET_R, get renderer() { return renderer; }, get planeta() { return PLANETA_PUNTOS; }, get garden() { return garden; }, get pajaro() { return pajaro; }, decoEsc, okWalk: (x, z) => okWalk(x, z), camTapada: () => camera ? camTapada(camera.position.x, camera.position.y, camera.position.z) : false, get ocultacion() { return { ocT, ocl, ocYaw, ocYawTo, velados: velados.size }; } }; }
 export function setScore(s) { if (!bear && target != null) { target = s; return; } if (s !== score) { score = s; if (renderer) buildForest(); } }
 export function setBloom(b) { b = b == null ? null : Math.max(0, Math.min(100, b)); if (b !== bloom) { bloom = b; if (renderer) buildForest(); } }
 /* Lo que hay en el claro: { brotes, flores, guayacanes: 0–4, casa, mariposas, escenario }.
@@ -1951,17 +1995,49 @@ export function setClaro(f) {
     mariposas: f.mariposas == null ? null : Math.max(0, +f.mariposas || 0) };
   const antes = !!esc; esc = f.escenario || null; ESC_TREES = null; celdas = null; DECO_ESC = null;
   if (renderer) { if (antes !== !!esc || esc) { const pal = palette(); buildGarden(pal); if (ground) ground.material.color.set(pal.ground); if (dust) dust.material.color.set(pal.dust); } buildForest(); }
+  despejarUku(); // con el claro ya armado: si algo guardado le quedó encima, se corre
 }
-// Para que la cámara no quede tapada: un rayo de la cabeza de Uku a la cámara, contra el escenario (no contra él mismo)
+/* Para que la cámara no quede tapada: un rayo de la cabeza y otro del pecho de Uku a la cámara, contra todo lo del
+   mundo (el escenario, la casa y el lago, la decoración, los brotes plantados y la malla única del jardín), no contra él
+   mismo. Lo velado (translúcido, ver velar) ya no tapa. */
 const _oc = new THREE.Raycaster(), _oh = new THREE.Vector3(), _ocd = new THREE.Vector3();
-let ocT = 0, ocl = 0, ocN = 0;
-function camTapada(cx, cy, cz) {
-  if (!bones.head || !bones.head.parent || !forest || !rig || !rig.root || !rig.root.parent) return false; // aún no está en escena
-  try { bones.head.getWorldPosition(_oh); } catch (e) { return false; }
+let ocT = 0, ocl = 0, ocN = 0, ocDesde = 0, ocYaw = 0, ocYawTo = 0;
+const estorba = o => o.parent && !velados.has(o) && (o.userData.zona || (o.userData.key && o.userData.key[0] === 'X'));
+function rayoTapado(bone, cx, cy, cz, objs) {
+  try { bone.getWorldPosition(_oh); } catch (e) { return false; }
   _ocd.set(cx - _oh.x, cy - _oh.y, cz - _oh.z); const d = _ocd.length();
   if (d < .3) return false;
-  _oc.set(_oh, _ocd.multiplyScalar(1 / d)); _oc.far = d - .12;
-  try { return _oc.intersectObjects(forest.children.filter(o => o.userData.zona && o.parent), true).length > 0; } catch (e) { return false; }
+  _oc.set(_oh, _ocd.multiplyScalar(1 / d)); _oc.far = d - .12; _oc.camera = camera; // (los Sprite —la neblina de la cascada— piden la cámara; y no tapan)
+  try { if (_oc.intersectObjects(objs, true).some(h => !h.object.isSprite)) return true; return !!garden && d < 8 && _oc.intersectObject(garden, false).length > 0; } catch (e) { return false; }
+}
+function camTapada(cx, cy, cz) {
+  if (!bones.head || !bones.head.parent || !forest || !rig || !rig.root || !rig.root.parent) return false; // aún no está en escena
+  const objs = forest.children.filter(estorba);
+  return rayoTapado(bones.head, cx, cy, cz, objs) || (!!bones.chest && rayoTapado(bones.chest, cx, cy, cz, objs));
+}
+/* En tercera persona (la cámara va detrás de él, entre los árboles) y de pájaro cerca, las piezas del mundo que quedan
+   entre la cámara y Uku se vuelven translúcidas en vez de taparlo: se les cambia el material por uno al 25 % y se les
+   devuelve el suyo al despejarse. La malla única del jardín no se puede velar por pieza: ahí la cámara sube (ocl). */
+const velados = new Set(); let LAMB_T = null;
+const _vh = new THREE.Vector3();
+function velar() {
+  const activo = camModo === 'tercera' || (camModo === 'pajaro' && pajaro.zoom < 1.3);
+  const ahora = new Set();
+  if (activo && forest && bones.head && bones.head.parent) {
+    LAMB_T = LAMB_T || toon({ vertexColors: true, transparent: true, opacity: .25, depthWrite: false });
+    const objs = forest.children.filter(o => o.parent && (o.userData.zona || (o.userData.key && o.userData.key[0] === 'X')));
+    for (const bone of [bones.head, bones.chest]) {
+      if (!bone) continue;
+      try { bone.getWorldPosition(_vh); } catch (e) { continue; }
+      _ocd.copy(_vh).sub(camera.position); const d = _ocd.length(); if (d < .3) continue;
+      _oc.set(camera.position, _ocd.multiplyScalar(1 / d)); _oc.far = d - .12; _oc.camera = camera;
+      try { _oc.intersectObjects(objs, true).forEach(h => { if (h.object.isSprite) return; let o = h.object; while (o.parent && o.parent !== forest) o = o.parent; ahora.add(o); }); } catch (e) {}
+    }
+    // La cámara metida dentro de una copa (el rayo nace adentro y no la ve): lo que la envuelve también se vela
+    objs.forEach(o => { const bs = o.geometry && o.geometry.boundingSphere; if (bs && o.position.distanceTo(camera.position) < bs.radius * o.scale.x + .1) ahora.add(o); });
+  }
+  ahora.forEach(o => { if (!velados.has(o)) { velados.add(o); o.traverse(m => { if (m.isMesh && m.material === LAMB) m.material = LAMB_T; }); } });
+  velados.forEach(o => { if (!ahora.has(o)) { velados.delete(o); o.traverse(m => { if (m.isMesh && m.material === LAMB_T) m.material = LAMB; }); } });
 }
 // Qué hay hoy en el claro (para depurar)
 export function contenido() { const f = enClaro(); return { arboles: forest ? forest.children.filter(o => /^T/.test(o.userData.key || '') && o.userData.dir > 0).length : 0, props: f.props, guayacanes: f.guayas, flores: Math.round(f.flores / 100 * FLOWERS.length), brotes: f.brotes ? SPROUTS.length : 0, plantados: planted.length, mariposas: flyN }; }

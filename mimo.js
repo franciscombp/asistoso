@@ -674,7 +674,7 @@ ui.escena.addEventListener('pointerup', (e) => {
   if (!p) return;
   const cerca = b.decoracionLista().map(d => ({ d, dist: b.distEsf(d.x, d.z, p.x, p.z) })).filter(x => x.dist < .25).sort((a, c) => a.dist - c.dist)[0];
   if (cerca) { decorando.actual = cerca.d.id; decorando.k = cerca.d.k; pintarDecorar(); return; }
-  if (!b.sitioLibre(p.x, p.z)) { estado('Ahí no cabe: prueba en un sitio libre', 'error'); return; }
+  if (!b.sitioLibre(p.x, p.z, decorando.k)) { estado('Ahí no cabe: prueba en un sitio libre', 'error'); return; } // ni encima de Uku ni de otra cosa puesta
   const nuevo = b.ponerDecoracion(decorando.k, p.x, p.z, Math.random() * 6.28);
   if (nuevo) { decorando.actual = nuevo.id; efectos.lanzar('ok', { x: e.clientX / innerWidth, y: e.clientY / innerHeight }); st.ultimaActividad = performance.now(); }
   pintarDecorar();

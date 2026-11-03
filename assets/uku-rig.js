@@ -8,7 +8,7 @@
      al oso, así que x y z del torso se fijan en su pose de reposo.
    - Los pies siempre en el suelo: cada cuadro se miden las plantas (los
      vértices más bajos del modelo) y la cadera sube o baja hasta apoyarlas.
-   - face: ojos, nariz y boca. En v2 los dibuja un shader sobre la cabeza
+   - face: ojos, nariz y boca. En v2/v3 los dibuja un shader sobre la cabeza
      (formas nítidas en la pose de reposo): pestañea, entrecierra, pone
      ojos contentos y la boca se abre y se redondea al hablar (voz.js ›
      boca). En el clásico están pintados y solo pestañea.
@@ -20,16 +20,20 @@
 import * as THREE from './vendor/three/three.module.min.js';
 import { GLTFLoader } from './vendor/three/jsm/loaders/GLTFLoader.js';
 
-/* Dos versiones del mismo personaje:
-   - v2 (por defecto): assets/oso/uku-rig-v2.glb, hecho con tools/uku-suave.py: malla subdividida (un loop
+/* Tres versiones del mismo personaje:
+   - v3 (por defecto): assets/oso/uku-rig-v3.glb, la v2 con pesos nuevos por cápsulas (tools/uku-pesos.py): misma
+     malla, texturas y clips que v2; cambia solo cómo se dobla (manos enteras a Hand, entrepierna y ruedo con la
+     cadera, mangas con el brazo, bufanda que sigue al cuello). ?oso=v2 carga la anterior.
+   - v2: assets/oso/uku-rig-v2.glb, hecho con tools/uku-suave.py: malla subdividida (un loop
      por arista, para que doble bien en codos, rodillas, cuello y cintura), pesos limpios (sin huesos del lado
      contrario, 3 por vértice, suavizados) y las texturas aparte, en oso/tex/, horneadas con tools/uku-hornea.py
      (suéter azul, bufanda amarilla, sombras suaves y sin la cara pintada: la dibuja el shader de abajo).
    - clasico: assets/oso/uku-rig.glb, el archivo original, tal cual (?oso=clasico o localStorage uku_oso). */
 const Q = (() => { try { return new URLSearchParams(location.search); } catch (e) { return new URLSearchParams(); } })();
 const LS = (k) => { try { return localStorage.getItem(k); } catch (e) { return null; } };
-export const VARIANTE = (Q.get('oso') || LS('uku_oso')) === 'clasico' ? 'clasico' : 'v2';
-export const UKU_URL = VARIANTE === 'clasico' ? './oso/uku-rig.glb' : './oso/uku-rig-v2.glb';
+const OSO_PEDIDO = Q.get('oso') || LS('uku_oso');
+export const VARIANTE = OSO_PEDIDO === 'clasico' ? 'clasico' : OSO_PEDIDO === 'v2' ? 'v2' : 'v3';
+export const UKU_URL = VARIANTE === 'clasico' ? './oso/uku-rig.glb' : VARIANTE === 'v2' ? './oso/uku-rig-v2.glb' : './oso/uku-rig-v3.glb';
 // three.js guarda los nombres sin puntos ni corchetes ni dos puntos ("mixamorig:Hips" -> "mixamorigHips")
 const key = (n) => n.replace(/[\[\].:\/]/g, '');
 const HIPS = key('mixamorig:Hips');
@@ -161,7 +165,7 @@ export function ukuFrom(gltf, { onLog = () => {} } = {}) {
   // sentarse(on, raise): on = true/false; raise = a qué altura (m del personaje) queda el bajo de los pies sobre el suelo
   function sentarse(on, raise = .22) { pose.sitTo = on ? 1 : 0; if (on) pose.raise = raise; }
 
-  /* Cara. En v2 la textura de la cabeza ya no trae ojos, nariz ni boca: los dibuja CARA (abajo) en la pose de reposo
+  /* Cara. En v2 y v3 la textura de la cabeza ya no trae ojos, nariz ni boca: los dibuja CARA (abajo) en la pose de reposo
      del modelo (metros; x a su izquierda, y arriba, z al frente), con bordes nítidos a cualquier distancia. El shader se
      instala en el material que tenga la cabeza (bosque3d cambia los materiales: después llama a face.instalar()).
      En el clásico los ojos están pintados: para pestañear se cambia el mapa por variantes (eyeMap). */
@@ -171,7 +175,7 @@ export function ukuFrom(gltf, { onLog = () => {} } = {}) {
   const U = { uLid: { value: 0 }, uFeliz: { value: 0 }, uBoca: { value: 0 }, uRedonda: { value: 0 },
     uTinta: { value: new THREE.Color('#14274f') }, uLengua: { value: new THREE.Color('#d9828e') }, uBoca0: { value: new THREE.Color('#0d1a38') } };
   const OJOS = { open: [0, 0], half: [.5, 0], shut: [1, 0], happy: [0, 1] };
-  const face = VARIANTE === 'v2' ? {
+  const face = VARIANTE !== 'clasico' ? {
     instalar() { if (headMesh) instalarCara(headMesh.material, U); },
     eyes(kind) { const [l, f] = OJOS[kind] || OJOS.open; U.uLid.value = l; U.uFeliz.value = f; },
     // open: 0 cerrada (la sonrisa) a 1 bien abierta; redonda: 0 (a, e, i) a 1 (o, u)
