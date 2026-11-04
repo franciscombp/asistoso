@@ -8,17 +8,20 @@
    - Sin nadie, Uku pasea por su cuenta (ambiente "walk"); cuando alguien
      llega, se detiene, se voltea hacia la cámara y saluda (setFront).
    - Entornos: el cielo se pinta detrás del lienzo (que es transparente);
-     de noche y en la fiesta el mundo pasa a su paleta oscura; la lluvia
-     es la de bosque3d (con paraguas); en el jardín florece todo.
+     de noche y en la fiesta el mundo pasa a su paleta oscura; el atardecer
+     y la lluvia tiñen el mundo (tinte: la luz y la niebla, del color del
+     cielo); con lluvia llueve en bosque3d y Uku saca el paraguas; en el
+     jardín florece todo.
    Paleta: solo azul gris y amarillo.
    ===================================================================== */
+// tinte (bosque3d.setTinte): luz que multiplica la del mundo y niebla del color de --cielo1 (lo lejano se funde con el cielo)
 const ENTORNOS = {
   dia:       { cielo: ['#c9d3e6', '#f6f6f5'] },
-  atardecer: { cielo: ['#f7d96b', '#fbf4dd'] },
+  atardecer: { cielo: ['#f7d96b', '#fbf4dd'], tinte: { luz: '#fff0d4', niebla: '#fbf4dd' } },
   noche:     { cielo: ['#2b3446', '#1f1f1f'], oscuro: true, estrellas: true },
-  lluvia:    { cielo: ['#aeb6c7', '#e4e7ec'], lluvia: true },
+  lluvia:    { cielo: ['#aeb6c7', '#e4e7ec'], lluvia: true, tinte: { luz: '#e6eaf1', niebla: '#e4e7ec', cerca: 3, lejos: 8 } },
   fiesta:    { cielo: ['#3c4659', '#1f1f1f'], oscuro: true, estrellas: true, fiesta: true },
-  jardin:    { cielo: ['#d6deec', '#fbf6e4'], flores: true }
+  jardin:    { cielo: ['#d6deec', '#fbf6e4'], flores: true, tinte: { niebla: '#fbf6e4' } }
 };
 export const NOMBRES_ENTORNO = Object.keys(ENTORNOS);
 let vestuario = {}; // lo que Uku se pone según el clima real (assets/clima.js › look)
@@ -100,7 +103,8 @@ export function setEntorno(nombre) {
   if (!e || nombre === entorno || !b3d) return false;
   entorno = nombre;
   document.documentElement.setAttribute('data-theme', e.oscuro ? 'dark' : 'light'); // bosque3d se repinta solo
-  b3d.setLook({ rain: !!e.lluvia || !!vestuario.rain });
+  if (b3d.setTinte) b3d.setTinte(e.tinte || null);
+  vestir();
   b3d.setBloom(e.flores ? FLORES.jardin : FLORES.normal);
   pintarCielo();
   return true;
@@ -108,7 +112,13 @@ export function setEntorno(nombre) {
 // El clima de verdad: Uku se viste para el lugar (paraguas, gorro, sombrero, gafas) y con lluvia llueve
 export function setClima(look) {
   vestuario = look || {};
-  if (b3d) b3d.setLook(Object.assign({}, vestuario, { rain: !!vestuario.rain || !!(ENTORNOS[entorno] && ENTORNOS[entorno].lluvia) }));
+  if (b3d) vestir();
+}
+// Con el entorno de lluvia, llueve y Uku saca el paraguas (sin gafas de sol); si no, lo que pide el clima real (al salir
+// de la lluvia vuelve a eso: sombrero, gafas, guayabera…)
+function vestir() {
+  if (ENTORNOS[entorno] && ENTORNOS[entorno].lluvia) b3d.setLook(Object.assign({}, vestuario, { rain: true, hat: 'paraguas', shades: false }));
+  else b3d.setLook(Object.assign({ hat: null, shades: false, shirt: 'sueter' }, vestuario, { rain: !!vestuario.rain }));
 }
 // El cartel «X días sin accidentes» del escenario: { dias, record, animar }
 export function setCartel(c) { if (b3d) b3d.setCartel(c); }

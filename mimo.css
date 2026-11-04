@@ -150,7 +150,7 @@ body:not(.lista) .mimo-inicio .mp-btn--primario { opacity: .6; }
 
 /* ---------- Paneles (personas, ayuda) ---------- */
 .mimo-panel {
-  position: fixed; top: 84px; right: 28px; z-index: 6; width: min(440px, calc(100vw - 56px)); max-height: calc(100vh - 120px); overflow: auto;
+  position: fixed; top: var(--techo, 84px); right: 28px; z-index: 6; width: min(440px, calc(100vw - 56px)); max-height: calc(100vh - var(--techo, 84px) - 36px); overflow: auto;
   display: flex; flex-direction: column; gap: 14px; padding: 24px; border-radius: var(--radio-lg); background: #ffffff;
 }
 .mimo-panel[hidden] { display: none; }
@@ -213,6 +213,8 @@ html[data-theme="dark"] .mimo-brillo { background: radial-gradient(60vmax 50vmax
 html[data-theme="dark"] .mimo-rayos { opacity: .22; }
 @media (prefers-reduced-motion: reduce) { .mimo-rayos { animation: none; } }
 body.solo-uku .mimo-brillo, body.solo-uku .mimo-rayos { opacity: 1; }
+/* Rayos de sol solo con sol: de noche, en la fiesta y con lluvia no hay (pintarCielo pone body[data-entorno]) */
+body[data-entorno="noche"] .mimo-rayos, body[data-entorno="fiesta"] .mimo-rayos, body[data-entorno="lluvia"] .mimo-rayos { display: none; }
 
 
 /* X: solo Uku. Se esconde toda la interfaz; quedan la escena, las reacciones y el globo de Uku */
@@ -285,7 +287,7 @@ body.solo-uku .mimo-oido { opacity: 0 !important; }
 .mp-mensaje b { font-weight: 600; font-style: italic; }
 
 /* ---------- Columna izquierda: descargas ---------- */
-.mimo-lateral { position: fixed; top: 84px; left: 28px; z-index: 5; width: min(380px, calc(100vw - 56px)); max-height: calc(100vh - 84px - 96px); overflow: auto; scrollbar-width: none; display: flex; flex-direction: column; gap: 12px; pointer-events: none; }
+.mimo-lateral { position: fixed; top: var(--techo, 84px); left: 28px; z-index: 5; width: min(380px, calc(100vw - 56px)); max-height: calc(100vh - var(--techo, 84px) - 96px); overflow: auto; scrollbar-width: none; display: flex; flex-direction: column; gap: 12px; pointer-events: none; }
 .mimo-tarjeta { pointer-events: auto; display: flex; flex-direction: column; gap: 10px; padding: 16px 18px; border-radius: var(--radio-md); background: rgb(255 255 255 / .94); color: #1f1f1f; }
 .mimo-tarjeta[hidden] { display: none; }
 .mimo-tarjeta__head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
@@ -419,7 +421,7 @@ html[data-theme="dark"] {
 }
 
 /* Post-its virtuales (tareas.js): tira arriba a la derecha, sin sombras */
-.mimo-muro { position: fixed; top: 64px; right: 14px; z-index: 30; display: flex; flex-direction: column; gap: 10px; max-width: 200px; pointer-events: auto; }
+.mimo-muro { position: fixed; top: var(--techo, 84px); right: 14px; z-index: 30; display: flex; flex-direction: column; gap: 10px; max-width: 200px; pointer-events: auto; }
 .mimo-muro[hidden] { display: none; }
 .mimo-postit { position: relative; padding: 12px 26px 12px 12px; border-radius: 6px; font-size: 14px; line-height: 1.35; color: #1c2430; border: 1px solid rgb(28 36 48 / .14); }
 .mimo-postit:nth-child(odd) { transform: rotate(-1.2deg); }
@@ -440,7 +442,7 @@ html[data-theme="dark"] {
 .mimo-inicio__nube[data-tipo="error"] { color: #9b2c2c; }
 
 /* Chat de depurar (tecla D): escribirle a Uku y ver por qué responde lo que responde */
-.mimo-chatdbg { display: none; position: fixed; left: 16px; top: 84px; z-index: 30; width: min(400px, calc(100vw - 32px)); max-height: calc(100vh - 200px);
+.mimo-chatdbg { display: none; position: fixed; left: 16px; top: var(--techo, 84px); z-index: 30; width: min(400px, calc(100vw - 32px)); max-height: calc(100vh - 200px);
   flex-direction: column; background: rgb(255 255 255 / .96); color: #14274f; border: 1px solid #c9d3e6; border-radius: 14px; overflow: hidden;
   font: 500 13px/1.4 system-ui, sans-serif; }
 body.debug.empezado .mimo-chatdbg { display: flex; } /* después del inicio: no tapa los botones de empezar */
@@ -457,3 +459,47 @@ body.debug.empezado .mimo-chatdbg { display: flex; } /* después del inicio: no 
 .mimo-chatdbg__form { display: flex; gap: 6px; align-items: center; padding: 8px; border-top: 1px solid #e3e8f2; }
 .mimo-chatdbg__form input[type=text] { flex: 1; min-width: 0; padding: 7px 9px; border: 1px solid #c9d3e6; border-radius: 8px; font: inherit; }
 .mimo-chatdbg__fran { font-size: 12px; white-space: nowrap; }
+
+/* ---------- La barra de arriba entra en pantalla ----------
+   Teléfono y tableta (hasta 900 px): fila 1 con el estado, el micrófono (solo el icono) y el reloj; fila 2 con el
+   modo y las acciones, que se desplazan de lado. Con el HUD oculto quedan el micrófono y el reloj (y el estado si
+   hay un error). Escritorio hasta 1900 px (en una fila no caben con los avisos del micrófono y la pantalla): las
+   acciones bajan a una segunda fila, a la derecha. El estado toma lo que queda en la fila (base 0: nunca empuja el reloj a otra
+   fila), sin pasar de su texto, y se corta con «…».
+   mimo.js › techoBarra mide hasta dónde baja la barra y lo deja en --techo (globo, columna izquierda, chat D). */
+.mimo-top { pointer-events: none; } /* lo vacío de la barra deja pasar los toques al mundo; sus controles no */
+.mimo-top > * { pointer-events: auto; }
+@media (max-width: 900px) {
+  .mimo-top { flex-wrap: wrap; row-gap: 8px; padding: 12px 16px; }
+  .mimo-top::after { content: ''; order: 3; flex-basis: 100%; height: 0; } /* corte de fila */
+  .mimo-estado { order: 0; }
+  .mimo-btn-mic { order: 1; margin-left: auto; width: 40px; padding: 0; }
+  .mimo-btn-mic span { display: none; }
+  .mimo-reloj { order: 2; margin-left: 8px; padding: 4px 10px; }
+  .mr-hora { font-size: 22px; }
+  .mimo-mic, .mimo-despierto, .mimo-modo { order: 4; }
+  /* las acciones se desplazan de lado; si les quedan menos de 160 px junto al modo, bajan a su propia fila */
+  .mimo-acciones, .mimo-reloj + .mimo-acciones { order: 5; flex: 1 1 0; min-width: 160px; margin-left: 0; overflow-x: auto; scrollbar-width: none; }
+  .mimo-acciones::-webkit-scrollbar { display: none; }
+  body.solo-uku .mimo-top > :not(.mimo-reloj):not(.mimo-btn-mic):not(.mimo-estado[data-tipo="error"]), body.solo-uku .mimo-top::after { display: none; }
+}
+@media (max-width: 1900px) {
+  .mimo-estado { flex: 1 1 0; max-width: max-content; display: block; line-height: 32px; }
+}
+@media (min-width: 901px) and (max-width: 1900px) {
+  .mimo-top { flex-wrap: wrap; row-gap: 8px; }
+  .mimo-acciones, .mimo-reloj + .mimo-acciones { flex-basis: 100%; justify-content: flex-end; margin-left: 0; }
+}
+/* Teléfono: el globo va sobre la cabeza de Uku con la colita hacia abajo (mimo.js › ubicarGlobo pone --colita-x);
+   si no cabe bajo la barra, abajo y sin colita. El subtítulo de lo oído va encima de las pistas, a lo ancho. */
+@media (max-width: 600px) {
+  .mimo-globo { max-width: calc(100vw - 32px); padding: 14px 18px; }
+  .mimo-globo p { font-size: 20px; }
+  .mimo-globo.colita-abajo::after { left: calc(var(--colita-x, 50%) - 10px); bottom: -10px; border: 10px solid transparent; border-top-color: #ffffff; border-bottom: 0; }
+  .mimo-globo.sin-colita::after { display: none; }
+  .mimo-oido { width: max-content; max-width: calc(100vw - 32px); font-size: 16px; }
+  /* la barra de Decorar tampoco se sale: los botones en una fila y la nota debajo */
+  .mimo-decorar { width: max-content; max-width: calc(100vw - 16px); flex-wrap: wrap; justify-content: center; row-gap: 4px; }
+  .mimo-decorar b { min-width: 72px; }
+  .mimo-decorar__nota { flex-basis: 100%; margin-left: 0; text-align: center; }
+}

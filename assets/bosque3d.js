@@ -48,6 +48,10 @@ function spring(cur, to, velKey, dt) {
 const PLANET_R = 5.5, PLANET_C = new THREE.Vector3(0, -PLANET_R, 0), FOG_NEAR = 4;
 let score = 50; // cuántos árboles tiene el bosque sin escenario (0–100)
 let target = null, loadAt = 0, ambLight = null, moodTint = new THREE.Color('#ffffff'); // mientras carga, el bosque crece hasta target; mood tiñe la luz
+/* Tinte del entorno (setTinte, lo pide escena.js): el atardecer y la lluvia tiñen el mundo y no solo el cielo de CSS. luz
+   multiplica la luz del mundo (ambiente y sol; la de Uku no se toca: él conserva sus colores) y niebla es el color al que se
+   funde lo lejano (el --cielo1 de cada entorno); cerca y lejos, dónde empieza y dónde termina la niebla. */
+const tinte = { luz: new THREE.Color('#fff'), luzTo: new THREE.Color('#fff'), niebla: null, cerca: FOG_NEAR, lejos: 9.5 };
 // bloom: flores amarillas del campo (0–100); mood: ánimo que se queda (feliz, tranquilo, pensativo)
 let bloom = null, mood = null;
 // Lo que hay en el claro (setClaro): brotes por todas partes, flores en los canteros, guayacanes, su casa y mariposas
@@ -66,22 +70,23 @@ function paletteBase() {
   const dark = document.documentElement.getAttribute('data-theme') === 'dark';
   if (look.region === 'costa') return dark ? {
     bg: '#1f1f1f', ground: '#353329', trunk: '#4c5262', pine: ['#3c4659', '#434d61'], palm: ['#41506a', '#4a5872'],
-    round: ['#465066', '#4e586e'], rock: '#3b3e46', grass: '#434b5c', flower: '#f2d64b', guaya: ['#f2d64b', '#e6c13d', '#f7e07a'], sprout: ['#f2d64b', '#d8bc3a'], dust: '#ffffff'
+    round: ['#465066', '#4e586e'], rock: '#3b3e46', grass: '#434b5c', flower: '#f2d64b', guaya: ['#f2d64b', '#e6c13d', '#f7e07a'], sprout: ['#f2d64b', '#d8bc3a'], dust: '#ffffff', carton: '#7d7562', crema: '#8e8a83', espuma: '#aab8d4', onda: '#5d6f99', nenufar: '#4f6290', caparazon: '#56689a'
   } : {
     bg: '#f6f6f5', ground: '#f6efd6', trunk: '#b9c0cf', pine: ['#d2dae8', '#c5cfe2'], palm: ['#a9bad6', '#9aaed0', '#b6c5de'],
-    round: ['#d8dfeb', '#cdd5e4'], rock: '#e3e5ea', grass: '#d0d8e6', flower: '#f2c94c', guaya: ['#f2c94c', '#f7d96b', '#e8b93a'], sprout: ['#f2c94c', '#f7dc7f'], dust: '#ffffff'
+    round: ['#d8dfeb', '#cdd5e4'], rock: '#e3e5ea', grass: '#d0d8e6', flower: '#f2c94c', guaya: ['#f2c94c', '#f7d96b', '#e8b93a'], sprout: ['#f2c94c', '#f7dc7f'], dust: '#ffffff', carton: '#e9dcb2', crema: '#efe9df', espuma: '#ffffff', onda: '#dfe9f8', nenufar: '#8aa0c6', caparazon: '#6f87b8'
   };
   // Ilustración: grises y blancos, tonos lavados para que el oso (que conserva sus colores) sea lo
   // nítido de la escena; el amarillo queda para lo que crece (brotes, flores, guayacanes, mariposas)
   return dark ? {
     bg: '#1f1f1f', ground: '#2b2d33', trunk: '#4a4f5c', pine: ['#3c4659', '#434d61', '#4a5468'],
-    round: ['#465066', '#4e586e'], rock: '#3a3c43', grass: '#434b5c', flower: '#f2d64b', guaya: ['#f2d64b', '#e6c13d', '#f7e07a'], sprout: ['#f2d64b', '#d8bc3a'], dust: '#ffffff'
+    round: ['#465066', '#4e586e'], rock: '#3a3c43', grass: '#434b5c', flower: '#f2d64b', guaya: ['#f2d64b', '#e6c13d', '#f7e07a'], sprout: ['#f2d64b', '#d8bc3a'], dust: '#ffffff', carton: '#7d7562', crema: '#8e8a83', espuma: '#aab8d4', onda: '#5d6f99', nenufar: '#4f6290', caparazon: '#56689a'
   } : {
     bg: '#f6f6f5', ground: '#eef0f4', trunk: '#aeb6c7', pine: ['#c9d3e6', '#b9c6de', '#d6deec'],
-    round: ['#c3cee3', '#d2dbea'], rock: '#d9dce4', grass: '#c4cee1', flower: '#f2c94c', guaya: ['#f2c94c', '#f7d96b', '#e8b93a'], sprout: ['#f2c94c', '#f7dc7f'], dust: '#ffffff'
+    round: ['#c3cee3', '#d2dbea'], rock: '#d9dce4', grass: '#c4cee1', flower: '#f2c94c', guaya: ['#f2c94c', '#f7d96b', '#e8b93a'], sprout: ['#f2c94c', '#f7dc7f'], dust: '#ffffff', carton: '#e9dcb2', crema: '#efe9df', espuma: '#ffffff', onda: '#dfe9f8', nenufar: '#8aa0c6', caparazon: '#6f87b8'
   };
 }
-// Colores de la ropa de Uku (gorro, paraguas, sombrero), que repiten la casa, el farol, la banca y los patos
+// Colores de la ropa de Uku (gorro, paraguas, sombrero), que repiten la casa, el farol, la banca y los patos (las cosas del claro usan
+// pal.carton y pal.crema, que de noche se oscurecen; la ropa de Uku, estos literales)
 const CREMA = '#efe9df', AZUL = '#2c4f9e', MARINO = '#1b2a4e', AMARILLO = '#ffd200', CARTON = '#e9dcb2';
 /* ---------- Estilo ilustración 2D ----------
    Colores planos, sin sombreado (solo luz ambiente) y sin contornos: los
@@ -143,24 +148,31 @@ function scatter(seed, n, r0, r1, ok, gap) {
 // Lo alto (árboles, casas) va siempre detrás de Uku: nunca queda algo delante de la cámara
 const TALL = (x, z) => z < -.4;
 // Todo se apoya donde se ve el suelo: la base de cada cosa tiene que verse desde las cámaras de la app (libre, en
-// primer plano, el plano general y alejada, de frente y girada). Si la normal del suelo en ese
-// punto no mira hacia alguna de ellas, el punto está detrás del horizonte y lo que se ponga ahí parecería flotar.
-const CAMS = [[0, .96, 3.14], [0, .78, 2.24], [0, 1.35, 4.26], [0, 1.2, 5.5], [1.4, .96, 2.8], [-1.4, .96, 2.8]];
+// primer plano y el plano general, de frente y giradas). Si la normal del suelo en ese punto no mira hacia alguna de
+// ellas, el punto está detrás del horizonte y lo que se ponga ahí parecería flotar. (La cámara alejada [0, 1.2, 5.5] era
+// de cuando el planeta medía 8 m: con 5,5 dejaba fuera todo lo de atrás y el claro lleno se quedaba sin casa ni bosque.)
+const CAMS = [[0, .96, 3.14], [0, .78, 2.24], [0, 1.35, 4.26], [1.4, .96, 2.8], [-1.4, .96, 2.8]];
 const _vn = new THREE.Vector3(), _vp = new THREE.Vector3(), _vc = new THREE.Vector3();
 function VISIBLE(x, z) {
   surf(x, z, _vn); _vp.copy(PLANET_C).addScaledVector(_vn, PLANET_R);
   return CAMS.every(c => _vc.set(c[0], c[1], c[2]).sub(_vp).normalize().dot(_vn) > .01);
 }
 /* Zonas del claro: cada cosa tiene su lugar fijo, así el paisaje se lee de un vistazo.
-   · a la izquierda, la casa de Uku
-   · a la derecha, los guayacanes en flor (si no hay, un arbolito por crecer)
+   · detrás del claro, la casa de Uku (entre el letrero del bosque y el guayacán de la derecha)
+   · los guayacanes en flor: con escenario son los de ESC_ZONA.guayas (SG0/SG1)
    · delante de Uku, los dos canteros de flores (vacíos, con su letrero)
-   · al fondo, el bosque */
+   · al fondo, el bosque, que asoma tras el horizonte */
 const ZONA = {
-  hogar: [[-.5, -1.1], [-1.05, -.95], [-.2, -1.65], [-.95, -1.65]].filter(([x, z]) => VISIBLE(x, z - .25)),
-  guayacanes: [[.5, -1.15], [1.05, -.95], [.25, -1.7], [1, -1.7]].filter(([x, z]) => VISIBLE(x, z - .25)),
+  hogar: [[-.05, -1.3]], // fija (sin filtro de cámaras): la casa siempre está, detrás del claro
+  // Con escenario los guayacanes son ESC_ZONA.guayas (SG0/SG1); si se reactivaran estos, el de (.5, -1.15) quedaría a
+  // .52 de SG1 y las copas se fundirían. Vacío: no se duplica nada de lo que hoy se ve.
+  guayacanes: [],
   canteros: [[-.56, .32], [.56, .32]]
 };
+// La huella de la casa para andar y poner cosas: el montículo (.48 × .43 a escala 1,2) más el cuerpo de Uku alrededor
+// (al costado se le abren los brazos). Así no se mete en la casa ni por el sendero de la puerta, que termina justo afuera.
+const CASA_PIE = [.6, .53];
+const enCasa = (x, z) => Math.hypot((x - ZONA.hogar[0][0]) / CASA_PIE[0], (z - ZONA.hogar[0][1]) / CASA_PIE[1]) < 1;
 const BED_R = .24, BIG = ZONA.hogar.concat(ZONA.guayacanes);
 const awayBig = (d) => (x, z) => BIG.every(([bx, bz]) => Math.hypot(x - bx, z - bz) > d);
 const outBeds = (d) => (x, z) => ZONA.canteros.every(([bx, bz]) => Math.hypot(x - bx, z - bz) > BED_R + d);
@@ -260,11 +272,11 @@ const PARTS = {
     return o;
   },
   // Letrero clavado en el cantero vacío: aquí florecerá algo
-  letrero: pal => [pc(CYL(.007, .007, .16, 5), CARTON, [0, .08, 0]), pc(new THREE.BoxGeometry(.11, .07, .012), CREMA, [0, .15, 0]), pc(new THREE.CircleGeometry(.018, 10), pal.flower, [0, .15, .007])],
+  letrero: pal => [pc(CYL(.007, .007, .16, 5), pal.carton, [0, .08, 0]), pc(new THREE.BoxGeometry(.11, .07, .012), pal.crema, [0, .15, 0]), pc(new THREE.CircleGeometry(.018, 10), pal.flower, [0, .15, .007])],
   // Arbolito por crecer (aún sin guayacanes): un guayacán chiquito atado a su tutor, con su letrero
   arbolito: pal => [pc(CYL(.012, .018, .2, 6), pal.trunk, [0, .1, 0]), pc(new THREE.IcosahedronGeometry(.05, 0), pal.sprout[1], [0, .22, 0], [.3, 0, 0], [1, .8, 1]), pc(new THREE.IcosahedronGeometry(.035, 0), pal.sprout[0], [.04, .19, .02]),
-    pc(CYL(.006, .006, .26, 5), CARTON, [-.05, .13, -.01]), pc(new THREE.TorusGeometry(.03, .004, 4, 10), CARTON, [-.025, .14, 0], [Math.PI / 2, 0, 0], [1, .6, 1]),
-    pc(CYL(.006, .006, .14, 5), CARTON, [.12, .07, .06]), pc(new THREE.BoxGeometry(.1, .065, .012), CREMA, [.12, .14, .06]), pc(new THREE.CircleGeometry(.016, 10), pal.guaya[0], [.12, .14, .067])],
+    pc(CYL(.006, .006, .26, 5), pal.carton, [-.05, .13, -.01]), pc(new THREE.TorusGeometry(.03, .004, 4, 10), pal.carton, [-.025, .14, 0], [Math.PI / 2, 0, 0], [1, .6, 1]),
+    pc(CYL(.006, .006, .14, 5), pal.carton, [.12, .07, .06]), pc(new THREE.BoxGeometry(.1, .065, .012), pal.crema, [.12, .14, .06]), pc(new THREE.CircleGeometry(.016, 10), pal.guaya[0], [.12, .14, .067])],
   // Casa hobbit: un montículo de pasto con puerta redonda, ventanitas con luz, chimenea de piedra y un caminito
   casa: pal => {
     const A = .4, H = .29, Z = .36, on = (x, y, k) => { // un punto del frente del montículo, mirando hacia afuera
@@ -274,9 +286,9 @@ const PARTS = {
     const door = new THREE.Matrix4().compose(new THREE.Vector3(0, .11, .336), new THREE.Quaternion(), new THREE.Vector3(1, 1, 1));
     const o = [pc(new THREE.SphereGeometry(1, 28, 12, 0, Math.PI * 2, 0, Math.PI / 2), pal.pine[1 % pal.pine.length], [0, 0, 0], 0, [A, H, Z]),
       pc(new THREE.SphereGeometry(1, 20, 8, 0, Math.PI * 2, 0, Math.PI / 2), pal.trunk, [0, .2, -.02], 0, [.27, .1, .24]), // el lomo, un poco más oscuro
-      pc(new THREE.TorusGeometry(.108, .018, 8, 28), CARTON, door), pc(new THREE.CircleGeometry(.1, 28), AZUL, door.clone().multiply(TRS([0, 0, .004]))),
+      pc(new THREE.TorusGeometry(.108, .018, 8, 28), pal.carton, door), pc(new THREE.CircleGeometry(.1, 28), AZUL, door.clone().multiply(TRS([0, 0, .004]))),
       pc(new THREE.BoxGeometry(.005, .19, .004), MARINO, door.clone().multiply(TRS([0, 0, .007]))), pc(new THREE.SphereGeometry(.012, 8, 6), AMARILLO, door.clone().multiply(TRS([.055, 0, .012])))];
-    [-1, 1].forEach(sx => { o.push(pc(new THREE.TorusGeometry(.05, .011, 6, 20), CREMA, on(sx * .215, .135, .004)), pc(new THREE.CircleGeometry(.047, 20), pal.flower, on(sx * .215, .135, .006)), pc(new THREE.BoxGeometry(.094, .006, .004), CREMA, on(sx * .215, .135, .009))); });
+    [-1, 1].forEach(sx => { o.push(pc(new THREE.TorusGeometry(.05, .011, 6, 20), pal.crema, on(sx * .215, .135, .004)), pc(new THREE.CircleGeometry(.047, 20), pal.flower, on(sx * .215, .135, .006)), pc(new THREE.BoxGeometry(.094, .006, .004), pal.crema, on(sx * .215, .135, .009))); });
     o.push(pc(CYL(.034, .04, .15, 8), pal.rock, [.14, .3, -.05]), pc(CYL(.044, .044, .022, 8), pal.trunk, [.14, .38, -.05]));
     [[0, .44, .07], [.03, .55, .06], [-.01, .66, .055]].forEach(([x, z, r]) => o.push(pc(CYL(r, r, .016, 9), pal.rock, [x, .004, z], [0, x * 20, 0], [1, 1, .75])));
     [[-.18, .24, .1], [.05, .27, -.17], [.25, .17, .02], [-.08, .28, -.05]].forEach(([x, y, z]) => o.push(pc(new THREE.ConeGeometry(.013, .06, 3), pal.trunk, [x, y, z], [z, 0, x])));
@@ -286,16 +298,18 @@ const PARTS = {
 /* ---------- Escenario (opcional: setClaro({ escenario })) ----------
    Un lago con muelle y patos, y cosas de la vida diaria alrededor. */
 const AGUA = (pal) => pal.bg === '#1f1f1f' ? '#3b4d78' : '#b6cbee';
+const ONDA_G = new THREE.TorusGeometry(.3, .004, 4, 40); // las ondas del lago (una geometría para todas)
 Object.assign(PARTS, {
-  // Lago: orilla de piedritas, agua, ondas, nenúfares con su flor, juncos y un muelle de tablas
+  // Lago: orilla de piedritas, agua, nenúfares con su flor, juncos y un muelle de tablas
   lago: pal => {
     const R = .5, o = [pc(CYL(R + .03, R + .045, .02, 40), pal.rock, [0, .004, 0]), pc(CYL(R, R, .03, 40), AGUA(pal), [0, .008, 0])], r = rng(33);
     for (let i = 0; i < 26; i++) { const a = i / 26 * 6.28 + r() * .1; o.push(pc(new THREE.DodecahedronGeometry(.03 + r() * .015, 0), pal.rock, [Math.cos(a) * (R + .03), .018, Math.sin(a) * (R + .03)], [r(), r(), 0], [1, .65, 1])); }
-    [[.2, .5], [.34, .5], [.14, .3]].forEach(([d, w]) => o.push(pc(new THREE.TorusGeometry(R * d * 1.7, .004, 4, 28), '#dfe9f8', [0, .025, 0], [Math.PI / 2, 0, 0], [1, 1, 1])));
-    [[.18, -.12], [-.1, .22], [.05, .05], [-.22, -.08], [.26, .17]].forEach(([x, z], i) => { o.push(pc(CYL(.055, .055, .008, 12), '#8aa0c6', [x, .027, z])); if (i % 2 === 0) o.push(pc(new THREE.SphereGeometry(.014, 6, 4), AMARILLO, [x + .01, .04, z], 0, [1, .7, 1])); });
+    // los nenúfares, fuera de las vueltas de los patos (radios .21 y .30): al centro y cerca de la orilla, libres del muelle y de
+    // la salida del arroyo (las ondas, que se abren, las pone escenario())
+    [[.05, .05], [.4, -.12], [.12, .41], [-.3, -.32], [.33, .27]].forEach(([x, z], i) => { o.push(pc(CYL(.055, .055, .008, 12), pal.nenufar, [x, .027, z])); if (i % 2 === 0) o.push(pc(new THREE.SphereGeometry(.014, 6, 4), AMARILLO, [x + .01, .04, z], 0, [1, .7, 1])); });
     for (let i = 0; i < 9; i++) { const a = 2.2 + i * .13, d = R - .01, h = .16 + r() * .1; o.push(pc(CYL(.004, .006, h, 4), pal.trunk, [Math.cos(a) * d, h / 2 + .01, Math.sin(a) * d], [r() * .2, 0, r() * .25 - .12])); if (i % 3 === 0) o.push(pc(CYL(.009, .009, .05, 5), pal.trunk, [Math.cos(a) * d, h + .02, Math.sin(a) * d])); }
     // el muelle sale de la orilla izquierda hacia adentro
-    for (let i = 0; i < 6; i++) o.push(pc(new THREE.BoxGeometry(.05, .012, .17), i % 2 ? CARTON : pal.trunk, [-R - .1 + i * .062, .045, -.02]));
+    for (let i = 0; i < 6; i++) o.push(pc(new THREE.BoxGeometry(.05, .012, .17), i % 2 ? pal.carton : pal.trunk, [-R - .1 + i * .062, .045, -.02]));
     [[-R - .08, .09], [-R - .08, -.13], [-R + .22, .09], [-R + .22, -.13]].forEach(([x, z]) => o.push(pc(CYL(.012, .012, .09, 5), pal.trunk, [x, .02, z])));
     return o;
   },
@@ -307,11 +321,11 @@ Object.assign(PARTS, {
   farol: pal => [pc(CYL(.012, .018, .5, 6), MARINO, [0, .25, 0]), pc(CYL(.03, .02, .04, 6), MARINO, [0, .5, 0]), pc(new THREE.SphereGeometry(.05, 10, 8), AMARILLO, [0, .56, 0], 0, [1, 1.2, 1]),
     pc(new THREE.ConeGeometry(.055, .05, 6), MARINO, [0, .65, 0]), pc(CYL(.03, .035, .03, 6), MARINO, [0, .01, 0])],
   // Banca de parque: dos listones de asiento y dos de respaldo sobre patas de hierro azul marino; Uku se sienta a leer
-  banca: pal => [...[.05, -.03].map(z => pc(new THREE.BoxGeometry(.46, .022, .07), CARTON, [0, .15, z])),
-    ...[.2, .27].map(y => pc(new THREE.BoxGeometry(.46, .05, .018), CARTON, [0, y, -.085], [-.14, 0, 0])),
+  banca: pal => [...[.05, -.03].map(z => pc(new THREE.BoxGeometry(.46, .022, .07), pal.carton, [0, .15, z])),
+    ...[.2, .27].map(y => pc(new THREE.BoxGeometry(.46, .05, .018), pal.carton, [0, y, -.085], [-.14, 0, 0])),
     ...[-.19, .19].flatMap(x => [pc(new THREE.BoxGeometry(.016, .15, .016), MARINO, [x, .075, .05]), pc(new THREE.BoxGeometry(.016, .32, .016), MARINO, [x, .16, -.08], [-.14, 0, 0]), pc(new THREE.BoxGeometry(.016, .016, .15), MARINO, [x, .14, -.015])])],
   // Cerca de madera con un par de travesaños
-  cerca: pal => [...[0, 1, 2, 3, 4, 5, 6].map(i => pc(CYL(.011, .013, .15, 5), pal.trunk, [-.3 + i * .1, .075, 0])), pc(new THREE.BoxGeometry(.64, .016, .012), CARTON, [0, .1, 0]), pc(new THREE.BoxGeometry(.64, .016, .012), CARTON, [0, .05, 0])],
+  cerca: pal => [...[0, 1, 2, 3, 4, 5, 6].map(i => pc(CYL(.011, .013, .15, 5), pal.trunk, [-.3 + i * .1, .075, 0])), pc(new THREE.BoxGeometry(.64, .016, .012), pal.carton, [0, .1, 0]), pc(new THREE.BoxGeometry(.64, .016, .012), pal.carton, [0, .05, 0])],
   // Huerto: un cuadro de tierra con plantitas en hileras
   huerto: pal => { const o = [pc(new THREE.BoxGeometry(.4, .03, .26), pal.trunk, [0, .015, 0])], r = rng(8);
     for (let i = 0; i < 4; i++) for (let j = 0; j < 3; j++) { const x = -.15 + i * .1, z = -.08 + j * .08; o.push(pc(CYL(.004, .005, .05, 4), pal.grass, [x, .055, z]), pc(new THREE.SphereGeometry(.026, 6, 5), pal.sprout[(i + j) % 2], [x, .09, z], [r(), r(), 0], [1, .8, 1])); }
@@ -319,16 +333,18 @@ Object.assign(PARTS, {
   buzon: pal => [pc(CYL(.012, .014, .24, 5), pal.trunk, [0, .12, 0]), pc(new THREE.BoxGeometry(.1, .07, .07), AZUL, [0, .27, 0]), pc(new THREE.SphereGeometry(.035, 8, 5, 0, Math.PI * 2, 0, Math.PI / 2), AZUL, [0, .305, 0], [0, 0, 0], [1.4, .8, 1]),
     pc(new THREE.BoxGeometry(.012, .06, .012), AMARILLO, [.06, .31, 0]), pc(new THREE.BoxGeometry(.035, .02, .012), AMARILLO, [.075, .335, 0])],
   // Hongos de sombrero amarillo con lunares
-  hongos: pal => [[0, 0, 1], [.09, .05, .7], [-.06, .07, .55]].flatMap(([x, z, k]) => [pc(CYL(.012 * k + .005, .016 * k + .005, .07 * k, 6), CREMA, [x, .035 * k, z]),
-    pc(new THREE.SphereGeometry(.05 * k, 9, 6, 0, Math.PI * 2, 0, Math.PI / 2), pal.guaya[0], [x, .07 * k, z], 0, [1, .7, 1]), pc(new THREE.SphereGeometry(.009 * k, 5, 4), CREMA, [x + .02 * k, .095 * k, z + .015 * k])]),
-  lena: pal => [[-.07, .02, 0], [.0, .02, 0], [.07, .02, 0], [-.035, .075, 0], [.035, .075, 0], [0, .125, 0]].flatMap(([x, y]) => [pc(CYL(.032, .032, .22, 8), pal.trunk, [x, y + .03, 0], [Math.PI / 2, 0, 0]), pc(CYL(.026, .026, .004, 8), CARTON, [x, y + .03, .111], [Math.PI / 2, 0, 0])]),
+  hongos: pal => [[0, 0, 1], [.09, .05, .7], [-.06, .07, .55]].flatMap(([x, z, k]) => [pc(CYL(.012 * k + .005, .016 * k + .005, .07 * k, 6), pal.crema, [x, .035 * k, z]),
+    pc(new THREE.SphereGeometry(.05 * k, 9, 6, 0, Math.PI * 2, 0, Math.PI / 2), pal.guaya[0], [x, .07 * k, z], 0, [1, .7, 1]), pc(new THREE.SphereGeometry(.009 * k, 5, 4), pal.crema, [x + .02 * k, .095 * k, z + .015 * k])]),
+  // Leña apilada: los troncos de abajo se apoyan en el suelo; las tapas claras (el corte) a los dos lados
+  lena: pal => [[-.07, .02, 0], [.0, .02, 0], [.07, .02, 0], [-.035, .075, 0], [.035, .075, 0], [0, .125, 0]].flatMap(([x, y]) => [pc(CYL(.032, .032, .22, 8), pal.trunk, [x, y + .012, 0], [Math.PI / 2, 0, 0]),
+    pc(CYL(.026, .026, .004, 8), pal.carton, [x, y + .012, .111], [Math.PI / 2, 0, 0]), pc(CYL(.026, .026, .004, 8), pal.carton, [x, y + .012, -.111], [Math.PI / 2, 0, 0])]),
   // Tortuga de Galápagos: caparazón azul con placas amarillas
-  tortuga: pal => [pc(new THREE.SphereGeometry(.09, 12, 7, 0, Math.PI * 2, 0, Math.PI / 2), '#6f87b8', [0, .03, 0], 0, [1.15, .8, 1]), ...[[0, 0], [.05, .03], [-.05, .03], [.05, -.03], [-.05, -.03]].map(([x, z]) => pc(CYL(.022, .022, .006, 6), AMARILLO, [x, .1 - Math.abs(x) * .3, z], 0, 1)),
-    pc(new THREE.SphereGeometry(.035, 8, 6), CREMA, [.12, .05, 0], 0, [1.2, 1, 1]), ...[[.06, .07], [.06, -.07], [-.06, .07], [-.06, -.07]].map(([x, z]) => pc(new THREE.SphereGeometry(.024, 6, 5), CREMA, [x, .02, z], 0, [1.2, .7, 1]))],
+  tortuga: pal => [pc(new THREE.SphereGeometry(.09, 12, 7, 0, Math.PI * 2, 0, Math.PI / 2), pal.caparazon, [0, .03, 0], 0, [1.15, .8, 1]), ...[[0, 0], [.05, .03], [-.05, .03], [.05, -.03], [-.05, -.03]].map(([x, z]) => pc(CYL(.022, .022, .006, 6), AMARILLO, [x, .1 - Math.abs(x) * .3, z], 0, 1)),
+    pc(new THREE.SphereGeometry(.035, 8, 6), pal.crema, [.12, .05, 0], 0, [1.2, 1, 1]), ...[[.06, .07], [.06, -.07], [-.06, .07], [-.06, -.07]].map(([x, z]) => pc(new THREE.SphereGeometry(.024, 6, 5), pal.crema, [x, .02, z], 0, [1.2, .7, 1]))],
   // Cartel de pizarra: dos postes y un marco azul marino; la pizarra (un lienzo con el número) se pone encima
   // Letrero de bosque: dos postes cortos de madera y una tabla con las puntas redondeadas, a la altura de la vista de Uku
   cartel: pal => [pc(CYL(.016, .02, .3, 6), pal.trunk, [-.19, .15, -.025]), pc(CYL(.016, .02, .3, 6), pal.trunk, [.19, .15, -.025]),
-    pc(new THREE.BoxGeometry(.5, .2, .028), CARTON, [0, .3, 0]), pc(CYL(.1, .1, .028, 16), CARTON, [-.25, .3, 0], [Math.PI / 2, 0, 0]), pc(CYL(.1, .1, .028, 16), CARTON, [.25, .3, 0], [Math.PI / 2, 0, 0]),
+    pc(new THREE.BoxGeometry(.5, .2, .028), pal.carton, [0, .3, 0]), pc(CYL(.1, .1, .028, 16), pal.carton, [-.25, .3, 0], [Math.PI / 2, 0, 0]), pc(CYL(.1, .1, .028, 16), pal.carton, [.25, .3, 0], [Math.PI / 2, 0, 0]),
     pc(new THREE.BoxGeometry(.54, .012, .032), pal.trunk, [0, .405, 0]), // el canto de arriba, más oscuro
     ...[[-.19, .3], [.19, .3]].map(([x, y]) => pc(CYL(.01, .01, .006, 8), pal.trunk, [x, y + .07, .016], [Math.PI / 2, 0, 0]))],
   /* ---- Bosque nublado del Chocó Andino (Mindo) ---- */
@@ -353,31 +369,42 @@ Object.assign(PARTS, {
     ...[0, 1, 2, 3, 4].map(i => pc(new THREE.ConeGeometry(.02, .07, 4), pal.flower, [(i % 2 ? .035 : -.035), .36 + i * .03, 0], [0, 0, i % 2 ? -1.2 : 1.2])), pc(new THREE.SphereGeometry(.012, 6, 5), pal.flower, [0, .5, 0])],
   // Hojas grandes de sotobosque (como las gunneras y anturios de Mindo)
   hojona: pal => [[.0, 0, 1.0, 0], [.1, .06, .8, 2.1], [-.08, .04, .7, 4.2]].flatMap(([x, z, k, a]) => [pc(CYL(.006, .008, .22 * k, 4), pal.grass, [x, .11 * k, z], [.35, a, 0]), pc(new THREE.IcosahedronGeometry(.11 * k, 1), pal.round[1], [x + Math.sin(a) * .06, .24 * k, z + Math.cos(a) * .06], [-.4, a, 0], [1.2, .18, 1])]),
-  // Cascada: pared de roca y una columna de agua con hilos blancos y espuma al pie; la neblina la pone escenario()
+  // Cascada: pared de roca y una columna de agua con espuma al pie; los hilos que caen y la neblina los pone escenario()
   cascada: pal => [ // Mindo: pared de roca en dos peldaños, el agua cae ancha y blanca, espuma abajo, musgo y helechos en la roca
     pc(new THREE.DodecahedronGeometry(.24, 0), pal.trunk, [-.26, .18, -.04], [.1, .3, 0], [1, 1.2, .6]), pc(new THREE.DodecahedronGeometry(.24, 0), pal.trunk, [.27, .2, -.05], [.4, 1.1, 0], [1, 1.35, .6]),
     pc(new THREE.DodecahedronGeometry(.2, 0), pal.trunk, [0, .5, -.12], [.2, .7, 0], [1.6, .8, .6]), pc(new THREE.DodecahedronGeometry(.12, 0), pal.trunk, [-.32, .04, .14], [0, .5, 0], [1, .7, 1]), pc(new THREE.DodecahedronGeometry(.1, 0), pal.trunk, [.33, .04, .15], [0, 1.2, 0], [1, .6, 1]),
     pc(new THREE.BoxGeometry(.18, .16, .05), AGUA(pal), [0, .56, .0]), pc(new THREE.BoxGeometry(.24, .48, .05), AGUA(pal), [0, .25, .06]),
-    ...[-.08, -.03, .02, .07].map((x, i) => pc(new THREE.BoxGeometry(.016, .46, .052), '#ffffff', [x, .26 + (i % 2) * .01, .064])), pc(new THREE.BoxGeometry(.012, .14, .052), '#ffffff', [-.02, .57, .003]), pc(new THREE.BoxGeometry(.012, .14, .052), '#ffffff', [.04, .56, .003]),
-    pc(new THREE.SphereGeometry(.1, 9, 6), '#ffffff', [0, .02, .12], 0, [2, .35, 1]), pc(new THREE.SphereGeometry(.06, 8, 6), '#ffffff', [.16, .02, .16], 0, [1.4, .3, 1]), pc(new THREE.SphereGeometry(.06, 8, 6), '#ffffff', [-.16, .02, .15], 0, [1.4, .3, 1]), pc(new THREE.SphereGeometry(.05, 8, 6), '#ffffff', [.04, .46, .08], 0, [1.6, .3, 1]),
+    // los dos hilos cortos de arriba (los que caen por la columna los pone escenario(): se mueven)
+    pc(new THREE.BoxGeometry(.012, .14, .052), pal.espuma, [-.02, .57, .003]), pc(new THREE.BoxGeometry(.012, .14, .052), pal.espuma, [.04, .56, .003]),
+    pc(new THREE.SphereGeometry(.1, 9, 6), pal.espuma, [0, .02, .12], 0, [2, .35, 1]), pc(new THREE.SphereGeometry(.06, 8, 6), pal.espuma, [.16, .02, .16], 0, [1.4, .3, 1]), pc(new THREE.SphereGeometry(.06, 8, 6), pal.espuma, [-.16, .02, .15], 0, [1.4, .3, 1]), pc(new THREE.SphereGeometry(.05, 8, 6), pal.espuma, [.04, .46, .08], 0, [1.6, .3, 1]),
     ...[[-.3, .36, .1], [.3, .4, .1], [-.12, .62, -.02], [.18, .64, 0]].map(([x, y, z]) => pc(new THREE.SphereGeometry(.07, 8, 6), pal.round[1] || pal.round[0], [x, y, z], 0, [1.3, .45, 1])), // musgo
     ...[[-.34, .1, .5], [.36, .12, .5], [-.1, .66, .4], [.28, .5, .3]].map(([x, y, z]) => pc(new THREE.IcosahedronGeometry(.07, 0), pal.round[0], [x, y, z * .1 - .02], [0, x * 4, 0], [1.2, .6, 1]))], // helechos en la roca
   // Puente de tablas con barandas de cuerda, sobre el arroyo que sale del lago
-  puente: pal => [...[0, 1, 2, 3, 4, 5, 6].map(i => pc(new THREE.BoxGeometry(.055, .014, .3), i % 2 ? CARTON : pal.trunk, [-.18 + i * .06, .06, 0])),
+  puente: pal => [...[0, 1, 2, 3, 4, 5, 6].map(i => pc(new THREE.BoxGeometry(.055, .014, .3), i % 2 ? pal.carton : pal.trunk, [-.18 + i * .06, .06, 0])),
     ...[[-.2, .13], [.2, .13], [-.2, -.13], [.2, -.13]].map(([x, z]) => pc(CYL(.01, .012, .16, 5), pal.trunk, [x, .12, z])),
-    ...[.13, -.13].flatMap(z => [pc(CYL(.004, .004, .42, 4), CARTON, [0, .19, z], [0, 0, Math.PI / 2]), pc(CYL(.004, .004, .42, 4), CARTON, [0, .13, z], [0, 0, Math.PI / 2])]),
-    pc(new THREE.BoxGeometry(.5, .012, .2), AGUA(pal), [0, .004, 0])],
-  arroyo: pal => [pc(new THREE.BoxGeometry(.2, .012, .9), AGUA(pal), [0, .004, 0]), ...[-.06, .05, 0].map((x, i) => pc(new THREE.BoxGeometry(.012, .013, .3), '#dfe9f8', [x, .005, -.3 + i * .3]))],
+    ...[.13, -.13].flatMap(z => [pc(CYL(.004, .004, .42, 4), pal.carton, [0, .19, z], [0, 0, Math.PI / 2]), pc(CYL(.004, .004, .42, 4), pal.carton, [0, .13, z], [0, 0, Math.PI / 2])])],
+  /* Arroyo: una cinta que sigue la curva del suelo (la losa plana flotaba 3,5 cm en las puntas y se le veía el canto). La z
+     local crece alejándose del lago: el extremo del lago queda bajo el agua del lago y el otro se afina hasta .07; encima,
+     dos rayitas de corriente, también en cinta */
+  arroyo: pal => {
+    const L = 1.0, S = 1.1 /* la escala con que se pone */, caida = z => (z * S) ** 2 / (2 * PLANET_R) / S;
+    const cinta = (w, l, n, x0, z0, alto, afina) => {
+      const g = new THREE.PlaneGeometry(w, l, 1, n).rotateX(-Math.PI / 2), p = g.attributes.position;
+      for (let i = 0; i < p.count; i++) { const z = p.getZ(i) + z0, t = (z + L / 2) / L; p.setX(i, x0 + p.getX(i) * (afina ? 1 - .65 * t : 1)); p.setZ(i, z); p.setY(i, alto - caida(z)); }
+      return g;
+    };
+    return [pc(cinta(.2, L, 16, 0, 0, .004, true), AGUA(pal)), pc(cinta(.012, .28, 6, -.04, -.2, .006), pal.onda), pc(cinta(.012, .28, 6, .03, .15, .006), pal.onda)];
+  },
   // Florcitas silvestres: tres tallos con flores chicas (relleno del claro)
   silvestre: (pal, v) => [[0, 0, 0], [.05, .03, 1], [-.04, .04, 2]].flatMap(([x, z, i]) => [pc(CYL(.003, .004, .07 + i * .012, 3), pal.grass, [x, .035 + i * .006, z]), pc(new THREE.SphereGeometry(.016, 6, 4), [pal.flower, pal.guaya[1], pal.dust][(i + v) % 3], [x, .075 + i * .012, z], 0, [1, .7, 1])]),
   // Helechito de suelo: cinco frondas cortas que se abren
   helechito: (pal, v) => [0, 1, 2, 3, 4].map(i => pc(new THREE.ConeGeometry(.025, .16, 3), pal.round[(i + v) % pal.round.length], TRS([0, .02, 0], [0, i / 5 * 6.28 + v, 0]).multiply(TRS([.05, .04, 0], [0, 0, 1.15], [1, 1, .2])))),
   // Poste indicador: un palo con tres tablitas en punta que señalan los senderos
   poste: pal => [pc(CYL(.014, .018, .42, 6), pal.trunk, [0, .21, 0]), pc(new THREE.SphereGeometry(.022, 6, 5), pal.trunk, [0, .42, 0]),
-    ...[[.36, .9], [.29, 2.4], [.22, -.8]].map(([y, a]) => pc(new THREE.BoxGeometry(.17, .045, .012), CARTON, TRS([0, y, 0], [0, a, 0]).multiply(TRS([.07, 0, 0])))),
-    ...[[.36, .9], [.29, 2.4], [.22, -.8]].map(([y, a]) => pc(new THREE.ConeGeometry(.024, .04, 4), CARTON, TRS([0, y, 0], [0, a, 0]).multiply(TRS([.17, 0, 0], [0, 0, -Math.PI / 2]))))],
+    ...[[.36, .9], [.29, 2.4], [.22, -.8]].map(([y, a]) => pc(new THREE.BoxGeometry(.17, .045, .012), pal.carton, TRS([0, y, 0], [0, a, 0]).multiply(TRS([.07, 0, 0])))),
+    ...[[.36, .9], [.29, 2.4], [.22, -.8]].map(([y, a]) => pc(new THREE.ConeGeometry(.024, .04, 4), pal.carton, TRS([0, y, 0], [0, a, 0]).multiply(TRS([.17, 0, 0], [0, 0, -Math.PI / 2]))))],
   // Farolito de sendero: un poste corto con una lucecita amarilla
-  farolito: pal => [pc(CYL(.009, .012, .22, 5), MARINO, [0, .11, 0]), pc(new THREE.BoxGeometry(.05, .05, .05), CREMA, [0, .245, 0]), pc(new THREE.SphereGeometry(.018, 6, 5), AMARILLO, [0, .245, 0]), pc(new THREE.ConeGeometry(.04, .03, 4), MARINO, [0, .285, 0], [0, .78, 0])],
+  farolito: pal => [pc(CYL(.009, .012, .22, 5), MARINO, [0, .11, 0]), pc(new THREE.BoxGeometry(.05, .05, .05), pal.crema, [0, .245, 0]), pc(new THREE.SphereGeometry(.018, 6, 5), AMARILLO, [0, .245, 0]), pc(new THREE.ConeGeometry(.04, .03, 4), MARINO, [0, .285, 0], [0, .78, 0])],
   // Bandera: un asta con una banderita amarilla
   bandera: pal => [pc(CYL(.007, .009, .3, 5), pal.trunk, [0, .15, 0]), pc(new THREE.BoxGeometry(.13, .08, .008), AMARILLO, [.07, .26, 0]), pc(new THREE.SphereGeometry(.014, 6, 5), MARINO, [0, .31, 0])]
 });
@@ -446,20 +473,25 @@ const LAGO_P = [1.25, -.05], LAGO_R = .5;
    arroyo que sale al frente con su puente, la tortuga en la orilla; al fondo a la izquierda, a la entrada del bosque, el letrero; más hongos en la orilla derecha del lago. */
 /* Un claro chico y fácil de administrar (lo principal es la asistencia; el mundo acompaña): la casa, el lago con su
    cascada y el puente, la banca con el farol, el letrero del bosque, el buzón, la leña y la tortuga. Nada más. */
-const ESC_ZONA = { farol: [-.8, .1], banca: [-1.15, .35], buzon: [-.15, -.62], lena: [-.85, -1.4], tortuga: [1.55, .45], cascada: [1.4, -.72], puente: [.95, .55], arroyo: [.95, .55], bandera: [-1.45, .05], heliconias: [], hojonas: [], cartel: [-1.2, -1.1], farolitos: [], guayas: [[-1.45, -.55], [1.0, -1.3]] };
+const BANCA_ROT = .9, BANCA_ESC = 1.3; // la banca: hacia dónde mira y su tamaño (Uku se sienta en ella; el paraguas se apoya al lado)
+// El buzón junto a la puerta de la casa (sin tapar la ventana izquierda); la leña al lado de la casa, 2,4° más adentro
+// del horizonte que antes (a .71 de la casa y a .26 del poste del letrero)
+const ESC_ZONA = { farol: [-.8, .1], banca: [-1.15, .35], buzon: [-.32, -.72], lena: [-.75, -1.2], tortuga: [1.55, .45], cascada: [1.4, -.72], puente: [.85, .75], arroyo: [.95, .55], bandera: [-1.45, .05], heliconias: [], hojonas: [], cartel: [-1.2, -1.1], farolitos: [], guayas: [[-1.45, -.55], [1.0, -1.3]] };
 const PASEO = [[-.9, -.9]]; // junto al letrero, que los árboles no tapen
+// El arroyo sale del lago hacia ESC_ZONA.arroyo y sigue .55 más (su punta, aguas abajo); el puente lo cruza a .22 de su centro
+const ARROYO_FIN = (() => { const [ax, az] = ESC_ZONA.arroyo, dx = ax - LAGO_P[0], dz = az - LAGO_P[1], l = Math.hypot(dx, dz); return [ax + dx / l * .55, az + dz / l * .55]; })();
 /* ---------- Senderos ----------
-   Corredores invisibles que unen los lugares del claro, saliendo de la plazuela entre los canteros: a la casa, al lago,
-   a la banca y de ahí al huerto y, bordeando, hasta el letrero del bosque; a la cascada por detrás del lago, y al
+   Corredores invisibles que unen los lugares del claro, saliendo de la plazuela entre los canteros: a la puerta de la
+   casa, al lago, a la banca, al letrero del bosque (pasando junto a la leña); a la cascada por detrás del lago, y al
    puente. Siempre están libres (nada se pone encima, los árboles los esquivan): por ahí pasea Uku y por ahí se lo
    guía. No se dibujan (un bosque no tiene caminos de tierra); los farolitos en las esquinas son la única pista. */
 const PLAZA = [0, .15];
 const SENDEROS = [
-  [PLAZA, [-.25, -.25], [-.5, -.55]],                               // a la puerta de la casa
+  [PLAZA, [.12, -.42], [.02, -.76]],                                // a la puerta de la casa (justo afuera de su huella)
   [PLAZA, [.45, -.05], [.68, -.05]],                                // a la orilla del lago
   [[.45, -.05], [.7, -.45], [.92, -.62]],                           // por detrás del lago, a la cascada
   [PLAZA, [-.3, .68], [-.85, .64]],                                 // a la banca y el farol
-  [[-.5, -.55], [-.9, -.9]],                                        // de la casa a la leña y el letrero del bosque
+  [PLAZA, [-.3, -.3], [-.9, -.9]],                                  // al letrero del bosque y la leña
   [PLAZA, [.2, .55], [.55, .68]]                                    // al puente sobre el arroyo
 ];
 const ANCHO_SENDERO = .24;
@@ -474,7 +506,7 @@ function distSendero(x, z) {
   return d;
 }
 // Los puntos de llegada de los senderos, con nombre (para «llévame a…» y para pasear)
-const DESTINOS = { plaza: PLAZA, casa: [-.5, -.55], lago: [.68, -.05], cascada: [.92, -.62], banca: [-.85, .64], letrero: [-.9, -.9], puente: [.55, .68] };
+const DESTINOS = { plaza: PLAZA, casa: [.02, -.76], lago: [.68, -.05], cascada: [.92, -.62], banca: [-.85, .64], letrero: [-.9, -.9], puente: [.55, .68] };
 // Para revisar el diseño: qué cosa queda encima de un sendero (se calcula sin el atajo de «sendero siempre libre»)
 export function senderosChocan() {
   const malos = [];
@@ -485,7 +517,7 @@ function quienBloquea(x, z) {
   if (!esc) return null;
   if (Math.hypot(x - LAGO_P[0], z - LAGO_P[1]) < lagoEnForma() + .12) return 'lago';
   if (!ZONA.canteros.every(([bx, bz]) => Math.hypot(x - bx, z - bz) > BED_R + .08)) return 'cantero';
-  for (let i = 0; i < ZONA.hogar.length && i < 1; i++) if (Math.hypot(x - ZONA.hogar[i][0], z - ZONA.hogar[i][1]) <= .38) return 'casa';
+  if (enCasa(x, z)) return 'casa';
   for (let i = 0; i < ZONA.guayacanes.length; i++) if (Math.hypot(x - ZONA.guayacanes[i][0], z - ZONA.guayacanes[i][1]) <= .28) return 'guayacan' + i;
   const RADIO = { cascada: .42, puente: .3, arroyo: .3, farol: .18, banca: .3, cerca: .3, huerto: .3, cartel: .32, lena: .18, tortuga: .18, hongos: .16, buzon: .14, bandera: .1, poste: .14 };
   for (const k in ESC_ZONA) { const v = ESC_ZONA[k]; if (!Array.isArray(v[0]) && Math.hypot(x - v[0], z - v[1]) < (RADIO[k] || .22)) return k; }
@@ -497,7 +529,9 @@ function quienBloquea(x, z) {
 export function destinos() { return Object.assign({}, DESTINOS); }
 export function destino(nombre) { const d = DESTINOS[nombre]; return d ? { x: d[0], z: d[1] } : null; }
 const lagoEnForma = () => Math.max(.7, Math.min(1.4, esc && esc.lago || 1)) * LAGO_R;
-const escTrees = () => scatter(19, 22, 1.0, 2.0, (x, z) => (z < -1.0 || Math.abs(x) > 1.3) && TALL(x, z) && VISIBLE(x, z - .3) && awayBig(.5)(x, z) && distSendero(x, z) > .3 && Math.hypot(x - LAGO_P[0], z - LAGO_P[1]) > lagoEnForma() + .4 && Math.hypot(x - ESC_ZONA.cartel[0], z - ESC_ZONA.cartel[1]) > .5 && Math.hypot(x - ESC_ZONA.cascada[0], z - ESC_ZONA.cascada[1]) > .7 && PASEO.every(([px, pz]) => Math.hypot(x - px, z - pz) > .45) && ESC_ZONA.guayas.every(([gx, gz]) => Math.hypot(x - gx, z - gz) > .55), .42);
+// El bosque del claro: detrás y a los lados, sin filtro de cámaras (las copas asoman tras el horizonte, como en Tolan) y
+// con aire alrededor de la casa
+const escTrees = () => scatter(19, 22, 1.0, 2.0, (x, z) => (z < -1.0 || Math.abs(x) > 1.3) && TALL(x, z) && Math.hypot(x - ZONA.hogar[0][0], z - ZONA.hogar[0][1]) > .75 && awayBig(.5)(x, z) && distSendero(x, z) > .3 && Math.hypot(x - LAGO_P[0], z - LAGO_P[1]) > lagoEnForma() + .4 && Math.hypot(x - ESC_ZONA.cartel[0], z - ESC_ZONA.cartel[1]) > .5 && Math.hypot(x - ESC_ZONA.cascada[0], z - ESC_ZONA.cascada[1]) > .7 && PASEO.every(([px, pz]) => Math.hypot(x - px, z - pz) > .45) && ESC_ZONA.guayas.every(([gx, gz]) => Math.hypot(x - gx, z - gz) > .55), .42);
 // Lo que se ve en el claro
 function enClaro() {
   return { props: claro.casa ? ['casa'] : [], guayas: Math.max(0, Math.min(4, claro.guayacanes | 0)),
@@ -525,10 +559,15 @@ function escenario(want, pal, Z, id) {
     const patoG = geo('pato', () => PARTS.pato(pal));
     const patos = [new THREE.Mesh(patoG, LAMB), new THREE.Mesh(patoG, LAMB)];
     patos.forEach((m, i) => { m.scale.setScalar(i ? .6 : .78); o.add(m); }); // el patito, más chico
-    o.userData.tick = (m, t) => patos.forEach((d, i) => { const a = t * (.16 + i * .05) * (i ? -1 : 1) + i * 2.4, rr = LAGO_R * (.42 + i * .18); d.position.set(Math.cos(a) * rr, .03 + Math.sin(t * 2 + i) * .004, Math.sin(a) * rr); d.rotation.y = -a + (i ? Math.PI / 2 : -Math.PI / 2); });
+    // Tres ondas que nacen chicas en el centro, se abren y se desvanecen (planas, de un tono); quietas, las de siempre
+    const ondas = [.58, .97, .4].map(k => { const m = new THREE.Mesh(ONDA_G, new THREE.MeshBasicMaterial({ color: pal.onda || '#dfe9f8', transparent: true, depthWrite: false })); m.rotation.x = Math.PI / 2; m.position.y = .026; m.scale.set(k, k, 1); o.add(m); return m; });
+    o.userData.tick = (m, t) => {
+      patos.forEach((d, i) => { const a = t * (.16 + i * .05) * (i ? -1 : 1) + i * 2.4, rr = LAGO_R * (.42 + i * .18); d.position.set(Math.cos(a) * rr, .03 + Math.sin(t * 2 + i) * .004, Math.sin(a) * rr); d.rotation.y = -a + (i ? Math.PI / 2 : -Math.PI / 2); });
+      ondas.forEach((w, i) => { const f = (t * .12 + i / 3) % 1, k = .3 + .7 * f; w.scale.set(k, k, 1); w.material.opacity = 1 - f; });
+    };
     return o;
   };
-  put('farol', E.farol, 1.1); put('banca', E.banca, 1.3, .9);
+  put('farol', E.farol, 1.5); put('banca', E.banca, BANCA_ESC, BANCA_ROT); // el farol, más alto que Uku (1,01 m; el foco a .84)
   put('buzon', E.buzon, 1.1); put('lena', E.lena, 1.1);
   // Más guayacanes en flor repartidos por el claro
   (E.guayas || []).forEach(([x, z], i) => { want['SG' + i] = () => Z(item('guaya', (i + 1) % 3, pal, { x, z, rot: i * 2.1 }, 1.05 + (i % 2) * .15, { sway: .015, gs: .7, crown: .95 }), 'escenario'); });
@@ -542,13 +581,20 @@ function escenario(want, pal, Z, id) {
   want['SCASCADA'] = () => {
     const o = Z(item('cascada', '', pal, { x: E.cascada[0], z: E.cascada[1], rot: .25 }, 1.2, { gs: .9 }), 'escenario');
     const tex = dotTexture(), nieblas = [];
-    for (let i = 0; i < 4; i++) { const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, color: '#ffffff', transparent: true, opacity: .45, depthWrite: false })); sp.scale.set(.16, .1, 1); o.add(sp); nieblas.push(sp); }
-    o.userData.tick = (m, t) => nieblas.forEach((n, i) => { const f = (t * .18 + i / 4) % 1; n.position.set(-.08 + i * .05 + Math.sin(t + i) * .02, .05 + f * .3, .12); n.material.opacity = Math.sin(f * Math.PI) * .45; n.scale.set(.14 + f * .16, .09 + f * .1, 1); });
+    for (let i = 0; i < 4; i++) { const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, color: pal.espuma, transparent: true, opacity: .45, depthWrite: false })); sp.scale.set(.16, .1, 1); o.add(sp); nieblas.push(sp); }
+    // El agua cae: ocho hilos blancos cortos bajan por la columna, en cuatro carriles y desfasados (con RM, quietos)
+    const hiloG = geo('hiloCascada', () => [pc(new THREE.BoxGeometry(.014, .09, .052), pal.espuma || '#ffffff')]), hiloY = (t, i) => .48 - ((t * .45 + i / 8 + (i % 4) * .13) % 1) * .44;
+    const hilos = [0, 1, 2, 3, 4, 5, 6, 7].map(i => { const h = new THREE.Mesh(hiloG, LAMB); h.position.set([-.08, -.03, .02, .07][i % 4], hiloY(0, i), .064); o.add(h); return h; });
+    o.userData.tick = (m, t) => {
+      nieblas.forEach((n, i) => { const f = (t * .18 + i / 4) % 1; n.position.set(-.08 + i * .05 + Math.sin(t + i) * .02, .05 + f * .3, .12); n.material.opacity = Math.sin(f * Math.PI) * .45; n.scale.set(.14 + f * .16, .09 + f * .1, 1); });
+      hilos.forEach((h, i) => { h.position.y = hiloY(t, i); });
+    };
     return o;
   };
   const ra = Math.atan2(E.arroyo[0] - LAGO_P[0], E.arroyo[1] - LAGO_P[1]);
   want['SARROYO'] = () => Z(item('arroyo', '', pal, { x: E.arroyo[0], z: E.arroyo[1], rot: ra }, 1.1, { gs: 1 }), 'escenario');
-  want['SPUENTE'] = () => Z(item('puente', '', pal, { x: E.puente[0], z: E.puente[1], rot: ra + Math.PI / 2 }, 1.1, { gs: 1.1 }), 'escenario');
+  // El puente cruza el agua: su eje (x local, por donde se camina) queda de través al arroyo (con ra + π/2 iba a lo largo)
+  want['SPUENTE'] = () => Z(item('puente', '', pal, { x: E.puente[0], z: E.puente[1], rot: ra }, 1.1, { gs: 1.1 }), 'escenario');
   (E.heliconias || []).forEach(([x, z], i) => { want['SHELI' + i] = () => Z(item('heliconia', '', pal, { x, z, rot: i * 1.3 }, 1.1 + (i % 3) * .1, { sway: .04, gs: 1.1 }), 'escenario'); });
   (E.hojonas || []).forEach(([x, z], i) => { want['SHOJA' + i] = () => Z(item('hojona', '', pal, { x, z, rot: i * 2.2 }, 1 + (i % 2) * .25, { sway: .03, gs: 1.1 }), 'escenario'); });
   if (esc.tortuga) put('tortuga', E.tortuga, 1.4, 4.4);
@@ -558,7 +604,8 @@ function escenario(want, pal, Z, id) {
 let smokeM = null; const smokeG = new THREE.SphereGeometry(.03, 7, 5);
 function smoke(o, t) { o.children.forEach((c, i) => { const f = (t * .22 + i / 3) % 1; c.position.set(.14 + f * .08, .41 + f * .32, -.05); c.scale.setScalar(Math.max(.001, Math.sin(f * Math.PI) * (.6 + f))); }); }
 function makeProp(k, pal, x, z) {
-  const o = item(k, '', pal, { x, z, rot: Math.atan2(-x, 3.2 - z) * .8 }, 1.45, { gs: 1.1 });
+  // a 1,2 (antes 1,45): una casita detrás del claro, con la puerta de ~.26 m (Uku mide .9)
+  const o = item(k, '', pal, { x, z, rot: Math.atan2(-x, 3.2 - z) * .8 }, 1.2, { gs: 1.1 });
   if (k === 'casa') { for (let i = 0; i < 3; i++) o.add(new THREE.Mesh(smokeG, smokeM)); o.userData.tick = smoke; }
   return o;
 }
@@ -636,7 +683,7 @@ let DECO_ESC = null;
 function decoEsc() {
   if (DECO_ESC) return DECO_ESC;
   const libre = (x, z) => distSendero(x, z) > .22 && Math.hypot(x - PLAZA[0], z - PLAZA[1]) > .55 && Math.hypot(x - LAGO_P[0], z - LAGO_P[1]) > lagoEnForma() + .18
-    && !quienBloquea(x, z) && VISIBLE(x, z) && z < 1.0 && z > -1.9;
+    && !quienBloquea(x, z) && VISIBLE(x, z) && z < 1.0 && z > -1.9 && distSegmento(x, z, LAGO_P, ARROYO_FIN) > .16; // nada crece en el agua del arroyo
   // Un poco más que antes (49 piezas) pero con las mismas semillas: lo de siempre no se mueve, lo nuevo se suma al final
   return DECO_ESC = {
     tufts: scatter(5, 16, .5, 2.3, libre, .45), rocks: scatter(17, 4, .9, 2.2, libre, 1.0),
@@ -657,6 +704,8 @@ function buildGarden(pal) {
   D.daisies.filter(enLago).forEach(p => { const m = M(p, .8 + p.s * .4); parts.push(pc(CYL(.003, .004, .05, 3), pal.grass, m.clone().multiply(TRS([0, .025, 0]))), pc(new THREE.SphereGeometry(.01, 5, 3), pal.dust, m.clone().multiply(TRS([0, .052, 0], 0, [1, .6, 1])))); });
   if (esc) planetaGeo(pal).forEach(g => parts.push(g));
   (D.parches || []).forEach((p, i) => { const col = pal.bg === '#1f1f1f' ? ['#30333b', '#2f3238'][i % 2] : ['#c7ccd4', '#aab1bc'][i % 2]; parts.push(casquete(p.x, p.z, .35 + p.s * .2, col)); });
+  // De noche el farol deja luz en el suelo: un charco plano, un tono más claro, por encima de cualquier parche
+  if (esc && pal.bg === '#1f1f1f') parts.push(casquete(ESC_ZONA.farol[0], ESC_ZONA.farol[1], .3, '#3a3e49', 1, encimaDe(.55)));
   (D.silvestres || []).forEach(p => { const m = M(p, .9 + p.s * .5); PARTS.silvestre(pal, p.v).forEach(g => parts.push(g.applyMatrix4(m))); });
   (D.helechitos || []).forEach(p => { const m = M(p, .8 + p.s * .6); PARTS.helechito(pal, p.v).forEach(g => parts.push(g.applyMatrix4(m))); });
   garden = new THREE.Mesh(kit(parts), LAMB); garden.visible = !focus; scene.add(garden);
@@ -688,9 +737,9 @@ Object.assign(PARTS, {
     return o; },
   // Hongo grande del silvestre: pie crema, sombrero azul gris oscuro y lunares casi blancos (sin amarillo, que es solo del claro y la pradera)
   hongoGrande: pal => { const osc = pal.bg === '#1f1f1f', som = osc ? '#3c4659' : '#7d8aa3', lun = osc ? '#d9dce4' : '#f3f4f7';
-    return [pc(CYL(.12, .18, .7, 8), CREMA, [0, .35, 0]), pc(new THREE.SphereGeometry(.5, 10, 6, 0, Math.PI * 2, 0, Math.PI / 2), som, [0, .7, 0], 0, [1, .75, 1]),
+    return [pc(CYL(.12, .18, .7, 8), pal.crema, [0, .35, 0]), pc(new THREE.SphereGeometry(.5, 10, 6, 0, Math.PI * 2, 0, Math.PI / 2), som, [0, .7, 0], 0, [1, .75, 1]),
     ...[[.2, .25, .3], [-.25, .22, .2], [.05, .32, -.3], [-.1, .35, .1], [.3, .2, -.15]].map(([x, y, z]) => pc(new THREE.SphereGeometry(.07, 5, 3), lun, [x, .7 + y, z], 0, [1, .6, 1])),
-    pc(CYL(.05, .07, .3, 6), CREMA, [.45, .15, .1]), pc(new THREE.SphereGeometry(.2, 8, 5, 0, Math.PI * 2, 0, Math.PI / 2), som, [.45, .3, .1], 0, [1, .75, 1])]; },
+    pc(CYL(.05, .07, .3, 6), pal.crema, [.45, .15, .1]), pc(new THREE.SphereGeometry(.2, 8, 5, 0, Math.PI * 2, 0, Math.PI / 2), som, [.45, .3, .1], 0, [1, .75, 1])]; },
   // Pino nevado del polo sur: el pino de siempre en celeste pálido, con una capa de nieve blanca en cada piso (que se lea sobre la nieve)
   pinoNevado: pal => { const osc = pal.bg === '#1f1f1f', P = Object.assign({}, pal, { pine: osc ? ['#4a4e5a', '#565a66', '#5f636f'] : ['#c5cfe2', '#b9c6de', '#c5cfe2'] });
     return [...PARTS.pino(P, 0), ...[[.32, .5, .45], [.25, .42, .72], [.17, .32, .95]].map(([r, h, y]) => pc(new THREE.SphereGeometry(r + .02, 7, 4), '#ffffff', [0, y - h / 2 + .03, 0], 0, [1, .25, 1]))]; },
@@ -807,6 +856,26 @@ function buildDust() {
   dust = new THREE.Points(g, new THREE.PointsMaterial({ map: polvoTexture(), size: .045, transparent: true, opacity: DUST_OP, depthWrite: false, color: palette().dust, fog: false }));
   dust.userData.speed = speed;
   scene.add(dust);
+}
+
+/* ---------- Estrellas (solo en el espacio) ----------
+   Alejado del todo, el fondo azul de noche se llena de puntos planos de un tono (casi blancos y algunos amarillos, como las
+   estrellas del CSS) en una cáscara de 42–60 m alrededor del planeta: giran con el globo porque están en el mundo. Discos
+   nítidos (no el polvo difuso), sin niebla y sin alphaTest, así el fundido al entrar y salir del espacio es parejo. */
+let estrellas = [];
+function buildEstrellas() {
+  const r = rng(181), amarillo = new THREE.Color('#ffe680'), blanco = new THREE.Color('#e8ebf7'), tex = dotTexture();
+  estrellas = [[160, 1.8], [80, 2.8]].map(([n, size]) => {
+    const pos = new Float32Array(n * 3), col = new Float32Array(n * 3);
+    for (let i = 0; i < n; i++) {
+      const u = 2 * r() - 1, f = 2 * Math.PI * r(), d = 42 + 18 * r(), h = Math.sqrt(1 - u * u);
+      pos.set([PLANET_C.x + d * h * Math.cos(f), PLANET_C.y + d * u, PLANET_C.z + d * h * Math.sin(f)], i * 3);
+      const c = r() < .18 ? amarillo : blanco; col.set([c.r, c.g, c.b], i * 3);
+    }
+    const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(pos, 3)); g.setAttribute('color', new THREE.BufferAttribute(col, 3));
+    const s = new THREE.Points(g, new THREE.PointsMaterial({ map: tex, size, sizeAttenuation: false, vertexColors: true, transparent: true, depthWrite: false, fog: false, opacity: 0 }));
+    s.frustumCulled = false; s.visible = false; scene.add(s); return s;
+  });
 }
 
 /* ---------- Pétalos de guayacán (puntos amarillos que caen despacio) ---------- */
@@ -933,9 +1002,10 @@ const BEAR_S = .58, WALK_V = .15; // Uku grande; pasea despacio (m/s)
 let pos = { x: 0, z: 0 }, heading = 0, goal = null, idleFor = 3, acts = 0, speed = 0, turnTo = 0, moving = false, swayB = 0, giroV = 0, headingAntes = 0;
 function clipFor() {
   if (gesture && GEST[gesture] && (!focus || STANDING[gesture])) return GEST[gesture];
-  if (moving) return [WALK[0], WALK[1] * clamp(speed / WALK_V, .5, 1.1), WALK[2]];
+  // La clip sigue a la velocidad (al frenar cerca de la meta se frena con él; manejando va hasta WALK_V·1,6)
+  if (moving) return [WALK[0], WALK[1] * clamp(speed / WALK_V, .2, manejando() ? 1.7 : 1.1), WALK[2]];
   // Girando en el sitio da pasitos (la clip de caminar, corta y más lenta): no se desliza sobre los pies quietos
-  if (giroV > .3) return [WALK[0], WALK[1] * clamp(.45 + giroV * .3, .45, 1), .5];
+  if (giroV > .3) return [WALK[0], WALK[1] * clamp(.6 + giroV * .4, .6, 1.3), .65];
   return IDLE;
 }
 // Pasear: elige un punto del claro, gira hacia él, camina despacio y se queda un rato mirando
@@ -964,8 +1034,11 @@ function brain(dt) {
     const dx = goal.x - pos.x, dz = goal.z - pos.z, d = Math.hypot(dx, dz), err = angDiff(Math.atan2(dx, dz), heading);
     heading += clamp(err, -dt * 1.5, dt * 1.5);
     want = Math.abs(err) < .25 ? WALK_V * Math.min(1, d / .15 + .3) : 0; // primero se orienta, luego camina (así sigue el tramo planeado)
-    // Nunca atraviesa nada: si el paso siguiente está ocupado, se detiene y vuelve a planear el camino (tres intentos)
-    if (want > 0 && !okWalk(pos.x + Math.sin(heading) * .06, pos.z + Math.cos(heading) * .06)) {
+    // Nunca atraviesa nada: si el paso siguiente está ocupado, se detiene y vuelve a planear el camino (tres intentos).
+    // Pero si el tramo hasta la meta está libre, sigue: el paso solo rozó la punta de un margen entre dos muestras del
+    // planificador (la esquina del cantero junto al sendero de la banca), y el plan nuevo sería el mismo. Si ya quedó
+    // dentro de un margen (frenando se resbala un poco), sale por el camino planeado, como al manejarlo
+    if (want > 0 && !okWalk(pos.x + Math.sin(heading) * .06, pos.z + Math.cos(heading) * .06) && okWalk(pos.x, pos.z) && !tramoLibre(pos.x, pos.z, goal.x, goal.z)) {
       want = 0; const dest = ruta.length ? ruta[ruta.length - 1] : goal;
       if (replanes++ < 3 && irA(dest.x, dest.z)) { /* nuevo camino */ } else { goal = null; ruta = []; idleFor = 1; }
     }
@@ -987,14 +1060,15 @@ let ESC_TREES = null;
 function okWalk(x, z) {
   const R = esc ? 1.8 : .75, zmin = esc ? -1.4 : -.5, zmax = esc ? .72 : .1;
   if (Math.hypot(x, z * .8) > R || z < zmin || z > zmax) return false;
+  // La casa, antes que los senderos: el de la puerta llega hasta ella, pero nadie entra en el montículo
+  if (claro.casa && enCasa(x, z)) return false;
   // Los senderos son corredores siempre libres (lo que hay puesto queda a los lados)
   if (esc && distSendero(x, z) < ANCHO_SENDERO / 2 + .04) return true;
   if (chocaPuesto(x, z)) return false; // lo que Fran decoró y los brotes que plantó también estorban
   if (esc) { if (!ESC_TREES) ESC_TREES = escTrees(); if (!ESC_TREES.every(t => Math.hypot(x - t.x, z - t.z) > .22)) return false; }
   if (!ZONA.canteros.every(([bx, bz]) => Math.hypot(x - bx, z - bz) > BED_R + .08)) return false;
-  // Solo lo que está puesto de verdad: la casa y los guayacanes (tronco fino)
-  const f = enClaro(), nc = Math.min(f.props.length, ZONA.hogar.length), ng = f.guayas || 1;
-  for (let i = 0; i < nc; i++) if (Math.hypot(x - ZONA.hogar[i][0], z - ZONA.hogar[i][1]) <= .38) return false;
+  // Solo lo que está puesto de verdad: los guayacanes (tronco fino); la casa ya se miró arriba
+  const ng = enClaro().guayas || 1;
   for (let i = 0; i < ng && i < ZONA.guayacanes.length; i++) if (Math.hypot(x - ZONA.guayacanes[i][0], z - ZONA.guayacanes[i][1]) <= (esc ? .28 : .38)) return false;
   if (esc) {
     if (Math.hypot(x - LAGO_P[0], z - LAGO_P[1]) < lagoEnForma() + .12) return false;
@@ -1150,7 +1224,7 @@ let leyendo = false, pagina = 0;
 function readStep(dt) {
   if (!leyendo) {
     leyendo = true; pagina = 0;
-    if (esc) { const b = ESC_ZONA.banca, r = .9; pos.x = b[0] - Math.sin(r) * .02; pos.z = b[1] - Math.cos(r) * .02; heading = r; goal = null; } // en el asiento, mirando al frente de la banca
+    if (esc) { const b = ESC_ZONA.banca, r = BANCA_ROT; pos.x = b[0] - Math.sin(r) * .02; pos.z = b[1] - Math.cos(r) * .02; heading = r; goal = null; } // en el asiento, mirando al frente de la banca
     rig.sentarse(true, .2); holdObject('periodico');
   }
   if (held && held.userData.pecho) {
@@ -1159,9 +1233,9 @@ function readStep(dt) {
     // Punto del mundo: delante del pecho, a la altura de las manos; inclinado hacia la cara (y un vaivén al pasar la página)
     const chest = held.parent; chest.updateWorldMatrix(true, false);
     chest.getWorldPosition(_rp); _rf.set(Math.sin(heading), 0, Math.cos(heading));
-    _rp.addScaledVector(_rf, .13 * bear.scale.x / BEAR_S).y += .02;
+    _rp.addScaledVector(_rf, .17 * bear.scale.x / BEAR_S).y -= .005; // con aire para el hocico (más cerca, la nariz atravesaba el papel)
     held.position.copy(chest.worldToLocal(_rp));
-    _rq.setFromAxisAngle(_ry, heading).multiply(_rq2.setFromEuler(_re.set(-.55 + (held.userData.pasa > 0 ? Math.sin(held.userData.pasa * 6.3) * .3 : 0), 0, 0)));
+    _rq.setFromAxisAngle(_ry, heading).multiply(_rq2.setFromEuler(_re.set(-.45 + (held.userData.pasa > 0 ? Math.sin(held.userData.pasa * 6.3) * .3 : 0), 0, 0)));
     chest.getWorldQuaternion(_rq3); held.quaternion.copy(_rq3.invert().multiply(_rq));
   }
 }
@@ -1171,20 +1245,54 @@ function readEnd() {
   // Se levanta y da un paso al frente: de pie en el asiento quedaba metido en la banca
   if (esc) { const nx = pos.x + Math.sin(heading) * .3, nz = pos.z + Math.cos(heading) * .3; if (okWalk(nx, nz)) { pos.x = nx; pos.z = nz; } else { const q = puntoLibreCerca(nx, nz); if (q) { pos.x = q.x; pos.z = q.z; } } goal = null; ruta = []; }
 }
-// Plantar: toma un brote de su lado, se agacha y lo deja en la tierra frente a él; el brote crece despacio
-let plantedNow = false;
+// Plantar: toma un brote de su lado, se agacha y lo deja en la tierra bajo la pata (si ahí no se puede, frente a él); el
+// brote baja de la pata a la tierra (pasoCaida) y ahí queda plantado, sin cambiar de tamaño; después crece despacio
+let plantedNow = false, caida = null;
+const _caP = new THREE.Vector3(), _caQ = new THREE.Quaternion();
 function plantStep() {
   if (gestureT > PLANT_AT.hold[0] && gestureT < PLANT_AT.hold[1] && !held) holdObject('sprout');
   if (gestureT >= PLANT_AT.at && !plantedNow) {
-    plantedNow = true; holdObject(null);
-    planted.push({ key: 'X' + plantN++, x: pos.x + Math.sin(heading) * .17, z: pos.z + Math.cos(heading) * .17, rot: Math.random() * 6.28 });
-    if (planted.length > 6) planted.shift();
-    celdas = null; buildForest(); // el brote nuevo (y el que se fue) cambian por dónde puede andar
+    plantedNow = true;
+    let x = pos.x + Math.sin(heading) * .17, z = pos.z + Math.cos(heading) * .17;
+    if (bones.hand_R) {
+      const a = arcoDe(bones.hand_R.getWorldPosition(_caP).sub(PLANET_C).normalize());
+      if (!(Math.hypot(a.x - pos.x, a.z - pos.z) > .35 || quienBloquea(a.x, a.z) || chocaPuesto(a.x, a.z))) { x = a.x; z = a.z; }
+    }
+    const rot = Math.random() * 6.28;
+    if (held && caida === null) {
+      const s = held; held = null; scene.attach(s);
+      surf(x, z, _caP); const p1 = PLANET_C.clone().addScaledVector(_caP, PLANET_R);
+      const q1 = new THREE.Quaternion().setFromUnitVectors(_nrm, _caP).multiply(_caQ.setFromAxisAngle(_nrm, rot));
+      caida = { s, p0: s.position.clone(), q0: s.quaternion.clone(), p1, q1, k: 0, x, z, rot };
+    } else plantar(x, z, rot);
   }
+}
+function plantar(x, z, rot) {
+  const key = 'X' + plantN++;
+  planted.push({ key, x, z, rot });
+  if (planted.length > 6) planted.shift();
+  celdas = null; buildForest(); // el brote nuevo (y el que se fue) cambian por dónde puede andar
+  const o = forest && forest.children.find(c => c.userData.key === key);
+  if (o) { o.userData.grow = .95; o.scale.setScalar(o.userData.base); } // ya es del tamaño del de la mano: sin aparecer de golpe
+}
+// El brote que soltó cae de la pata a la tierra en .3 s (aunque el gesto se corte) y ahí queda plantado
+function pasoCaida(dt) {
+  if (!caida) return;
+  const c = caida; c.k = Math.min(1, c.k + dt / .3); const e = c.k * c.k;
+  c.s.position.lerpVectors(c.p0, c.p1, e); c.s.quaternion.slerpQuaternions(c.q0, c.q1, e);
+  if (c.k >= 1) { scene.remove(c.s); caida = null; plantar(c.x, c.z, c.rot); }
 }
 // Mirada: la cabeza (y un poco el cuello) siguen a una mariposa cercana, a algo del paisaje un rato o a ti
 let glance = null, glanceT = 3, glanceFor = 0, lookY = 0, lookP = 0;
 const _hp = new THREE.Vector3(), _lp = new THREE.Vector3(), _gl = new THREE.Vector3(), _qa = new THREE.Quaternion(), _qb = new THREE.Quaternion(), _qp = new THREE.Quaternion(), _au = new THREE.Vector3(), _ar = new THREE.Vector3();
+// Con pena la cabeza se ladea apenas (hasta .1 rad), alrededor del eje hacia adelante de Uku
+const _af = new THREE.Vector3();
+function ladearConPena() {
+  if (RM || penaCur < .02 || !bones.head) return;
+  const b = bones.head; _af.set(0, 0, 1).applyQuaternion(bear.quaternion);
+  b.parent.getWorldQuaternion(_qp); _qa.setFromAxisAngle(_af, .1 * penaCur);
+  b.quaternion.premultiply(_qa.premultiply(_qp.clone().invert()).multiply(_qp)); b.updateMatrixWorld(true);
+}
 function lookAround(dt) {
   if (!bones.head || !bones.neck) return;
   bones.head.getWorldPosition(_hp);
@@ -1208,19 +1316,22 @@ function lookAround(dt) {
     y = clamp(Math.atan2(_lp.x, _lp.z), -.5, .5); p = clamp(Math.atan2(_lp.y, Math.hypot(_lp.x, _lp.z)), -.22, .2); // giros suaves: nunca baja ni tuerce mucho la cabeza
   }
   lookY = lerp(lookY, y * w, Math.min(1, dt * 2.2)); lookP = lerp(lookP, p * w, Math.min(1, dt * 2.2));
-  if (Math.abs(lookY) + Math.abs(lookP) < 1e-3) return;
+  // Al hablar, la cabeza acompaña las sílabas: baja apenas la barbilla cuando la boca se abre (sobrio: ~2–5°)
+  const habla = RM || moving ? 0 : Math.max(0, mouthCur - .15) * .06;
+  ladearConPena();
+  if (Math.abs(lookY) + Math.abs(lookP) < 1e-3 && !habla) return;
   _au.set(0, 1, 0).applyQuaternion(bear.quaternion); _ar.set(1, 0, 0).applyQuaternion(bear.quaternion);
   [[bones.neck, .35], [bones.head, .65]].forEach(([b, k]) => {
     // giro en el mundo (alrededor del eje vertical y del lateral de Uku) llevado al espacio del hueso
     b.parent.getWorldQuaternion(_qp);
-    _qa.setFromAxisAngle(_au, lookY * k).multiply(_qb.setFromAxisAngle(_ar, -lookP * k));
+    _qa.setFromAxisAngle(_au, lookY * k).multiply(_qb.setFromAxisAngle(_ar, -lookP * k + (b === bones.head ? habla : 0)));
     b.quaternion.premultiply(_qa.premultiply(_qp.clone().invert()).multiply(_qp));
     b.updateMatrixWorld(true);
   });
 }
 /* Ojos y boca: piezas de la cara (rig.face). Pestañea cada pocos segundos (a veces dos seguidas), pone ojos
    contentos ^ ^ al alegrarse o cuando una mariposa se le posa, y mueve la boca al hablar. */
-let eyeKind = 'open', blinkT = 2.5, happyFor = 0, mouthCur = 0, mouthRed = 0, bocaFn = null;
+let eyeKind = 'open', blinkT = 2.5, happyFor = 0, mouthCur = 0, mouthRed = 0, bocaFn = null, penaCur = 0;
 // Quién mueve la boca mientras habla (voz.js › boca): () => { a: 0–1 abierta, r: 0–1 redonda } o null si está callado
 export function setBoca(fn) { bocaFn = typeof fn === 'function' ? fn : null; }
 function eyes(dt, t) {
@@ -1243,6 +1354,9 @@ function eyes(dt, t) {
   mouthCur = lerp(mouthCur, m, Math.min(1, dt * 22));
   mouthRed = lerp(mouthRed, v ? v.r : 0, Math.min(1, dt * 16));
   rig.face.mouth(mouthCur, mouthRed);
+  // Preocupado (worried) pone cara de pena; pensativo, un poco; contento, nada (pena y alegría no se mezclan)
+  penaCur = lerp(penaCur, happyFor > 0 ? 0 : gesture === 'worried' ? 1 : mood === 'pensativo' ? .4 : 0, Math.min(1, dt * 4));
+  if (rig.face.pena) rig.face.pena(penaCur);
 }
 
 function holdObject(kind) {
@@ -1308,7 +1422,16 @@ function measureHead() {
     }
   });
   if (isFinite(b.x0)) HEAD = { W: (b.x1 - b.x0) / 2, top: b.y1, front: b.z1 };
+  // Los lentes amarillos (el nodo 'lentes'), en el espacio del hueso de la cabeza: las gafas de sol van en su mismo plano
+  LENTES = null; const nl = rig.N('lentes'); if (!nl) return;
+  const caja = new THREE.Box3();
+  nl.traverse(m => {
+    if (!m.isMesh) return; const p = m.geometry.attributes.position;
+    for (let i = 0; i < p.count; i++) { if (m.isSkinnedMesh) m.getVertexPosition(i, v).applyMatrix4(m.matrixWorld); else v.fromBufferAttribute(p, i).applyMatrix4(m.matrixWorld); caja.expandByPoint(bones.head.worldToLocal(v)); }
+  });
+  if (!caja.isEmpty()) LENTES = { c: caja.getCenter(new THREE.Vector3()), w: caja.max.x - caja.min.x };
 }
+let LENTES = null; // { c: centro, w: ancho } de los lentes en el espacio del hueso de la cabeza
 function hatPaja() {
   const g = new THREE.Group(), straw = mat('#e9dcb2'), band = mat('#2f2f2f');
   const brim = new THREE.Mesh(new THREE.CylinderGeometry(.2, .21, .01, 32), straw);
@@ -1334,8 +1457,9 @@ function hatLana() {
 let umb = null;
 function umbrella() {
   const g = new THREE.Group(), canopy = new THREE.Group(), cloth = mat('#1b2a4e', { side: THREE.DoubleSide }), stripe = mat('#ffd200', { side: THREE.DoubleSide });
-  for (let i = 0; i < 8; i++) canopy.add(new THREE.Mesh(new THREE.ConeGeometry(.29, .11, 2, 1, true, i / 8 * Math.PI * 2, Math.PI / 4), i % 2 ? stripe : cloth));
-  const tip = new THREE.Mesh(new THREE.CylinderGeometry(.006, .006, .06, 5), mat('#2f2f2f')); tip.position.y = .08; canopy.add(tip);
+  // la tela, de .22 de radio y plana: cubre la cabeza y las orejas sin taparle la cara (la de .29 le tapaba los ojos)
+  for (let i = 0; i < 8; i++) canopy.add(new THREE.Mesh(new THREE.ConeGeometry(.22, .085, 2, 1, true, i / 8 * Math.PI * 2, Math.PI / 4), i % 2 ? stripe : cloth));
+  const tip = new THREE.Mesh(new THREE.CylinderGeometry(.006, .006, .06, 5), mat('#2f2f2f')); tip.position.y = .07; canopy.add(tip);
   const pole = new THREE.Mesh(new THREE.CylinderGeometry(.007, .007, 1, 5), mat('#2f2f2f'));
   const handle = new THREE.Mesh(new THREE.TorusGeometry(.03, .008, 6, 12, Math.PI), mat('#2f2f2f')); handle.rotation.z = Math.PI; handle.position.set(-.03, -.02, 0);
   g.add(canopy, pole, handle);
@@ -1348,7 +1472,7 @@ function placeUmbrella() {
   if (!umb || !mano || !bones.head) return;
   mano.getWorldPosition(_h); if (mano.children[0]) _h.lerp(mano.children[0].getWorldPosition(_t), .6); // centro de la pata
   _bu.set(0, 1, 0).applyQuaternion(bear.quaternion); // el «arriba» de Uku (la normal del planeta)
-  (bones.headTop || bones.head).getWorldPosition(_t); _t.addScaledVector(_bu, .06 * bear.scale.x / BEAR_S); // sobre la coronilla
+  (bones.headTop || bones.head).getWorldPosition(_t); _t.addScaledVector(_bu, .13 * bear.scale.x / BEAR_S); // sobre la coronilla, con aire: la tela no baja hasta los ojos
   // El palo va casi derecho (el «arriba» de Uku), apenas inclinado hacia la cabeza: no cruza en diagonal
   _d.subVectors(_t, _h).normalize().lerp(_bu, .8).normalize();
   const u = umb.userData;
@@ -1361,8 +1485,9 @@ function placeUmbrella() {
   u.canopy.quaternion.setFromUnitVectors(_d, _up); // la tela queda horizontal aunque el mango vaya inclinado
 }
 /* Manos ocupadas: leer y plantar piden las dos manos. Con el paraguas abierto, Uku primero lo cierra (.5 s: la tela se
-   pliega sobre el palo), lo cuelga cruzado en la espalda y baja el brazo; ahí empieza la acción. Al terminar (sin gesto
-   ni lectura) lo vuelve a tomar con la izquierda, sube el brazo y lo abre. umbT: 0 abierto … 1 cerrado. */
+   pliega sobre el palo), lo deja (apoyado al lado de la banca si va a leer en ella; si no, cruzado en la espalda) y baja
+   el brazo; ahí empieza la acción. Al terminar (sin gesto ni lectura) lo vuelve a tomar con la izquierda, sube el brazo y
+   lo abre. Los cambios de lugar se hacen en .4 s, sin saltos. umbT: 0 abierto … 1 cerrado. */
 const MANOS = { read: 1, plant: 1 };
 let umbEstado = 'abierto', umbT = 0, pendiente = null;
 const _ub = new THREE.Vector3(), _uf = new THREE.Vector3(), _ur = new THREE.Vector3(), _uq = new THREE.Quaternion(), _uI = new THREE.Quaternion();
@@ -1385,27 +1510,58 @@ function pasoParaguas(dt) {
   // la tela: abierta, horizontal; cerrada, plegada a lo largo del palo
   const c = umbT * umbT * (3 - 2 * umbT);
   u.canopy.scale.set(1 - .86 * c, 1 + .9 * c, 1 - .86 * c);
+  _upP.copy(umb.position); _upQ.copy(umb.quaternion); const largo0 = u.pole.scale.y; // lo que se ve ahora (para el cambio de lugar)
+  let lugar = 'mano', largo = u.L;
   if (enMano) {
     placeUmbrella();
     _uq.copy(u.canopy.quaternion); u.canopy.quaternion.copy(_uq.slerp(_uI, c)); // al cerrarse se alinea con el palo
+  } else if (leyendo && esc) {
+    // leyendo en la banca: cerrado y apoyado en el extremo más lejano del farol, con la punta arriba del respaldo
+    lugar = 'banca';
+    const o = placeAt(_uO, ESC_ZONA.banca[0], ESC_ZONA.banca[1], BANCA_ROT); o.scale.setScalar(BANCA_ESC); o.updateMatrixWorld(true);
+    surf(ESC_ZONA.farol[0], ESC_ZONA.farol[1], _uF).multiplyScalar(PLANET_R).add(PLANET_C);
+    const sx = o.localToWorld(_h.set(.27, .03, -.01)).distanceTo(_uF) > o.localToWorld(_t.set(-.27, .03, -.01)).distanceTo(_uF) ? 1 : -1;
+    o.localToWorld(_h.set(sx * .27, .03, -.01)); o.localToWorld(_t.set(sx * .245, .27, -.07)); // del suelo, junto a la pata, al canto del respaldo (~16°)
+    _d.subVectors(_t, _h).normalize();
+    umb.position.copy(_h); umb.quaternion.setFromUnitVectors(_up, _d); u.canopy.quaternion.identity();
   } else {
-    // en la espalda: cruzado, del lado izquierdo de la cadera al hombro derecho, sin tocar el cuerpo
+    // en la espalda (al plantar, de pie): cruzado, de la cadera izquierda al hombro derecho, sin tocar el cuerpo; con los
+    // ejes del pecho, así sigue la inclinación cuando se agacha; más corto, para que no asome sobre la cabeza
+    lugar = 'espalda';
     const chest = bones.chest || bones.neck; if (!chest) return;
     const s = bear.scale.x / BEAR_S;
-    _ub.set(0, 1, 0).applyQuaternion(bear.quaternion); _uf.set(0, 0, 1).applyQuaternion(bear.quaternion); _ur.set(1, 0, 0).applyQuaternion(bear.quaternion);
-    chest.getWorldPosition(_h); _h.addScaledVector(_uf, -.11 * s).addScaledVector(_ur, .07 * s).addScaledVector(_ub, -.13 * s);
+    chest.getWorldPosition(_h); (bones.neck || chest).getWorldPosition(_ub).sub(_h);
+    if (_ub.lengthSq() < 1e-10) _ub.set(0, 1, 0).applyQuaternion(bear.quaternion); _ub.normalize();
+    _uf.set(0, 0, 1).applyQuaternion(bear.quaternion); _uf.addScaledVector(_ub, -_uf.dot(_ub)).normalize(); _ur.crossVectors(_ub, _uf);
+    _h.addScaledVector(_uf, -.16 * s).addScaledVector(_ur, .07 * s).addScaledVector(_ub, -.13 * s);
     _d.copy(_ub).addScaledVector(_ur, -.55).normalize();
-    umb.position.copy(_h); umb.quaternion.setFromUnitVectors(_up, _d);
-    u.pole.scale.y = u.L; u.pole.position.y = u.L / 2; u.canopy.position.y = u.L; u.canopy.quaternion.identity();
+    umb.position.copy(_h); umb.quaternion.setFromUnitVectors(_up, _d); u.canopy.quaternion.identity();
+    largo = u.L * .75;
   }
+  // Al cambiar de lugar (mano, banca, espalda) no salta: va del de antes al nuevo en .4 s
+  if (u.lugar && lugar !== u.lugar) u.desde = { p: _upP.clone(), q: _upQ.clone(), L: largo0, k: 0, arco: u.lugar !== 'banca' && lugar !== 'banca' };
+  u.lugar = lugar;
+  if (u.desde && u.desde.k < 1) {
+    const D = u.desde; D.k = Math.min(1, D.k + dt / .4); const e = D.k * D.k * (3 - 2 * D.k);
+    _upP.copy(umb.position); _upQ.copy(umb.quaternion);
+    umb.position.lerpVectors(D.p, _upP, e); umb.quaternion.slerpQuaternions(D.q, _upQ, e); largo = D.L + (largo - D.L) * e;
+    // de la mano a la espalda (y de vuelta) da un rodeo por su costado izquierdo: en línea recta pasaría por dentro del cuerpo
+    if (D.arco) umb.position.addScaledVector(_t.set(1, 0, 0).applyQuaternion(bear.quaternion), .08 * bear.scale.x / BEAR_S * Math.sin(Math.PI * e));
+  }
+  if (lugar !== 'mano' || largo !== u.L) { u.pole.scale.y = largo; u.pole.position.y = largo / 2; u.canopy.position.y = largo; }
 }
+const _upP = new THREE.Vector3(), _upQ = new THREE.Quaternion(), _uO = new THREE.Object3D(), _uF = new THREE.Vector3();
 function shades() {
   const g = new THREE.Group(), lens = mat('#1e2126', { flatShading: false }), frame = mat('#111111');
   [-1, 1].forEach(s => {
     const l = new THREE.Mesh(new THREE.CircleGeometry(.034, 20), lens); l.position.set(s * .047, 0, 0); l.rotation.y = s * .18; g.add(l);
+    // patillas: del borde de afuera de cada cristal hacia atrás y un poco hacia afuera, hasta las orejas
+    const p = new THREE.Mesh(new THREE.BoxGeometry(.006, .006, .16), frame); p.position.set(s * .09, .004, -.079); p.rotation.y = -s * .12; g.add(p);
   });
   const bridge = new THREE.Mesh(new THREE.BoxGeometry(.028, .006, .004), frame); g.add(bridge);
-  const { W, top, front } = HEAD; g.scale.setScalar(6.8 * W); g.position.set(0, top - .89 * W, front - .12 * W);
+  // En el plano de los lentes amarillos (que se guardan), apenas delante: tapan los ojos, no flotan en la punta del hocico
+  if (LENTES) { g.scale.setScalar(LENTES.w / .162); g.position.copy(LENTES.c); g.position.z += LENTES.w * .02; } // .162: ancho del par de cristales
+  else { const { W, top, front } = HEAD; g.scale.setScalar(6.8 * W); g.position.set(0, top - .89 * W, front - .12 * W); }
   return g;
 }
 // Guayabera: el suéter se repinta en lino claro (en el clásico, su textura; en el de respaldo, los
@@ -1488,15 +1644,24 @@ function dressBear() {
   guayabera(look.shirt === 'guayabera');
   const lentes = rig.N('lentes'); if (lentes) lentes.visible = !look.shades; // con gafas de sol se guarda los lentes
 }
+/* Lluvia: 220 gotas planas (rayitas de 6 mm × 9 cm, de un tono más oscuro que el suelo y el cielo de lluvia: las líneas de
+   1 px no se veían) que caen hasta el suelo de la esfera y vuelven a nacer arriba; cada gota mira a la cámara */
+const _gota = new THREE.Object3D();
 function buildRain() {
-  const n = 220, pos = new Float32Array(n * 6), r = rng(71);
-  for (let i = 0; i < n; i++) {
-    const x = (r() - .5) * 5, y = r() * 2.6, z = -r() * 3 + .8;
-    pos.set([x, y, z, x - .01, y - .07, z], i * 6);
-  }
-  const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
-  rain = new THREE.LineSegments(geo, new THREE.LineBasicMaterial({ color: '#9fb3c8', transparent: true, opacity: .55 }));
+  const n = 220, P = new Float32Array(n * 3), r = rng(71);
+  for (let i = 0; i < n; i++) { const x = (r() - .5) * 5, z = -2.2 + r() * 3; P.set([x, groundY(x, z) + r() * 2.6, z], i * 3); }
+  rain = new THREE.InstancedMesh(new THREE.PlaneGeometry(.006, .09), new THREE.MeshBasicMaterial({ color: '#7f93ad', transparent: true, opacity: .8, depthWrite: false, side: THREE.DoubleSide }), n);
+  rain.frustumCulled = false; rain.userData.P = P;
+  ponerGotas();
   rain.visible = false; scene.add(rain);
+}
+function ponerGotas() {
+  const P = rain.userData.P, cam = camera.position;
+  for (let i = 0; i < P.length / 3; i++) {
+    const x = P[i * 3], y = P[i * 3 + 1], z = P[i * 3 + 2];
+    _gota.position.set(x, y, z); _gota.rotation.set(0, Math.atan2(cam.x - x, cam.z - z), 0); _gota.updateMatrix(); rain.setMatrixAt(i, _gota.matrix);
+  }
+  rain.instanceMatrix.needsUpdate = true;
 }
 export function setLook(l) {
   const region = look.region;
@@ -1505,6 +1670,15 @@ export function setLook(l) {
   dressBear();
   if (rain) rain.visible = !!look.rain;
   if (region !== look.region) repaint();
+}
+// El tinte del entorno: { luz, niebla, cerca, lejos } (colores CSS y metros) o null para volver al de siempre
+export function setTinte(t) {
+  t = t || {};
+  tinte.luzTo.set(t.luz || '#fff'); tinte.niebla = t.niebla ? new THREE.Color(t.niebla) : null;
+  tinte.cerca = t.cerca || FOG_NEAR; tinte.lejos = t.lejos || 9.5;
+  if (!scene) { tinte.luz.copy(tinte.luzTo); return; }
+  bgCol.set(tinte.niebla || palette().bg);
+  if (!fogEsp) scene.fog.color.copy(bgCol);
 }
 
 /* ---------- Bucle ---------- */
@@ -1526,12 +1700,16 @@ function frame(now) {
     if (s2 !== score) { score = s2; buildForest(); }
   }
   moodTint.lerp(MOOD_TINT[mood] || WHITE, Math.min(1, dt * 2));
-  if (ambLight) ambLight.color.copy(AMB).multiply(moodTint);
+  tinte.luz.lerp(tinte.luzTo, Math.min(1, dt * 1.5)); // el tinte del entorno entra despacio
+  if (ambLight) ambLight.color.copy(AMB).multiply(moodTint).multiply(tinte.luz);
+  if (solMundo) solMundo.color.copy(SOL).multiply(tinte.luz);
   if (bear) {
     if (bear.userData.grow < 1) { bear.userData.grow = Math.min(1, bear.userData.grow + dt * 1.2); bear.scale.setScalar(Math.max(.001, BEAR_S * (1 - Math.pow(1 - bear.userData.grow, 3)))); }
     brain(dt);
     const c = clipFor();
     rig.playClip(c[0], .8, { speed: c[1], calm: c[2], keep: c[4] });
+    // Plantar en cuclillas (la clip es de rodillas): baja al empezar y se levanta antes de terminar
+    if (rig.agacharse) rig.agacharse(gesture === 'plant' && !focus && gestureT > .15 && gestureT < GEST.plant[3] - .9);
     rig.update(dt);
     // Los pies siempre en el suelo (el rig apoya el pie más bajo); quieto, se mece apenas.
     // Sobre la esfera su eje vertical es la normal del planeta
@@ -1547,6 +1725,7 @@ function frame(now) {
     if (espejo.on) espejoPaso(dt); else lookAround(dt);
     eyes(dt, t);
     if (umb) pasoParaguas(dt);
+    pasoCaida(dt);
   }
   if (forest) forest.children.slice().forEach(o => {
     const u = o.userData;
@@ -1575,13 +1754,9 @@ function frame(now) {
     a.needsUpdate = true;
   }
   if (rain && rain.visible && !RM) {
-    const a = rain.geometry.attributes.position;
-    for (let i = 0; i < a.count; i += 2) {
-      let y = a.getY(i) - dt * 2.4;
-      if (y < 0) y += 2.6;
-      a.setY(i, y); a.setY(i + 1, y - .07);
-    }
-    a.needsUpdate = true;
+    const P = rain.userData.P;
+    for (let i = 0; i < P.length; i += 3) { let y = P[i + 1] - dt * 2.4; if (y < groundY(P[i], P[i + 2])) y += 2.6; P[i + 1] = y; }
+    ponerGotas();
   }
   // Giro: el dedo manda (con un pequeño rebote en los topes); a los 3 s vuelve de frente.
   // Con un mensaje o conversando, siempre de frente; en libertad la cámara orbita despacio alrededor de él
@@ -1638,7 +1813,7 @@ function frame(now) {
     // El globo entero: pajaro.q es el marco del punto mirado (Y = su normal). Siguiendo a Uku, el marco va hacia el suyo;
     // soltado el dedo, sigue girando un poco por inercia
     if (pajaro.seguir) { marcoDeUku(_qU); pajaro.q.slerp(_qU, RM ? 1 : Math.min(1, dt * 2)); }
-    else if (pajaro.w.lengthSq() > 4e-4) inercia(dt);
+    else if (pajaro.w.lengthSq() > 3.6e-5) inercia(dt); // (.006)²
     pajaro.zoom = RM ? pajaro.zoomA : Math.exp(lerp(Math.log(pajaro.zoom), Math.log(pajaro.zoomA), Math.min(1, dt * 9)));
     const z = pajaro.zoom;
     // Cuanto más lejos, más desde arriba (de cerca se ve en perspectiva; de lejos, el planeta entero centrado).
@@ -1659,8 +1834,9 @@ function frame(now) {
     if (scene.fog) { scene.fog.color.copy(bgCol).lerp(_colEsp, esp * camAmt.pajaro); fogEsp = true; }
   } else if (fogEsp && scene.fog) { scene.fog.color.copy(bgCol); fogEsp = false; }
   // Desde lejos la niebla se abre: así, alejando del todo, se ve el claro entero y el planeta redondo (como en Tolan)
-  if (scene.fog) { const lejos = camAmt.pajaro * Math.max(0, pajaro.zoom - 1) * 6; scene.fog.near = FOG_NEAR + lejos; scene.fog.far = 9.5 + lejos * 3; }
+  if (scene.fog) { const lejos = camAmt.pajaro * Math.max(0, pajaro.zoom - 1) * 6; scene.fog.near = tinte.cerca + lejos; scene.fog.far = tinte.lejos + lejos * 3; }
   if (dust) dust.material.opacity = DUST_OP * (1 - esp * camAmt.pajaro); // desde el espacio el polvo del claro no asoma fuera del limbo
+  { const o = .9 * esp * camAmt.pajaro; estrellas.forEach(s => { s.material.opacity = o; s.visible = o > .01; }); } // y aparecen las estrellas
   camera.position.copy(_cp);
   camera.up.copy(camAmt.pajaro > .001 ? _upCam : _UP0); // de pájaro, «arriba» es la normal del punto mirado
   camera.lookAt(_cl);
@@ -1786,7 +1962,7 @@ let camModo = 'libre', terceraYaw = 0;
 /* Vista de pájaro = el planeta entero se gira con el dedo (como en Tolan). pajaro.q lleva el marco del claro (Y = normal
    del polo, +Z hacia la cámara, +X derecha) al marco del punto mirado: q·(0,1,0) es su normal, q·(0,0,1) «atrás» y
    q·(1,0,0) «derecha»; q = identidad mira al centro del claro (la misma imagen de siempre). Es la construcción de placeAt.
-   zoom es el valor animado que usa la cámara y zoomA el que piden la rueda, el pellizco y 📍; ambos en [.4, 7.5].
+   zoom es el valor animado que usa la cámara y zoomA el que piden la rueda, el pellizco y 📍; ambos en [.75, 7.5].
    w es la velocidad angular de la inercia (rad/s, vector mundial) y tUlt el performance.now() del último pointermove. */
 const camAmt = { tercera: 0, pajaro: 0 }, pajaro = { q: new THREE.Quaternion(), zoom: 1, zoomA: 1, seguir: true, w: new THREE.Vector3(), tUlt: 0 };
 const _cp = new THREE.Vector3(), _cl = new THREE.Vector3(), _tp = new THREE.Vector3(), _tl = new THREE.Vector3(), _ep = new THREE.Vector3();
@@ -1815,7 +1991,8 @@ export function girarVista(ax, ay) {
 // Mover la vista de pájaro (en metros de arco, en el sentido de siempre, ya sin recortes: se llega a toda la esfera) y
 // hacer zoom (factor); en la vista libre el zoom es el de siempre
 export function moverVista(dx, dz) { girarVista(-dx / PLANET_R, dz / PLANET_R); }
-export function zoomVista(f) { if (camModo === 'pajaro') pajaro.zoomA = clamp(pajaro.zoomA * f, .4, 7.5); else setZoom(zoomTo * f); }
+// De pájaro, el zoom mínimo es .75: más cerca la cámara le cortaba la cabeza a Uku y el globo de texto le tapaba el cuerpo
+export function zoomVista(f) { if (camModo === 'pajaro') pajaro.zoomA = clamp(pajaro.zoomA * f, .75, 7.5); else setZoom(zoomTo * f); }
 export function zoomPajaro() { return pajaro.zoom; }
 export function enElEspacio() { return camModo === 'pajaro' && pajaro.zoom > 2.5; }
 // Trackball exacto para el punto central, sin ladeo: el planeta tiene que llevar la normal a (la que estaba bajo el dedo)
@@ -1827,13 +2004,13 @@ function girarHacia(a, b) {
   _upN.copy(_upL).applyQuaternion(_qm);
   pajaro.q.premultiply(_qd.setFromUnitVectors(_upL, _upN)).normalize();
 }
-// Inercia: el globo sigue girando alrededor del eje w y se frena (τ = .35 s)
+// Inercia: el globo sigue girando alrededor del eje w y se frena (τ = .35 s) hasta casi quieto (.006 rad/s): sin tirón al final
 function inercia(dt) {
   const v = pajaro.w.length();
   _upL.set(0, 1, 0).applyQuaternion(pajaro.q);
   _upN.copy(_upL).applyQuaternion(_qd.setFromAxisAngle(_ax.copy(pajaro.w).divideScalar(v), v * dt));
   pajaro.q.premultiply(_qd.setFromUnitVectors(_upL, _upN)).normalize();
-  pajaro.w.multiplyScalar(Math.exp(-dt / .35)); if (pajaro.w.length() < .02) pajaro.w.set(0, 0, 0);
+  pajaro.w.multiplyScalar(Math.exp(-dt / .35)); if (pajaro.w.length() < .006) pajaro.w.set(0, 0, 0);
 }
 // Normal de la esfera bajo un píxel (null fuera del limbo)
 function normalBajo(cx, cy, out) {
@@ -1883,14 +2060,14 @@ function init() {
   scene = new THREE.Scene();
   const pal = palette();
   scene.background = null; // transparente: la máscara del contenedor funde la escena con la página
-  bgCol.set(pal.bg); scene.fog = new THREE.Fog(pal.bg, FOG_NEAR, 9.5); // el fondo del claro se aclara con la distancia, como en una ilustración
+  bgCol.set(tinte.niebla || pal.bg); scene.fog = new THREE.Fog(bgCol.clone(), tinte.cerca, tinte.lejos); // el fondo del claro se aclara con la distancia, como en una ilustración
   camera = new THREE.PerspectiveCamera(30, 1, .05, 90); // lejos: el planeta entero desde el espacio
   camera.position.set(0, .75, 2.6);
   // Ilustración vectorial: luz ambiente y un sol de dos tonos (ver toon)
   ambLight = new THREE.AmbientLight(AMB, Math.PI); scene.add(ambLight);
   solMundo = new THREE.DirectionalLight(SOL, Math.PI); scene.add(solMundo);
   LAMB = toon({ vertexColors: true });
-  smokeM = new THREE.MeshBasicMaterial({ color: pal.dust, transparent: true, opacity: .85 });
+  smokeM = new THREE.MeshBasicMaterial({ color: pal.espuma, transparent: true, opacity: .85 }); // el humo, del tono de la espuma (de noche no es blanco puro)
   ground = new THREE.Mesh(new THREE.SphereGeometry(PLANET_R, 128, 96), toon({ color: pal.ground }));
   ground.position.copy(PLANET_C); scene.add(ground);
   // Uku y lo que lleva van en su escena, con la misma luz de dos tonos que el mundo
@@ -1991,6 +2168,7 @@ function init() {
   buildGarden(pal);
   buildForest();
   buildDust();
+  buildEstrellas();
   buildRain();
   buildFlies();
   buildPetals();
@@ -1999,8 +2177,8 @@ function init() {
 }
 // Tema o región nuevos: se repinta todo con la paleta que toca
 function repaint() {
-  const p = palette(); bgCol.set(p.bg); scene.fog.color.set(p.bg); fogEsp = false; ground.material.color.set(p.ground);
-  if (wingM) wingM.color.set(p.flower); if (petals) petals.material.color.set(p.flower); if (smokeM) smokeM.color.set(p.dust);
+  const p = palette(); bgCol.set(tinte.niebla || p.bg); scene.fog.color.copy(bgCol); fogEsp = false; ground.material.color.set(p.ground);
+  if (wingM) wingM.color.set(p.flower); if (petals) petals.material.color.set(p.flower); if (smokeM) smokeM.color.set(p.espuma);
   buildForest(true);
 }
 
@@ -2043,7 +2221,7 @@ const frameHooks = [];
 export function enCuadro(fn) { frameHooks.push(fn); }
 // El material plano de dos tonos, para lo que se agrega al mundo desde afuera (efectos3d)
 export function materialPlano(o) { return toon(o); }
-export function mundo3d() { return { THREE, scene, camera, get uku() { return bear; }, get rig() { return rig; }, get estado() { return { pos, heading, speed, moving, gesture, giroV, clip: clipFor()[0], paraguas: umbEstado, leyendo }; }, groundY, PLANET_C, PLANET_R, get renderer() { return renderer; }, get planeta() { return PLANETA_PUNTOS; }, get garden() { return garden; }, get pajaro() { return pajaro; }, decoEsc, okWalk: (x, z) => okWalk(x, z), camTapada: () => camera ? camTapada(camera.position.x, camera.position.y, camera.position.z) : false, get ocultacion() { return { ocT, ocl, ocYaw, ocYawTo, velados: velados.size }; } }; }
+export function mundo3d() { return { THREE, scene, camera, get uku() { return bear; }, get rig() { return rig; }, get estado() { return { pos, heading, speed, moving, gesture, giroV, clip: clipFor()[0], paraguas: umbEstado, leyendo }; }, groundY, PLANET_C, PLANET_R, get renderer() { return renderer; }, get planeta() { return PLANETA_PUNTOS; }, get garden() { return garden; }, get pajaro() { return pajaro; }, get look() { return Object.assign({}, look); }, get lluvia() { return rain; }, tinte, decoEsc, okWalk: (x, z) => okWalk(x, z), camTapada: () => camera ? camTapada(camera.position.x, camera.position.y, camera.position.z) : false, get ocultacion() { return { ocT, ocl, ocYaw, ocYawTo, velados: velados.size }; } }; }
 export function setScore(s) { if (!bear && target != null) { target = s; return; } if (s !== score) { score = s; if (renderer) buildForest(); } }
 export function setBloom(b) { b = b == null ? null : Math.max(0, Math.min(100, b)); if (b !== bloom) { bloom = b; if (renderer) buildForest(); } }
 /* Lo que hay en el claro: { brotes, flores, guayacanes: 0–4, casa, mariposas, escenario }.
@@ -2108,7 +2286,7 @@ export function setFocus(on) {
   // Conversando no pasea: se queda contigo. Al volver a su mundo retoma lo que hacía.
   if (focus) { ambFocus = ambient; ambient = null; } else ambient = ambFocus;
   [forest, garden, ground, dust, rain, umb, fliesG].forEach(o => { if (o) o.visible = focus ? false : (o === rain ? !!look.rain : true); });
-  if (scene) scene.fog.near = focus ? 1e4 : FOG_NEAR;
+  if (scene) scene.fog.near = focus ? 1e4 : tinte.cerca;
 }
 export function snapshot() {
   if (!renderer || !scene) return null;
@@ -2125,16 +2303,34 @@ export function setZoom(z, instant) { zoomTo = Math.max(.8, Math.min(1.8, +z || 
 export function setFront(on) { front = !!on; }
 // Dónde está su cara en pantalla (px del contenedor): centro, radio aproximado y el encuadre actual.
 // Con esto, la app calcula un corrimiento para que nada le tape la cara.
-const _h1 = new THREE.Vector3(), _h2 = new THREE.Vector3(), _camUp = new THREE.Vector3();
+const _h1 = new THREE.Vector3(), _h2 = new THREE.Vector3(), _camUp = new THREE.Vector3(), _hm = new THREE.Vector3(), _hl = new THREE.Vector3();
 export function head() {
   if (!bear || !bones.head || !host || !camera) return null;
   const w = host.clientWidth, h = host.clientHeight; if (!w || !h) return null;
   bones.head.getWorldPosition(_h1);
   const top = bones.headTop; if (top) top.getWorldPosition(_h2); else _h2.copy(_h1).add(_camUp.set(0, 1, 0).multiplyScalar(.2 * BEAR_S));
-  _h1.project(camera); _h2.project(camera);
+  // De arriba (pájaro) o mirando a la cámara, cuello–coronilla se ve corto: el radio es también el de ese largo puesto de lado
+  _hm.addVectors(_h1, _h2).multiplyScalar(.5); _hl.setFromMatrixColumn(camera.matrixWorld, 0).normalize().multiplyScalar(_h1.distanceTo(_h2) * .5).add(_hm);
+  _h1.project(camera); _h2.project(camera); _hm.project(camera); _hl.project(camera);
   const x1 = (_h1.x + 1) / 2 * w, y1 = (1 - _h1.y) / 2 * h, x2 = (_h2.x + 1) / 2 * w, y2 = (1 - _h2.y) / 2 * h;
-  const r = Math.hypot(x2 - x1, y2 - y1) * .62; // la mitad de cuello a coronilla, con margen para las orejas
-  return { x: (x1 + x2) / 2, y: (y1 + y2) / 2, r, shiftX: shiftCur.x, shiftY: shiftCur.y, zoom: zoomCur, shiftToX: shiftTo.x, shiftToY: shiftTo.y, zoomTo };
+  const rLado = Math.hypot((_hl.x - _hm.x) / 2 * w, (_hl.y - _hm.y) / 2 * h) * 1.24;
+  const r = Math.max(Math.hypot(x2 - x1, y2 - y1) * .62, rLado); // la mitad de cuello a coronilla, con margen para las orejas
+  const cy = (y1 + y2) / 2;
+  // arriba: lo más alto de la cabeza en pantalla con lo que lleva encima (sombrero, paraguas), para poner el globo sobre
+  // ella; se calcula solo si se pide
+  return { x: (x1 + x2) / 2, y: cy, r, get arriba() { return arribaDe(cy - r, h); }, shiftX: shiftCur.x, shiftY: shiftCur.y, zoom: zoomCur, shiftToX: shiftTo.x, shiftToY: shiftTo.y, zoomTo };
+}
+// Vértice a vértice (son pocos: sombrero, gafas, paraguas), el más alto en pantalla; tope es el de la cabeza sola
+function arribaDe(tope, h) {
+  for (const o of [acc, umb]) {
+    if (!o || !o.visible) continue;
+    o.traverse(m => {
+      if (!m.isMesh || !m.visible) return;
+      const p = m.geometry.attributes.position;
+      for (let i = 0; i < p.count; i++) { _hm.fromBufferAttribute(p, i).applyMatrix4(m.matrixWorld).project(camera); tope = Math.min(tope, (1 - _hm.y) / 2 * h); }
+    });
+  }
+  return tope;
 }
 export function setMood(m) { mood = ['feliz', 'tranquilo', 'pensativo'].includes(m) ? m : null; }
 export function isReady() { return !!bear; }

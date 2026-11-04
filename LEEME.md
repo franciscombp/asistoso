@@ -185,11 +185,11 @@ El mundo de Uku es un paisaje fijo (`escena.js › MUNDO`, que se pasa a `assets
 
 | Qué hay | Dónde |
 | --- | --- |
-| Su **casa** con chimenea (un montículo con puerta redonda) | A la izquierda, al fondo |
+| Su **casa** con chimenea (un montículo con puerta redonda), con el buzón junto a la puerta y la leña al lado | Detrás del claro, entre el letrero y el guayacán de la derecha |
 | El **lago**, con muelle, nenúfares, juncos y dos **patos** que nadan | A la derecha |
 | **Flores** amarillas en los dos canteros | Delante de Uku |
 | **Guayacanes** en flor | Repartidos por el claro |
-| 24 **árboles** del bosque nublado | Al fondo |
+| Unos pocos **árboles** del bosque nublado | Al fondo, asomando tras el horizonte (como en Tolan) |
 | Una **tortuga** de Galápagos | En la orilla del lago |
 | Farol, banca, cerca, huerto, buzón, hongos y leña, y el **cartel de días sin accidentes** | Alrededor |
 
@@ -242,8 +242,25 @@ si no hay WebGL.
   El esqueleto (Mixamo) es el mismo: no se puede re-riggear sin Blender.
 - **Texturas horneadas** (`tools/uku-hornea.py`, ver «Aspecto de Uku» abajo) en `assets/oso/tex/`;
   las originales del archivo quedan en `assets/oso/tex-original/` solo como fuente del horneado.
-- **Plantar**: solo los brazos hacen el gesto completo; el resto del cuerpo se queda a medio camino, y
-  además ninguna parte del cuerpo (salvo las manos) puede quedar bajo el suelo.
+- **Plantar en cuclillas** (`uku-rig.js › agacharse`, `pose.cuc`): la clip es de alguien de rodillas, así que
+  el cuerpo no la sigue (calma 1): cadera, piernas y columna parten del reposo, las rodillas van adelante,
+  la espalda se inclina ~45° y los brazos (que sí siguen la clip) apuntan estirados a la tierra, delante
+  de los pies: la pata baja al ~13 % de su altura (antes 47 %), con los pies apoyados y la cabeza sobre
+  el 35 %. La cabeza no cuelga con la espalda: mira a la tierra delante de las patas, a lo más
+  `pose.cuc.mira` (0,5 rad) bajo la horizontal; así, desde la cámara de frente, el sombrero no le tapa la
+  cara (antes la cara quedaba a ~80° y se veía solo la copa). Al plantar, el brote **baja de la pata a la tierra** (0,3 s) justo debajo de ella (si ahí no
+  se puede, frente a él) y queda del mismo tamaño, sin aparecer de golpe (`bosque3d.js › plantStep`,
+  `pasoCaida`). El gesto dura 5,4 s: planta a los 3,4 y se levanta. Ninguna parte del cuerpo (salvo las
+  manos) puede quedar bajo el suelo.
+- **Caminar parejo**: la clip Walking cojeaba (la zancada izquierda era un cuarto de la derecha). Al cargar,
+  pierna y brazo izquierdos se rehacen en espejo de los derechos, con media vuelta de desfase
+  (`ukuFrom`): los dos pasos miden lo mismo (0,74 y 0,73) y a 0,45 de velocidad de clip el pie apoyado
+  casi no desliza. La clip sigue a la velocidad al frenar y, manejándolo, hasta 1,7 veces.
+- **Respira** en reposo (la columna se abre y se cierra cada 3,8 s; piernas y cadera quietas) y al hablar
+  **la cabeza acompaña las sílabas**: baja apenas la barbilla cuando la boca se abre (~2–3°).
+- **Preocupado** (`worried`: errores, sorpresa, nieve, guiado trabado) ya no es igual a asentir: más lento
+  y más chico, con **cara de pena** (el shader baja los párpados hacia afuera y aplana la sonrisa,
+  `face.pena`) y la cabeza apenas ladeada. Pensativo pone un poco de pena; contento, nada.
 - Para volver atrás: `?oso=clasico` (modelo original, con su cara pintada); también con
   `localStorage` `uku_oso`.
 
@@ -253,14 +270,19 @@ si no hay WebGL.
   queda a menos de 1 mm; caminando y plantando, a menos de 1 cm). Ya no se mece girando el cuerpo
   entero (giraba los pies apoyados) y la sombra de contacto vuelve a ser una elipse plana visible.
 - **Giros con pasitos**: si gira en el sitio (más de 0,3 rad/s sin avanzar), usa la clip de caminar
-  corta y lenta, así mueve las patas en vez de deslizarse.
+  corta (calma .65) y lenta, así mueve las patas en vez de deslizarse.
 - **Paraguas en la mano izquierda**: la derecha queda libre para saludar y para lo demás que sostiene.
   El brazo izquierdo lo sostiene con el codo doblado (`uku-rig.js › sostener`) y el paraguas es rígido:
-  su largo se mide una vez con el brazo en su pose y no se estira al caminar ni al saludar.
+  su largo se mide una vez con el brazo en su pose y no se estira al caminar ni al saludar. La tela
+  (radio .22, plana) queda 13 cm sobre la coronilla: cubre cabeza y orejas sin taparle la cara
+  (diámetro ≈ 0,84 de su altura).
 - **Manos ocupadas**: leer y plantar piden las dos manos. Si tiene el paraguas abierto, primero lo
-  cierra (la tela se pliega sobre el palo), lo cuelga cruzado en la espalda y baja el brazo; ahí empieza
-  la acción. Al terminar lo vuelve a tomar con la izquierda, sube el brazo y lo abre
-  (`bosque3d.js › pasoParaguas`). Saludar no lo guarda: usa la otra mano.
+  cierra (la tela se pliega sobre el palo) y lo deja: para leer en la banca, **apoyado cerrado en el
+  extremo de la banca más lejano del farol** (~17°, sin tocar la banca ni a Uku); para plantar, cruzado
+  en la espalda, más corto y con los ejes del pecho (sigue la inclinación al agacharse). Ahí empieza la
+  acción. Al terminar lo vuelve a tomar con la izquierda, sube el brazo y lo abre
+  (`bosque3d.js › pasoParaguas`). Cada cambio de lugar se hace en 0,4 s, sin saltos (de la mano a la
+  espalda, por el costado). Saludar no lo guarda: usa la otra mano.
 
 ## Los pesos de Uku (v3)
 
@@ -329,8 +351,10 @@ Más sobrio y menos infantil, con la referencia del juego de «Her»:
   y polvo (con escenario; sin él, el suelo es claro).
 - **Banca de parque** (dos listones de asiento, respaldo y patas de hierro azul marino). Cuando Uku llega
   paseando a la banca, la mitad de las veces **se sienta a leer «El Claro»** 16 s: pose sentada del rig
-  (muslos adelante, pantorrillas abajo, codos doblados, cabeza baja), el periódico delante del pecho y
-  pasa la página cada 3,5 s; luego se levanta y sigue. `Mimo.escena.mundo().play('read')` lo fuerza.
+  (muslos adelante, pantorrillas abajo, codos doblados, cabeza baja), el periódico delante del pecho
+  (con aire para el hocico: la nariz queda sobre el borde de arriba, sin atravesarlo, y «EL CLARO» se
+  lee entero) y pasa la página cada 3,5 s; luego se levanta y sigue. Sentado no respira (la pose parte
+  del reposo). `Mimo.escena.mundo().play('read')` lo fuerza.
 - **Sin marca**: no hay logo en la barra ni en el inicio y el icono es un Uku de línea (`icono.svg`).
 
 ## Cámaras: control en tercera persona, vista de pájaro y espejo
@@ -345,9 +369,12 @@ Tres botones arriba (o sus teclas) cambian cómo se ve y se usa el claro:
   Tolan. Arrastrar con el mouse o el dedo hace rodar el globo (lo que estaba bajo el dedo sigue bajo
   el dedo, sin ladearse en cada arrastre; en bucles largos puede quedar un poco girado y 📍 lo
   endereza) y se puede dar la vuelta completa, hasta la nieve del polo sur; al soltar en
-  movimiento sigue un poco por **inercia** y se frena solo. Se acerca o aleja con la **rueda** o el
-  **pellizco** (el pellizco también arrastra con el punto medio), de forma continua: más allá de 2,5 de
-  zoom la cámara se va al **espacio** (cielo de noche, niebla azul) y orbita el planeta desde el mismo
+  movimiento sigue un poco por **inercia** y se frena solo, de forma continua hasta casi quieto (corta en
+  0,006 rad/s: sin tirón al final). Se acerca o aleja con la **rueda** o el
+  **pellizco** (el pellizco también arrastra con el punto medio), de forma continua, entre 0,75 (Uku
+  entero desde arriba: más cerca le cortaba la cabeza) y 7,5: más allá de 2,5 de
+  zoom la cámara se va al **espacio** (cielo de noche, niebla azul y un campo de **estrellas** planas,
+  casi blancas y algunas amarillas, que giran con el globo) y orbita el planeta desde el mismo
   lado que se estaba mirando; de vuelta, se cae sobre ese mismo sitio. Un **toque en el planeta desde
   el espacio** vuelve a Uku (salvo decorando). **Uku sigue en sus cosas** mientras tanto (pasea, lee,
   mira mariposas) y la vista lo sigue hasta que arrastres; el botón **📍** gira el globo hasta él y
@@ -440,7 +467,7 @@ parche.
 
 El claro tiene **corredores** (`assets/bosque3d.js › SENDEROS`) que salen de la plazuela entre
 los canteros y unen todos los lugares: la puerta de la casa, la orilla del lago, la cascada (por
-detrás del lago), la banca con el farol, el letrero del bosque (desde la casa, junto a la leña) y
+detrás del lago), la banca con el farol, el letrero del bosque (pasando junto a la leña) y
 el puente sobre el arroyo.
 
 - Son **corredores siempre libres**: nada se pone encima (la tortuga, las hojas grandes y las
@@ -473,8 +500,13 @@ el puente sobre el arroyo.
 - **No atraviesa nada**: antes de salir a un sitio planea el camino sobre una rejilla del claro (5 cm,
   búsqueda en anchura) y lo estira en tramos rectos; si el tramo directo está libre va derecho. Primero
   se orienta y luego camina, y si un paso cae sobre algo (el lago, la casa, la banca…) se detiene y
-  vuelve a planear (hasta tres veces). Solo bloquean el paso las cosas que están puestas de verdad (la
-  casa y los guayacanes que hay, no todos los huecos posibles). Para probar:
+  vuelve a planear (hasta tres veces). Si el tramo hasta la meta está libre sigue igual: el paso solo rozó
+  la punta de un margen entre dos muestras del plan (la esquina del cantero izquierdo donde dobla el
+  sendero de la banca, donde antes se trababa replaneando el mismo tramo); y si al frenar quedó dentro de
+  un margen, sale por el camino planeado. Solo bloquean el paso las cosas que están puestas de verdad (la
+  casa y los guayacanes que hay, no todos los huecos posibles). La casa tiene su **huella** (`CASA_PIE`:
+  el montículo más el cuerpo de Uku) y se mira antes que los senderos: el de la puerta termina justo
+  afuera (`destino('casa')` = (0,02, −0,76)) y Uku no se mete en el montículo. Para probar:
   `Mimo.escena.mundo().caminarA(x, z)` y `dondeEsta()`.
 - **Visita lugares**: dos de cada tres paseos van a un sitio concreto (la orilla del lago por tres
   lados, la banca, el huerto, el farol, el letrero, la cascada, el puente, los hongos, el buzón, la leña,
@@ -496,10 +528,14 @@ Uku vive en el bosque nublado, así que con escenario no hay pinos:
   en la horqueta; entre ellos, **helechos arbóreos** (roseta de nueve frondas sobre un tronco).
 - **Heliconias** (tallo, dos hojas y brácteas amarillas en zigzag) y **hojas grandes** a ras de suelo
   repartidas por el claro.
-- **Cascada** al fondo del lago: pared de roca en dos peldaños, el agua cae ancha y blanca, espuma
-  abajo, musgo y helechos en la roca y una **neblina** que sube (cuatro motas suaves que respiran).
-- Del lago sale un **arroyo** hacia el frente y lo cruza un **puentecito de tablas con barandas de
-  cuerda**, como los de Mindo.
+- **Cascada** al fondo del lago: pared de roca en dos peldaños, el agua cae ancha (ocho **hilos blancos
+  cortos bajan** por la columna, desfasados), espuma abajo, musgo y helechos en la roca y una
+  **neblina** que sube (cuatro motas suaves que respiran).
+- En el **lago** tres **ondas** nacen en el centro, se abren y se desvanecen; los nenúfares están fuera de
+  las vueltas de los patos (ningún pato pasa por encima). Con movimiento reducido, todo quieto.
+- Del lago sale un **arroyo** hacia el frente: una cinta que sigue la curva del suelo (sin canto, nada
+  crece en el agua) y se afina aguas abajo; lo **cruza de través** un **puentecito de tablas con
+  barandas de cuerda**, como los de Mindo.
 - **Sentado**: las piernas y los brazos se doblan en los ejes del personaje (no en los locales de cada
   hueso de Mixamo), así que los muslos van adelante y las pantorrillas abajo sin abrirse de lado.
 
@@ -570,6 +606,33 @@ siguiente toque. La tecla `F` la alterna en cualquier momento.
   borde de luz y un brillo suave arriba, sin sombras. Textos de 14 px y peso medio; radios de 8
   (botones), 12 (contenedores) y 16 (hojas). De día el vidrio es claro; de noche, ahumado con
   texto claro. Los paneles y tarjetas usan un vidrio más lechoso para que se lean bien.
+- **La barra entra en pantalla** (`mimo.css`, al final):
+  - **Teléfono y tableta** (hasta 900 px): arriba van el estado, el micrófono (solo el icono) y el
+    reloj. Debajo, los avisos (🎙️ Te escucho, ☀️ Pantalla despierta), el modo y las acciones, que se
+    desplazan de lado; si les quedan menos de 160 px junto al modo, bajan a su propia fila. Con los
+    controles ocultos quedan el micrófono y el reloj, y el estado si hay un error.
+  - **Escritorio hasta 1900 px**: las acciones bajan a una segunda fila, a la derecha. Más ancho,
+    todo cabe en una fila.
+  - **El estado** toma lo que queda en su fila sin pasar de su texto y se corta con «…»: nunca
+    empuja el reloj a otra fila ni queda como una píldora vacía.
+  - **Lo vacío de la barra** deja pasar los toques al mundo (por ejemplo, para arrastrar en la vista
+    de pájaro).
+  - **El techo** (`mimo.js › techoBarra`): el borde de abajo de lo que se ve en la barra + 10 px. Se
+    mide cada 300 ms, al tocar el reloj y al cambiar el tamaño; si la opacidad va en transición,
+    cuenta la de llegada. Queda en `--techo`: el globo no sube de ahí, y la columna de descargas, el
+    chat de depurar, los paneles y los post-its empiezan ahí.
+  - **En teléfono, la barra de Decorar** lleva los botones en una fila y la nota debajo.
+- **El globo en teléfono** (hasta 600 px, `mimo.js › ubicarGlobo`):
+  - Va **sobre la cabeza de Uku**, centrado en ella y a 16 px de los bordes, con la colita hacia
+    abajo apuntando a la cabeza (`--colita-x`). Texto de 20 px; ancho hasta la pantalla menos 32 px.
+  - Se apoya en `bosque3d.js › head().arriba`: lo más alto de la cabeza con el sombrero o el
+    paraguas, medido vértice a vértice. Así no los tapa: la colita queda unos 12 px por encima.
+  - El radio de `head()` es el mayor entre el largo cuello–coronilla y ese mismo largo puesto de
+    lado. Desde arriba (vista de pájaro), o cuando Uku mira a la cámara, cuello–coronilla se ve corto.
+  - Si no cabe bajo la barra, va abajo sin colita, encima de las pistas o de la barra de Decorar.
+  - **El subtítulo de lo oído** va justo encima de las pistas (en teléfono ocupan varias filas) y a
+    lo ancho.
+  - En escritorio el globo sigue a la derecha de la cabeza.
 
 ## El sueño (atmósfera)
 
@@ -580,7 +643,8 @@ Todo el claro parece un sueño idílico (`sueno.js` y `mimo.css`):
 - **Polvo de luz**: unas 300 motas doradas flotan despacio entre los árboles (pequeñas y nítidas,
   y otras grandes y suaves) y respiran con la luz.
 - **Bokeh**: discos grandes, planos y translúcidos muy cerca de la cámara, que se mueven con ella.
-- **Bruma** y **rayos de luz** planos que se mecen muy despacio. De noche todo baja de intensidad.
+- **Bruma** y **rayos de luz** planos que se mecen muy despacio; los rayos son de sol: de noche, en la
+  fiesta y con lluvia no hay (`mimo.css`, por `body[data-entorno]`). De noche todo baja de intensidad.
   Todo de borde nítido (ver «Dibujo vectorial plano»).
 - `?sueno=0` apaga el polvo y el bokeh.
 - El **cartel de días sin accidentes** es sobrio: pizarra de papel claro con un filete fino, fichas
@@ -592,9 +656,16 @@ Arriba a la derecha: la **hora local** y la fecha, y el **clima del lugar** (`as
 Open-Meteo con tu ubicación; sin permiso o sin red, Quito).
 
 - Uku **se viste según el clima**: paraguas con lluvia (y llueve), gorro con frío, sombrero de
-  paja y gafas de sol con calor, guayabera y palmeras en la costa.
+  paja y gafas de sol con calor, guayabera y palmeras en la costa. Las gafas de sol van en el plano de
+  sus lentes amarillos (que se guarda), medidos al cargar (`bosque3d.js › measureHead`), con patillas
+  hasta las orejas: tapan los ojos y no flotan delante del hocico.
 - El **entorno sigue la hora**: día, atardecer (desde las 17:30) y noche (desde las 19:00); con
   lluvia, lluvia. Si alguien elige un entorno a mano (teclas `1`–`6`, gestos, voz), se respeta.
+- El **atardecer y la lluvia tiñen el mundo**, no solo el cielo: la luz del mundo se entibia o se
+  enfría y lo lejano se funde con el color del cielo (`escena.js › ENTORNOS.tinte` →
+  `bosque3d.js › setTinte`; la luz de Uku no se toca, conserva sus colores). Con el entorno de
+  **lluvia** llueve de verdad (220 gotas planas, más oscuras que el suelo, que llegan al suelo) y Uku
+  saca el paraguas y se quita las gafas de sol; al salir de la lluvia vuelve a lo del clima real.
 - Uku contesta «¿qué tiempo hace?» con el clima real, y «¿qué hora es?» con la hora real.
 - Para probar: `?clima=gye|uio-rain|uio-cold|cuenca|tena` y `?hora=21:05`.
 
@@ -641,7 +712,10 @@ frase hasta haber dicho todas**, y la primera de la baraja nueva nunca es la
 - **Paleta de sueño:** todos los entornos son azul gris y amarillo, en colores planos.
 - **Su mundo** (`assets/bosque3d.js`): planeta redondeado,
   colores planos de ilustración, flores, guayacanes y brotes amarillos. De noche
-  y en la fiesta usa su paleta oscura; con lluvia, Uku saca el paraguas.
+  y en la fiesta usa su paleta oscura, también las cosas del claro (madera, crema, espuma, ondas,
+  nenúfares, tortuga: `pal.carton`, `pal.crema`, `pal.espuma`…): lo que brilla de noche es lo amarillo
+  y el **farol**, que mide 1 m (más que Uku) y deja un charco de luz plano en el suelo. La ropa de Uku
+  conserva sus colores. Con lluvia, Uku saca el paraguas.
 - **Quieto** un rato: Uku sugiere un gesto o comparte un consejo de oso.
 - **Voz** (apagada por defecto; se enciende en el inicio o con `M`): Uku dice
   sus frases en voz alta. Lo que escucha está en «Habla con Uku».

@@ -202,19 +202,63 @@ function decirEnVivo(texto) {
   clearTimeout(globoTimer);
   globoTimer = setTimeout(() => ui.globo.classList.remove('is-visible', 'is-escribiendo'), 15000);
 }
+// Hasta dónde baja la barra de arriba (px): el borde inferior más bajo de lo que se ve en ella (opacidad > 0,
+// display ≠ none) + 10. Hasta 1900 px de ancho la barra tiene dos filas o más (mimo.css). Se mide como mucho
+// cada 300 ms, al mostrar u ocultar el HUD y al cambiar el tamaño; queda en --techo (columna izquierda, chat D).
+const barra = $('.mimo-top'), barraDecorar = $('#decorar-barra');
+let techo = 84, techoT = -1e9;
+function techoBarra(ya) {
+  const t = performance.now();
+  if (!ya && t - techoT < 300) return techo;
+  techoT = t;
+  let fondo = 0;
+  for (const el of barra.children) {
+    const cs = getComputedStyle(el);
+    // si la opacidad va de camino (transición al mostrar u ocultar el HUD), cuenta la de llegada
+    const tr = el.getAnimations ? el.getAnimations().find(a => a.transitionProperty === 'opacity') : null, k = tr && tr.effect.getKeyframes();
+    const op = k && k.length ? +k[k.length - 1].opacity : +cs.opacity;
+    if (cs.display === 'none' || !(op > 0)) continue;
+    const r = el.getBoundingClientRect(); if (r.height) fondo = Math.max(fondo, r.bottom);
+  }
+  const n = Math.max(16, Math.round(fondo + 10));
+  if (n !== techo) { techo = n; document.documentElement.style.setProperty('--techo', n + 'px'); }
+  return techo;
+}
+document.documentElement.style.setProperty('--techo', techo + 'px');
+addEventListener('resize', () => techoBarra(true));
+const entre = (a, v, b) => Math.max(a, Math.min(b, v));
 function ubicarGlobo() {
   const p = escena.puntoCabeza();
   if (!p) return;
   // El foco del sueño sigue a Uku: nítido él, desenfocado lo que lo rodea (mimo.css › .mimo-sueno)
   const rs = document.documentElement.style;
   rs.setProperty('--ux', p.x.toFixed(0) + 'px'); rs.setProperty('--uy', (p.y + 120).toFixed(0) + 'px');
-  const w = ui.globo.offsetWidth, h = ui.globo.offsetHeight, W = innerWidth;
-  // A la derecha de la cabeza, con la colita a la altura de la boca; nunca bajo la barra de arriba
-  let y = Math.max(84, p.y - h * .55);
-  const x = Math.max(24, Math.min(W - w - 24, p.x + 24));
+  const w = ui.globo.offsetWidth, h = ui.globo.offsetHeight, W = innerWidth, H = innerHeight, tope = techoBarra(), g = ui.globo.classList;
+  // Las pistas de gestos (abajo): en teléfono ocupan varias filas; si no se ven (HUD oculto, decorando), no cuentan
+  const pi = ui.pistas.getBoundingClientRect(), altoPistas = !document.body.classList.contains('solo-uku') && pi.height > 0 ? Math.max(0, H - pi.top) : 0;
+  // El subtítulo de lo que se oyó: en teléfono, justo encima de las pistas (si no, caería sobre ellas)
+  const tel = W <= 600; // como mimo.css › @media (max-width: 600px)
+  ui.oido.style.bottom = tel && altoPistas ? Math.round(altoPistas + 12) + 'px' : '';
+  const c = tel && escena.mundo() && escena.mundo().head();
+  let x, y;
+  if (c) {
+    // Teléfono: sobre la cabeza (con margen para las orejas; con sombrero o paraguas, sobre ellos: head().arriba) y la
+    // colita apuntando a ella; si no cabe bajo la barra, abajo y sin colita, para no taparle la cara
+    x = entre(16, c.x - w / 2, W - w - 16);
+    y = Math.min(c.y - c.r * 1.35, c.arriba != null ? c.arriba - 6 : Infinity) - h - 16;
+    const arriba = y >= tope, deco = barraDecorar && !barraDecorar.hidden ? barraDecorar.getBoundingClientRect() : null; // ni sobre la barra de Decorar
+    if (!arriba) y = H - h - 24 - Math.max(altoPistas, deco && deco.height ? H - deco.top - 12 : 0);
+    g.toggle('colita-abajo', arriba); g.toggle('sin-colita', !arriba);
+    if (arriba) ui.globo.style.setProperty('--colita-x', Math.round(entre(18, c.x - x, w - 18)) + 'px');
+  } else {
+    // A la derecha de la cabeza, con la colita a la altura de la boca; nunca bajo la barra de arriba
+    g.remove('colita-abajo', 'sin-colita');
+    y = Math.max(tope, p.y - h * .55);
+    x = Math.max(24, Math.min(W - w - 24, p.x + 24));
+  }
   // nunca encima del subtítulo de lo que se oyó (abajo al centro): el globo sube
-  if (ui.oido.classList.contains('is-visible')) { const o = ui.oido.getBoundingClientRect(); if (x < o.right && x + w > o.left && y + h > o.top - 12) y = Math.max(84, o.top - 12 - h); }
-  ui.globo.style.transform = `translate(${x}px, ${y}px)`;
+  if (ui.oido.classList.contains('is-visible')) { const o = ui.oido.getBoundingClientRect(); if (x < o.right && x + w > o.left && y + h > o.top - 12) y = Math.max(tope, o.top - 12 - h); }
+  ui.globo.style.transform = `translate(${Math.round(x)}px, ${Math.round(y)}px)`;
 }
 
 function estado(texto, tipo = '') { ui.estado.textContent = texto; ui.estado.dataset.tipo = tipo; }
@@ -1167,7 +1211,7 @@ ui.modo.addEventListener('click', () => setModo(modo === 'demo' ? 'guardian' : '
 ui.optDemo.addEventListener('change', () => setModo(ui.optDemo.checked ? 'demo' : 'guardian'));
 setModo(modo);
 /* HUD: por defecto oculto (body.solo-uku). X o tocar el reloj lo muestra u oculta. */
-function alternarHud(ver) { document.body.classList.toggle('solo-uku', ver === undefined ? !document.body.classList.contains('solo-uku') : !ver); }
+function alternarHud(ver) { document.body.classList.toggle('solo-uku', ver === undefined ? !document.body.classList.contains('solo-uku') : !ver); techoBarra(true); }
 $('#reloj').addEventListener('click', (e) => { alternarHud(); e.currentTarget.blur(); });
 $('#reloj').addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); alternarHud(); } });
 ui.empezar.addEventListener('click', () => empezar());

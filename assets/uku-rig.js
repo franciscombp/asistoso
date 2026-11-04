@@ -6,12 +6,18 @@
      animaciones; no tiene morph targets.
    - Las clips traen el desplazamiento del torso al caminar; el planeta mueve
      al oso, así que x y z del torso se fijan en su pose de reposo.
+   - Walking cojeaba (la zancada izquierda era un cuarto de la derecha): pierna
+     y brazo izquierdos se rehacen en espejo de los derechos, con media vuelta
+     de desfase; los dos pasos quedan iguales.
    - Los pies siempre en el suelo: cada cuadro se miden las plantas (los
      vértices más bajos del modelo) y la cadera sube o baja hasta apoyarlas.
    - face: ojos, nariz y boca. En v2/v3 los dibuja un shader sobre la cabeza
      (formas nítidas en la pose de reposo): pestañea, entrecierra, pone
-     ojos contentos y la boca se abre y se redondea al hablar (voz.js ›
-     boca). En el clásico están pintados y solo pestañea.
+     ojos contentos o cara de pena (face.pena) y la boca se abre y se
+     redondea al hablar (voz.js › boca). En el clásico están pintados y
+     solo pestañea.
+   - Poses encima de la clip: respira (la columna), sentado (leer),
+     sostener (el paraguas) y en cuclillas (agacharse, para plantar).
    - gest: cómo hace cada gesto de la app con estas clips (velocidad, calma).
    - loadUkuRig(container): visor independiente para verificar el modelo.
    (El oso de respaldo, hecho por código, está en uku-rig-nuevo.js.)
@@ -79,6 +85,22 @@ export function ukuFrom(gltf, { onLog = () => {} } = {}) {
     });
     return c;
   });
+  // Walking cojea (la izquierda da pasos de un cuarto de la derecha): la izquierda se rehace desde la derecha, con media
+  // vuelta de desfase y en espejo (x, -y, -z, w) del giro respecto del reposo en el espacio del padre: qL = espejo(qR·restR⁻¹)·restL
+  // (en los huesos cuyo reposo ya es espejo queda espejo(qR); en ToeBase, que no lo es, respeta su reposo)
+  const walkC = clips.find(c => c.name === 'Walking');
+  if (walkC) {
+    const dur = walkC.duration, qa = new THREE.Quaternion(), qb = new THREE.Quaternion();
+    ['UpLeg', 'Leg', 'Foot', 'ToeBase', 'Shoulder', 'Arm', 'ForeArm'].forEach(n => {
+      const bL = bones[key('mixamorig:Left' + n)], bR = bones[key('mixamorig:Right' + n)];
+      const iL = walkC.tracks.findIndex(t => t.name === key('mixamorig:Left' + n) + '.quaternion');
+      const tR = walkC.tracks.find(t => t.name === key('mixamorig:Right' + n) + '.quaternion');
+      if (!bL || !bR || iL < 0 || !tR) return;
+      const restL = bL.quaternion.clone(), restRi = bR.quaternion.clone().invert(), it = tR.createInterpolant(), v = new Float32Array(tR.times.length * 4);
+      tR.times.forEach((t, i) => { qa.fromArray(it.evaluate((t + dur / 2) % dur)).multiply(restRi); qb.set(qa.x, -qa.y, -qa.z, qa.w).multiply(restL); qb.toArray(v, i * 4); });
+      walkC.tracks[iL] = new THREE.QuaternionKeyframeTrack(walkC.tracks[iL].name, Float32Array.from(tR.times), v);
+    });
+  }
 
   // Mixer y clips con crossfade
   const mixer = new THREE.AnimationMixer(root);
@@ -93,7 +115,7 @@ export function ukuFrom(gltf, { onLog = () => {} } = {}) {
   /* Pose sentado (para leer en la banca): se aplica después del mixer y la calma. Los muslos van hacia adelante,
      las pantorrillas hacia abajo, los brazos adelante con los codos doblados (sostienen el periódico) y la cabeza
      baja un poco. Las rotaciones son sobre la pose de reposo; `sit` va de 0 a 1 para entrar y salir suave. */
-  const pose = { sit: 0, sitTo: 0, raise: 0, hold: 0, holdTo: 0, ang: { upLeg: -1.5, leg: 1.55, arm: -1.0, foreArm: -1.2, armZ: .2, head: .45 } };
+  const pose = { sit: 0, sitTo: 0, raise: 0, hold: 0, holdTo: 0, crouch: 0, crouchTo: 0, cuc: { upLeg: -1.25, leg: 1.9, foot: -.65, spine: [.62, .44, .33], alcance: .9, adelante: .2, codo: 1, mira: .5 }, ang: { upLeg: -1.5, leg: 1.55, arm: -1.0, foreArm: -1.05, armZ: .2, head: .45 } };
   // Los huesos de Mixamo tienen giro propio en sus ejes locales: las rotaciones de la pose se hacen alrededor de
   // ejes del personaje (x = a su derecha/izquierda, z = hacia adelante), convertidos al espacio del padre de cada hueso
   const _qp = new THREE.Quaternion(), _qr = new THREE.Quaternion(), _qw = new THREE.Quaternion(), _axw = new THREE.Vector3();
@@ -129,6 +151,7 @@ export function ukuFrom(gltf, { onLog = () => {} } = {}) {
   soles.sort((a, b) => a[2] - b[2]); soles.length = Math.min(60, soles.length);
   skinned.forEach(m => { if (/brazos/.test(m.material && m.material.map && m.material.map.name || '')) return; const p = m.geometry.attributes.position, paso = Math.max(1, Math.round(p.count / 220)); for (let i = 0; i < p.count; i += paso) soles.push([m, i, p.getY(i)]); });
   const _v = new THREE.Vector3(), _a = new THREE.Vector3(), _b = new THREE.Vector3();
+  let tVida = 0;
   function update(dt) {
     mixed.forEach(([b, q]) => b.quaternion.copy(q));
     if (hips) hips.position.copy(hipsMixed);
@@ -137,6 +160,40 @@ export function ukuFrom(gltf, { onLog = () => {} } = {}) {
     if (hips) hipsMixed.copy(hips.position);
     calmCur += (calmTo - calmCur) * Math.min(1, dt * 2.5);
     if (calmCur > .005) rest0.forEach(([b, q]) => { if (!keep || !keep.test(b.name)) b.quaternion.slerp(q, calmCur); });
+    // Respira: el pecho se abre y se cierra cada 3,8 s (solo la columna: piernas y cadera no se mueven). En cuclillas y
+    // sentado la columna vuelve a su pose, así que ahí la respiración se apaga sola
+    tVida += dt; const resp = Math.sin(tVida * Math.PI * 2 / 3.8);
+    rotWorld(bones[key('mixamorig:Spine')], 1, 0, 0, resp * .015); rotWorld(bones[key('mixamorig:Spine1')], 1, 0, 0, resp * .015); rotWorld(bones[key('mixamorig:Spine2')], 1, 0, 0, resp * .025);
+    pose.crouch += (pose.crouchTo - pose.crouch) * Math.min(1, dt * 3);
+    if (pose.crouch > .005) {
+      const k = pose.crouch;
+      // En cuclillas: cadera, piernas y columna parten del reposo (sin la pose de rodillas de la clip) y se doblan; la cadera
+      // la baja la corrección de pies de abajo, y las muestras del cuerpo impiden que la cabeza entre al suelo. Los brazos de
+      // Uku son cortos: para que la pata llegue a la tierra la espalda se inclina (~45°) y los brazos, estirados, apuntan
+      // hacia abajo y apenas adelante (pose.cuc: ángulos en rad; alcance 0–1, cuánto apuntan; codo 0–1, cuánto se estiran)
+      CROUCH.forEach(b => { const q = rest0Q.get(b); if (q) b.quaternion.slerp(q, k); });
+      root.updateMatrixWorld(true);
+      const C = pose.cuc;
+      ['Left', 'Right'].forEach(L => { const B = n => bones[key('mixamorig:' + L + n)];
+        rotWorld(B('UpLeg'), 1, 0, 0, C.upLeg * k); rotWorld(B('Leg'), 1, 0, 0, C.leg * k); rotWorld(B('Foot'), 1, 0, 0, C.foot * k); });
+      rotWorld(bones[key('mixamorig:Spine')], 1, 0, 0, C.spine[0] * k); rotWorld(bones[key('mixamorig:Spine1')], 1, 0, 0, C.spine[1] * k); rotWorld(bones[key('mixamorig:Spine2')], 1, 0, 0, C.spine[2] * k);
+      // la cabeza no cuelga con la espalda: mira a la tierra delante de las patas, a lo más C.mira rad bajo la horizontal
+      // (con la espalda a ~45° y la clip mirando abajo quedaba a ~80°, y desde la cámara el sombrero le tapaba la cara)
+      const hd = bones[key('mixamorig:Head')];
+      if (C.mira != null && hd) {
+        root.getWorldQuaternion(_qw).invert(); hd.getWorldQuaternion(_qp); _v.set(0, 0, 1).applyQuaternion(_qp).applyQuaternion(_qw);
+        const baja = -Math.asin(Math.max(-1, Math.min(1, _v.y))) - C.mira;
+        if (baja > 0) { rotWorld(bones[key('mixamorig:Neck')], 1, 0, 0, -baja * .4 * k); rotWorld(hd, 1, 0, 0, -baja * .6 * k); }
+      }
+      // los brazos (que siguen la clip) apuntan hacia la tierra, delante de los pies
+      if (C.alcance) ['Left', 'Right'].forEach(L => {
+        const a = bones[key('mixamorig:' + L + 'Arm')], f = bones[key('mixamorig:' + L + 'ForeArm')], h = bones[key('mixamorig:' + L + 'Hand')]; if (!a || !h) return;
+        if (C.codo && f && rest0Q.get(f)) { f.quaternion.slerp(rest0Q.get(f), C.codo * k); f.updateWorldMatrix(false, true); }
+        root.worldToLocal(a.getWorldPosition(_a)); root.worldToLocal(h.getWorldPosition(_b)); _b.sub(_a).normalize();
+        _v.set(0, -1, C.adelante).normalize(); const ang = Math.acos(Math.max(-1, Math.min(1, _b.dot(_v)))); _a.crossVectors(_b, _v);
+        if (_a.lengthSq() > 1e-10) { _a.normalize(); rotWorld(a, _a.x, _a.y, _a.z, ang * C.alcance * k); }
+      });
+    }
     pose.sit += (pose.sitTo - pose.sit) * Math.min(1, dt * 3);
     if (pose.sit > .005) {
       const k = pose.sit, A = pose.ang;
@@ -176,7 +233,10 @@ export function ukuFrom(gltf, { onLog = () => {} } = {}) {
   function sentarse(on, raise = .22) { pose.sitTo = on ? 1 : 0; if (on) pose.raise = raise; }
   // sostener(on): el brazo izquierdo sostiene algo (el paraguas) con el codo doblado
   function sostener(on) { pose.holdTo = on ? 1 : 0; }
+  // agacharse(on): en cuclillas (para plantar), con las rodillas adelante y la espalda apenas inclinada
+  function agacharse(on) { pose.crouchTo = on ? 1 : 0; }
   const rest0Q = new Map(rest0);
+  const CROUCH = ['Hips', 'Spine', 'Spine1', 'Spine2', 'LeftUpLeg', 'LeftLeg', 'LeftFoot', 'LeftToeBase', 'RightUpLeg', 'RightLeg', 'RightFoot', 'RightToeBase'].map(n => bones[key('mixamorig:' + n)]).filter(Boolean);
 
   /* Cara. En v2 y v3 la textura de la cabeza ya no trae ojos, nariz ni boca: los dibuja CARA (abajo) en la pose de reposo
      del modelo (metros; x a su izquierda, y arriba, z al frente), con bordes nítidos a cualquier distancia. El shader se
@@ -185,7 +245,7 @@ export function ukuFrom(gltf, { onLog = () => {} } = {}) {
   let headMesh = null, headMap = null;
   root.traverse(o => { if (o.isMesh && o.material && o.material.map && /cabeza/.test(o.material.map.name || '')) { headMesh = o; headMap = o.material.map; } });
   const maps = { open: headMap };
-  const U = { uLid: { value: 0 }, uFeliz: { value: 0 }, uBoca: { value: 0 }, uRedonda: { value: 0 },
+  const U = { uLid: { value: 0 }, uFeliz: { value: 0 }, uBoca: { value: 0 }, uRedonda: { value: 0 }, uPena: { value: 0 },
     uTinta: { value: new THREE.Color('#14274f') }, uLengua: { value: new THREE.Color('#d9828e') }, uBoca0: { value: new THREE.Color('#0d1a38') } };
   const OJOS = { open: [0, 0], half: [.5, 0], shut: [1, 0], happy: [0, 1] };
   const face = VARIANTE !== 'clasico' ? {
@@ -193,6 +253,8 @@ export function ukuFrom(gltf, { onLog = () => {} } = {}) {
     eyes(kind) { const [l, f] = OJOS[kind] || OJOS.open; U.uLid.value = l; U.uFeliz.value = f; },
     // open: 0 cerrada (la sonrisa) a 1 bien abierta; redonda: 0 (a, e, i) a 1 (o, u)
     mouth(open, redonda = 0) { U.uBoca.value = Math.max(0, Math.min(1, +open || 0)); U.uRedonda.value = Math.max(0, Math.min(1, +redonda || 0)); },
+    // pena: 0 a 1; los párpados caen hacia afuera y la sonrisa se aplana (preocupado)
+    pena(v) { U.uPena.value = Math.max(0, Math.min(1, +v || 0)); },
     uniforms: U
   } : {
     instalar() {},
@@ -201,7 +263,8 @@ export function ukuFrom(gltf, { onLog = () => {} } = {}) {
       if (!maps[kind]) { try { maps[kind] = eyeMap(headMap, kind); } catch (e) { maps[kind] = headMap; } }
       headMesh.material.map = maps[kind];
     },
-    mouth() {} // la boca está pintada: no se abre
+    mouth() {}, // la boca está pintada: no se abre
+    pena() {}
   };
   face.instalar();
 
@@ -209,16 +272,16 @@ export function ukuFrom(gltf, { onLog = () => {} } = {}) {
   const gest = {
     wave: ['Waving', .55, .45, 2.7, /Right(Shoulder|Arm|ForeArm|Hand)/], // saluda con el brazo entero, pero el cuerpo casi quieto
     happy: ['Happy Idle', .8, .15, 2.4], talk: ['Happy Idle', .6, .45, 2.2],
-    nod: ['Thoughtful Head Nod', .8, .1, 3.4], worried: ['Thoughtful Head Nod', .7, .2, 3.8],
-    // Plantar: la clip es de una persona que se arrodilla; con el cuerpo de Uku la cabeza se iba bajo tierra. Solo los brazos
-    // hacen el gesto completo (bajan hasta la tierra); cadera, piernas, torso y cabeza se quedan a medio camino (calma .62)
-    plant: ['Plant A Plant', .9, .62, 8.2, /Arm|Hand|Shoulder/],
-    idle: ['Happy Idle', .45, .65], walk: ['Walking', .6, .1],
+    nod: ['Thoughtful Head Nod', .8, .1, 3.4], worried: ['Thoughtful Head Nod', .55, .35, 3.8], // preocupado: más lento y más chico (y la cara con pena)
+    // Plantar: la clip es de una persona que se arrodilla; Uku no la sigue con el cuerpo (calma 1): se pone en cuclillas
+    // (agacharse, que lo pide bosque3d) y solo los brazos hacen el gesto completo, hasta la tierra
+    plant: ['Plant A Plant', .9, 1, 5.4, /Arm|Hand|Shoulder/], // 5,4 s: planta a los 3,4 y se levanta (lo que sigue de la clip es de rodillas)
+    idle: ['Happy Idle', .45, .5], walk: ['Walking', .45, .1], // .45: la clip (ya pareja) a WALK_V no desliza los pies
     read: ['Happy Idle', .35, 1, 16], // leer sentado: la pose la pone sentarse(); la clip solo respira
     plantAt: { hold: [1.6, 3.4], at: 3.4 } // plantar: cuándo sostiene el brote y cuándo queda en la tierra (s del gesto)
   };
 
-  return { root, body, box, skinned, bones, nodes, clips, playClip, update, face, gest, report, sentarse, sostener, pose, B: n => bones[key(n)], N: n => nodes[key(n)] };
+  return { root, body, box, skinned, bones, nodes, clips, playClip, update, face, gest, report, sentarse, sostener, agacharse, pose, B: n => bones[key(n)], N: n => nodes[key(n)] };
 }
 
 /* El shader de la cara. Se agrega a cualquier material (básico o con luz): toma la posición y la normal de reposo
@@ -226,7 +289,7 @@ export function ukuFrom(gltf, { onLog = () => {} } = {}) {
    ojos en x ±0,092 y 1,467 (4 × 4,8 cm), nariz en y 1,391 (9,3 × 6,3 cm), sonrisa de y 1,314 al centro a 1,339 en
    x ±0,073. Cada forma es una distancia con signo; fwidth da el antialias. */
 const CARA = `
-uniform float uLid, uFeliz, uBoca, uRedonda;
+uniform float uLid, uFeliz, uBoca, uRedonda, uPena;
 uniform vec3 uTinta, uLengua, uBoca0;
 varying vec3 vCara; varying vec3 vCaraN;
 float cAA(float d) { float w = max(fwidth(d), 1e-5) * .8; return 1. - smoothstep(-w, w, d); }
@@ -234,9 +297,9 @@ float cElipse(vec2 p, vec2 r) { return (length(p / r) - 1.) * min(r.x, r.y); }
 float cTrazo(vec2 p, float y, float hw, float xr) { return max(abs(p.y - y) - hw, abs(p.x) - xr); }
 vec3 cOjo(vec3 c, vec2 p, float lado) {
   vec2 r = vec2(.0195, .0238);
-  // abierto (y a medio cerrar: el párpado baja recto) ...
-  float lid = clamp(uLid, 0., 1.);
-  float ab = max(cElipse(p, r), p.y - r.y * (1. - 2.15 * lid));
+  // abierto (y a medio cerrar: el párpado baja recto; con pena baja hacia afuera, como cejas de preocupación) ...
+  float lid = max(clamp(uLid, 0., 1.), .3 * uPena);
+  float ab = max(cElipse(p, r), p.y - r.y * (1. - 2.15 * lid) + lado * p.x * .6 * uPena);
   float abierto = cAA(ab) * (1. - step(.9, lid)) * (1. - uFeliz);
   // ... cerrado: una curva hacia abajo ...
   float cerrado = cAA(cTrazo(p, -r.y * .12 + (p.x * p.x) / (r.x * r.x) * r.y * -.32, .0026, r.x * 1.05)) * step(.9, lid) * (1. - uFeliz);
@@ -258,8 +321,8 @@ vec3 pintarCara(vec3 c) {
   // boca: la sonrisa; al hablar se abre (y se redondea con la o y la u), con la lengua al fondo
   float x = q.x, k = 5.9, w = .072;
   float ab = clamp(uBoca, 0., 1.), red = clamp(uRedonda, 0., 1.);
-  float y0 = 1.3136 + .002 * ab;
-  float fu = y0 + k * x * x * (1. - .45 * ab);
+  float y0 = 1.3136 + .002 * ab - .004 * uPena;
+  float fu = y0 + k * x * x * (1. - .45 * ab) * (1. - 1.7 * uPena); // con pena la sonrisa se aplana y apenas cae
   float wo = (.042 + .018 * ab) * (1. - .38 * red);
   float h = (.004 + .03 * ab) * (1. + .3 * red) * step(.02, ab);
   float t = clamp(1. - (x * x) / (wo * wo), 0., 1.);
