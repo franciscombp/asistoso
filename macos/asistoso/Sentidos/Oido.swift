@@ -97,19 +97,30 @@ final class Oido {
         guard let entrada else { return }
         let nodo = MotorAudio.compartido.motor.inputNode
         nodo.removeTap(onBus: 0)
-        do {
-            try nodo.installAudioTap(onBus: 0, bufferSize: 4096, format: nodo.outputFormat(forBus: 0), tapProvider: Self.tap(formato: formato, entrada: entrada))
-        } catch {
-            alEvento(.error("No pude abrir el micrófono: \(error.localizedDescription)"))
+        let formatoMic = nodo.outputFormat(forBus: 0)
+        guard let conversor = AVAudioConverter(from: formatoMic, to: formato) else {
+            alEvento(.error("No pude preparar el micrófono"))
+            return
         }
+        nodo.installTap(onBus: 0, bufferSize: 4096, format: formatoMic, block: Self.tap(conversor: Caja(conversor), formato: formato, entrada: entrada))
     }
 
-    /// El bloque del micrófono corre en el hilo de audio: convierte y entrega al analizador, nada más.
-    nonisolated private static func tap(formato: AVAudioFormat, entrada: AsyncStream<AnalyzerInput>.Continuation) -> @Sendable (AVReadOnlyAudioPCMBuffer, AVAudioTime) -> Void {
-        let conversor = Caja(AnalyzerInputConverter(analyzerFormat: formato))
+    /// El bloque del micrófono corre en el hilo de audio: convierte al formato del analizador y lo entrega, nada más.
+    /// (AVAudioConverter funciona en macOS 26 y 27; el conversor propio de Speech es solo de macOS 27.)
+    nonisolated private static func tap(conversor: Caja<AVAudioConverter>, formato: AVAudioFormat,
+                                        entrada: AsyncStream<AnalyzerInput>.Continuation) -> AVAudioNodeTapBlock {
         return { buffer, _ in
-            guard let entradas = try? conversor.valor.convert(AVAudioPCMBuffer(copying: buffer), at: nil) else { return }
-            for e in entradas { entrada.yield(e) }
+            let capacidad = AVAudioFrameCount(Double(buffer.frameLength) * formato.sampleRate / buffer.format.sampleRate) + 64
+            guard let salida = AVAudioPCMBuffer(pcmFormat: formato, frameCapacity: capacidad) else { return }
+            var entregado = false
+            var error: NSError?
+            conversor.valor.convert(to: salida, error: &error) { _, estado in
+                if entregado { estado.pointee = .noDataNow; return nil }
+                entregado = true
+                estado.pointee = .haveData
+                return buffer
+            }
+            if error == nil, salida.frameLength > 0 { entrada.yield(AnalyzerInput(buffer: salida)) }
         }
     }
 

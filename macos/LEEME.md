@@ -10,7 +10,7 @@ La app nativa de macOS. El mundo 3D sigue siendo la web de este repo (copiada en
 | Visión | Manos y cuerpo con Vision. Caras: Vision las encuentra y **FaceNet en Core ML** (`Sentidos/Huella.mlpackage`) las reconoce. MediaPipe queda solo para las expresiones de la cara. |
 | Interfaz | SwiftUI con Liquid Glass: inicio, barra, «Quién vino» (visitas, mensajes, personas, dónde estoy, diario) y ayuda. |
 
-Requisitos: macOS 27.2 o más nuevo; Apple Intelligence activado (opcional si hay key de Groq).
+Requisitos: macOS 26 o más nuevo; Apple Intelligence activado (opcional si hay key de Groq).
 
 ## Compilar
 

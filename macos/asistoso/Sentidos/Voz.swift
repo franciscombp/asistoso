@@ -128,7 +128,7 @@ final class Voz: NSObject, AVSpeechSynthesizerDelegate {
         let r = MotorAudio.compartido.reproductor
         if r.engine != nil {
             r.stop()
-            if MotorAudio.compartido.motor.isRunning { try? r.playAudio() }
+            if MotorAudio.compartido.motor.isRunning { r.play() }
         }
         if interrumpido { respuesta = nil }
         if estaba && avisar { avisoFin = true; alEvento(.fin(interrumpido: interrumpido)) }

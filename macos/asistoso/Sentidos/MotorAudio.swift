@@ -44,18 +44,18 @@ final class MotorAudio {
         }
         // La conexión va después del procesamiento de voz (cambia el formato de salida)
         motor.disconnectNodeOutput(reproductor)
-        try motor.connectNode(reproductor, to: motor.mainMixerNode, format: Self.formatoVoz)
+        motor.connect(reproductor, to: motor.mainMixerNode, format: Self.formatoVoz)
         motor.prepare()
         try motor.start()
-        try reproductor.playAudio()
+        reproductor.play()
     }
 
     private func rearrancar() {
         guard !motor.isRunning else { return }
         motor.disconnectNodeOutput(reproductor)
-        try? motor.connectNode(reproductor, to: motor.mainMixerNode, format: Self.formatoVoz)
+        motor.connect(reproductor, to: motor.mainMixerNode, format: Self.formatoVoz)
         try? motor.start()
-        try? reproductor.playAudio()
+        reproductor.play()
         alReconfigurar()
     }
 }
